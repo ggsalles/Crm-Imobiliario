@@ -1,5 +1,22 @@
 # Registro de Versão - CRM SalesScore
 
+## [STABLE_POINT_PRE_DEPLOY] - 10 de Maio de 2026
+Ponto de controle estável antes da tentativa de deploy no Vercel. 
+
+### Novidades:
+- **Build Verificado:** `npm run build` executado com sucesso no ambiente local.
+- **Correções de Estabilidade:**
+  - Ajuste na tipagem de datas no Calendário para evitar falhas de runtime com `parseISO`.
+  - Melhoria na listagem visual do Calendário com cards de eventos (Visita, Follow-up, Reunião).
+  - Filtro de busca de eventos implementado no dashboard do calendário.
+  - Otimização das funções de `update` no `lib/db.ts` para usar envios parciais de dados (evita sobrescrever campos nulos).
+- **Tratamento de 404:** Criação de página `not-found.tsx` personalizada para melhor UX.
+
+### Funcionalidades Verificadas:
+- Calendário: Sincronização em tempo real das atividades com o banco de dados.
+- Dashboard: KPIs e atividades recentes carregando corretamente.
+- Contatos/Empresas: Fluxo de CRUD resiliente.
+
 ## [UI_UX_CHAT_UPDATE] - 10 de Maio de 2026
 Melhoria na experiência do usuário e sistema de comunicação interna.
 

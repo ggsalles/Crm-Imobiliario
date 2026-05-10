@@ -276,12 +276,12 @@ export async function createCompany(data: any) {
 }
 
 export async function updateCompany(id: string, data: any) {
-  const { error } = await supabase.from('companies').update({
-    name: data.name,
-    industry: data.industry,
-    website: data.website,
-    updated_at: new Date().toISOString()
-  }).eq('id', id);
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.industry !== undefined) updateData.industry = data.industry;
+  if (data.website !== undefined) updateData.website = data.website;
+
+  const { error } = await supabase.from('companies').update(updateData).eq('id', id);
   if (error) throw error;
 }
 
@@ -451,14 +451,14 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
 }
 
 export async function updateUserProfile(id: string, data: any) {
-  const { error } = await supabase.from('profiles').update({
-    display_name: data.displayName,
-    photo_url: data.photoURL,
-    role: data.role,
-    user_type: data.userType,
-    is_admin: data.isAdmin,
-    updated_at: new Date().toISOString()
-  }).eq('id', id);
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (data.displayName !== undefined) updateData.display_name = data.displayName;
+  if (data.photoURL !== undefined) updateData.photo_url = data.photoURL;
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.userType !== undefined) updateData.user_type = data.userType;
+  if (data.isAdmin !== undefined) updateData.is_admin = data.isAdmin;
+
+  const { error } = await supabase.from('profiles').update(updateData).eq('id', id);
   if (error) throw error;
 }
 
@@ -549,14 +549,14 @@ export async function createActivity(data: any) {
 }
 
 export async function updateActivity(id: string, data: any) {
-  const { error } = await supabase.from('activities').update({
-    title: data.title,
-    description: data.description,
-    date: data.date,
-    type: data.type,
-    status: data.status,
-    updated_at: new Date().toISOString()
-  }).eq('id', id);
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.date !== undefined) updateData.date = data.date;
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.status !== undefined) updateData.status = data.status;
+
+  const { error } = await supabase.from('activities').update(updateData).eq('id', id);
   if (error) throw error;
 }
 

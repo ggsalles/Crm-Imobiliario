@@ -71,6 +71,7 @@ export default function CalendarPage() {
   });
 
   const [events, setEvents] = useState<Event[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Load events from database on mount
   useEffect(() => {
@@ -81,15 +82,34 @@ export default function CalendarPage() {
     const unsub = subscribeToActivities((data) => {
       // Map DB activities to local Event shape
       const mappedEvents: Event[] = data.map(act => {
-        const descLines = act.description?.split("\n") || [];
-        const timeLine = descLines[0];
+        const descText = act.description || "";
+        const descLines = descText.split("\n");
+        const firstLine = descLines[0] || "";
         
+        // Match format like "10:00 - 11:00"
+        const isTimeFormat = /^\d{2}:\d{2}\s-\s\d{2}:\d{2}/.test(firstLine);
+        
+        let displayTime = "Agendado";
+        let dateObj: Date;
+        try {
+          dateObj = act.date ? (typeof act.date === 'string' ? parseISO(act.date) : new Date(act.date)) : new Date();
+          
+          if (isTimeFormat) {
+            displayTime = firstLine;
+          } else if (act.date) {
+            displayTime = format(dateObj, "HH:mm");
+          }
+        } catch (e) {
+          console.error("Error formatting date", e);
+          dateObj = new Date();
+        }
+
         return {
           id: act.id,
-          title: act.title,
-          description: descLines.slice(1).join("\n"),
-          date: act.date,
-          time: timeLine.includes(" - ") ? timeLine : "Agendado",
+          title: act.title || "Sem título",
+          description: isTimeFormat ? descLines.slice(1).join("\n") : descText,
+          date: dateObj,
+          time: displayTime,
           type: act.type === 'meeting' ? "Visita" : act.type === 'call' ? "Follow-up" : "Reunião",
           client: "",
           status: act.status
@@ -100,6 +120,11 @@ export default function CalendarPage() {
 
     return () => unsub();
   }, [user, profile]);
+
+  const filteredEvents = events.filter(event => 
+    event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (event.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -177,22 +202,25 @@ export default function CalendarPage() {
 
   const openEditModal = (event: Event) => {
     setEditingEvent(event);
-    const [start, end] = event.time.split(" - ");
+    const timeParts = event.time.split(" - ");
+    const start = timeParts[0] || "10:00";
+    const end = timeParts[1] || "11:00";
+    
     setNewEvent({
       title: event.title,
-      time: start || "10:00",
-      endTime: end || "11:00",
+      time: start,
+      endTime: end,
       type: event.type,
       client: event.client || "",
       description: event.description || ""
     });
-    setSelectedDate(typeof event.date === 'string' ? parseISO(event.date) : event.date);
+    setSelectedDate(event.date instanceof Date ? event.date : parseISO(event.date));
     setIsModalOpen(true);
   };
 
   const getEventsForDay = (date: Date) => {
-    return events.filter(event => {
-      const eventDate = typeof event.date === 'string' ? parseISO(event.date) : event.date;
+    return filteredEvents.filter(event => {
+      const eventDate = event.date instanceof Date ? event.date : parseISO(event.date);
       return isSameDay(eventDate, date);
     });
   };
@@ -219,6 +247,8 @@ export default function CalendarPage() {
               <input 
                 type="text" 
                 placeholder="Buscar eventos..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="pl-11 pr-6 py-3 bg-slate-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-64 transition-all"
               />
             </div>
@@ -286,24 +316,37 @@ export default function CalendarPage() {
                     )}
                   >
                     <span className={cn(
-                      "inline-flex items-center justify-center w-7 h-7 text-xs font-bold rounded-lg transition-colors",
+                      "inline-flex items-center justify-center w-7 h-7 text-xs font-bold rounded-lg transition-all",
                       isSameDay(date, new Date()) ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-slate-600 group-hover:text-blue-600",
-                      isSameDay(date, selectedDate) && !isSameDay(date, new Date()) && "text-blue-600 ring-2 ring-blue-500/20"
+                      isSameDay(date, selectedDate) && "ring-2 ring-blue-500 ring-offset-2 z-10"
                     )}>
                       {format(date, "d")}
                     </span>
 
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {dayEvents.map((e, idx) => (
+                    <div className="mt-2 flex flex-col gap-1 overflow-hidden">
+                      {dayEvents.slice(0, 3).map((e, idx) => (
                         <div 
                           key={idx} 
                           className={cn(
-                            "h-1.5 w-1.5 rounded-full",
+                            "px-1.5 py-0.5 rounded-md text-[9px] font-bold truncate flex items-center gap-1",
+                            e.type === "Visita" ? "bg-amber-50 text-amber-600 border border-amber-100" : 
+                            e.type === "Reunião" ? "bg-blue-50 text-blue-600 border border-blue-100" : 
+                            "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                          )} 
+                        >
+                          <div className={cn(
+                            "w-1 h-1 rounded-full shrink-0",
                             e.type === "Visita" ? "bg-amber-400" : 
                             e.type === "Reunião" ? "bg-blue-500" : "bg-emerald-400"
-                          )} 
-                        />
+                          )} />
+                          {e.title}
+                        </div>
                       ))}
+                      {dayEvents.length > 3 && (
+                        <div className="text-[9px] font-bold text-slate-400 pl-1 mt-0.5">
+                          + {dayEvents.length - 3} mais
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -419,7 +462,12 @@ export default function CalendarPage() {
             <div className="bg-slate-900 rounded-[32px] p-8 text-white relative overflow-hidden group">
               <div className="relative z-10">
                 <h3 className="text-xl font-bold mb-2">Resumo da Semana</h3>
-                <p className="text-slate-400 text-sm mb-6 leading-relaxed">Você tem {events.length} compromissos agendados nos próximos dias.</p>
+                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                  Você tem {filteredEvents.filter(e => {
+                    const d = e.date instanceof Date ? e.date : parseISO(e.date);
+                    return d >= startOfWeek(new Date(), { locale: ptBR }) && d <= endOfWeek(new Date(), { locale: ptBR });
+                  }).length} compromissos agendados nesta semana.
+                </p>
                 <button className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold text-xs transition-all flex items-center gap-2 border border-white/10">
                   Ver Relatório Completo
                   <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
