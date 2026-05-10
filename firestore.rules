@@ -1,0 +1,245 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com'); }
+    function isSuperAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'ggsalles@gmail.com' || 
+        request.auth.uid == 'zpqWegRcW6Z5iBIyq9CEX7wotWT2'
+      ); 
+    }
+    function isAdmin() {
+      return isSuperAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin');
+    }
+    function isOwner(data) { return isSignedIn() && (data.ownerId == request.auth.uid); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidContact(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.type in ['cliente', 'equipe'] &&
+             (data.ownerId == request.auth.uid || isSuperAdmin()) &&
+             (!('companyId' in data) || data.companyId is string);
+    }
+
+    function isValidCompany(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (data.ownerId == request.auth.uid || isSuperAdmin());
+    }
+
+    function isValidDeal(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             (data.ownerId == request.auth.uid || isSuperAdmin()) &&
+             data.stage is string &&
+             data.value is number &&
+             (!('propertyId' in data) || data.propertyId is string);
+    }
+
+    function isValidProperty(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             data.type in ['casa', 'apartamento', 'terreno', 'comercial'] &&
+             data.status in ['disponível', 'reservado', 'vendido', 'alugado'] &&
+             data.price is number &&
+             data.location is string &&
+             (!('cep' in data) || data.cep is string) &&
+             (!('street' in data) || data.street is string) &&
+             (!('neighborhood' in data) || data.neighborhood is string) &&
+             (!('city' in data) || data.city is string) &&
+             (!('state' in data) || data.state is string) &&
+             (!('number' in data) || data.number is string) &&
+             (!('complement' in data) || data.complement is string) &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('acceptsFinancing' in data) || data.acceptsFinancing is bool) &&
+             (data.ownerId == request.auth.uid || isSuperAdmin());
+    }
+
+    function isValidGoal(data) {
+      return (data.stageGoals is map || data.targetValue is number) &&
+             data.month is string &&
+             (data.ownerId == request.auth.uid || isSuperAdmin());
+    }
+
+    function isValidTimelineEvent(data) {
+      return data.type in ['system', 'note'] &&
+             data.category in ['contact', 'deal', 'company'] &&
+             data.content is string && data.content.size() <= 10000 &&
+             (data.ownerId == request.auth.uid || isSuperAdmin()) &&
+             data.createdAt == request.time;
+    }
+
+    function isValidConversation(data) {
+      return data.participants is list && data.participants.size() >= 1 &&
+             data.type in ['direct', 'group'] &&
+             data.category in ['client', 'team'] &&
+             (data.ownerId == request.auth.uid || isSuperAdmin());
+    }
+
+    function isValidChatMessage(data) {
+      return data.conversationId is string &&
+             (data.senderId == request.auth.uid || isSuperAdmin()) &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.type in ['text', 'image', 'file'] &&
+             (data.ownerId == request.auth.uid || isSuperAdmin()) &&
+             data.createdAt == request.time;
+    }
+
+    match /contacts/{contactId} {
+      allow get: if isOwner(existing()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      
+      allow create: if isSignedIn() && isValidContact(incoming()) && 
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isOwner(existing()) && isValidContact(incoming()) &&
+                    incoming().updatedAt == request.time &&
+                    incoming().createdAt == existing().createdAt &&
+                    (incoming().ownerId == existing().ownerId || isSuperAdmin());
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /companies/{companyId} {
+      allow get: if isOwner(existing()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      
+      allow create: if isSignedIn() && isValidCompany(incoming()) && 
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isOwner(existing()) && isValidCompany(incoming()) &&
+                    incoming().updatedAt == request.time &&
+                    incoming().createdAt == existing().createdAt &&
+                    (incoming().ownerId == existing().ownerId || isSuperAdmin());
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /properties/{propertyId} {
+      allow get: if isOwner(existing()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      
+      allow create: if isSignedIn() && isValidProperty(incoming()) && 
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isOwner(existing()) && isValidProperty(incoming()) &&
+                    incoming().updatedAt == request.time &&
+                    incoming().createdAt == existing().createdAt &&
+                    (incoming().ownerId == existing().ownerId || isSuperAdmin());
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /deals/{dealId} {
+      allow get: if isOwner(existing()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      
+      allow create: if isSignedIn() && isValidDeal(incoming()) && 
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isOwner(existing()) && isValidDeal(incoming()) &&
+                    incoming().updatedAt == request.time &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().ownerId == existing().ownerId;
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /goals/{goalId} {
+      allow get: if isOwner(existing()) || (resource == null && isSignedIn()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      
+      allow create: if isOwner(incoming()) && isValidGoal(incoming());
+      
+      allow update: if isOwner(existing()) && 
+                    isValidGoal(incoming()) &&
+                    incoming().ownerId == existing().ownerId;
+      
+      allow delete: if isOwner(existing());
+    }
+
+    match /activities/{activityId} {
+      allow get: if isOwner(existing()) || (resource == null && isSignedIn()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      allow create: if isOwner(incoming());
+      allow update: if isOwner(existing()) && incoming().ownerId == existing().ownerId;
+      allow delete: if isOwner(existing());
+    }
+
+    match /timeline/{eventId} {
+      allow get: if isOwner(existing()) || isAdmin();
+      allow list: if isOwner(resource.data) || isAdmin();
+      allow create: if isSignedIn() && isValidTimelineEvent(incoming());
+      allow update: if isOwner(existing()) && isValidTimelineEvent(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(existing());
+    }
+    
+    match /conversations/{convId} {
+      allow get: if isAdmin() || (isSignedIn() && request.auth.uid in existing().participants);
+      allow list: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.participants);
+      allow create: if isSignedIn() && isValidConversation(incoming()) && request.auth.uid in incoming().participants;
+      allow update: if (isAdmin() || (isSignedIn() && request.auth.uid in existing().participants)) && isValidConversation(incoming());
+      allow delete: if isAdmin() || isOwner(existing());
+    }
+    
+    match /messages/{msgId} {
+      allow get: if isAdmin() || (isSignedIn() && (isOwner(existing()) || get(/databases/$(database)/documents/conversations/$(existing().conversationId)).data.participants.hasAny([request.auth.uid])));
+      allow list: if isAdmin() || (isSignedIn() && (resource.data.ownerId == request.auth.uid || get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.participants.hasAny([request.auth.uid])));
+      allow create: if isSignedIn() && isValidChatMessage(incoming());
+      allow update: if (isAdmin() || isOwner(existing())) && isValidChatMessage(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() || isOwner(existing());
+    }
+
+    function isValidUser(data) {
+      return (data.uid is string || !('uid' in data)) && 
+             (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || data.photoURL is string || data.photoURL == null) &&
+             (!('role' in data) || data.role in ['Membro', 'Admin']) &&
+             (!('userType' in data) || data.userType in ['funcionário', 'cliente']);
+    }
+
+    // isAdmin() uses get() and should be avoided in list rules to prevent O(n) costs.
+    // isSuperAdmin() uses email check and is safe.
+
+    function isMainAdmin(userIdOrEmail) {
+      return userIdOrEmail == 'ggsalles@gmail.com' || userIdOrEmail == 'zpqWegRcW6Z5iBIyq9CEX7wotWT2';
+    }
+
+    // Users collection
+    match /users/{uid} {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && (request.auth.uid == uid || isAdmin()) && 
+                    isValidUser(incoming()) &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && (
+                      isAdmin() || 
+                      (request.auth.uid == uid && 
+                        (!('role' in incoming()) || !('role' in existing()) || incoming().role == existing().role)
+                      )
+                    ) && 
+                    isValidUser(incoming()) &&
+                    (incoming().updatedAt == request.time || isAdmin()) &&
+                    (!('createdAt' in existing()) || !('createdAt' in incoming()) || incoming().createdAt == existing().createdAt) &&
+                    (!('email' in existing()) || !('email' in incoming()) || incoming().email == existing().email);
+      allow delete: if isSignedIn() && (
+                      (isAdmin() && !isMainAdmin(uid) && !isMainAdmin(existing().email)) ||
+                      (existing().email == request.auth.token.email)
+                    );
+    }
+  }
+}
