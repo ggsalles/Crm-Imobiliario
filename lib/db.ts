@@ -561,8 +561,13 @@ export async function updateActivity(id: string, data: any) {
 }
 
 export async function deleteActivity(id: string) {
+  console.log("Attempting to delete activity with id:", id);
   const { error } = await supabase.from('activities').delete().eq('id', id);
-  if (error) throw error;
+  if (error) {
+    console.error("Supabase delete error:", error);
+    throw error;
+  }
+  console.log("Successfully deleted activity:", id);
 }
 
 // Timeline

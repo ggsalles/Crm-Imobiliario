@@ -38,6 +38,7 @@ export function Sidebar() {
   const navItems = [
     { label: "Dashboard", icon: LayoutDashboard, href: "/" },
     { label: "Pipeline", icon: Trello, href: "/pipeline" },
+    { label: "Calendário", icon: Calendar, href: "/calendar" },
     { label: "Clientes", icon: Users, href: "/contacts" },
     { label: "Relatórios", icon: BarChart3, href: "/?tab=Relatórios" },
     { label: "Mensagens", icon: MessageSquare, href: "/messages" },
@@ -48,7 +49,7 @@ export function Sidebar() {
 
   const SidebarContent = () => (
     <div className="w-64 bg-[#0f172a] h-full flex flex-col text-slate-400">
-      <div className="p-8 flex items-center justify-between md:block">
+      <div className="p-6 md:p-8 flex items-center justify-between md:block">
         <Link href="/" className="group">
           <h1 className="text-xl font-bold text-white tracking-tight group-hover:text-blue-400 transition-colors">SalesScore</h1>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Enterprise Management</p>
@@ -58,14 +59,14 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 px-4 space-y-1 mt-4">
+      <nav className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setIsMobileMenuOpen(false)}
             className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group",
+              "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group",
               pathname === item.href 
                 ? "bg-blue-600/10 text-white" 
                 : "hover:bg-white/5 hover:text-white"
@@ -83,7 +84,7 @@ export function Sidebar() {
           href="/settings"
           onClick={() => setIsMobileMenuOpen(false)}
           className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group mt-4",
+            "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-2",
             pathname === "/settings" ? "bg-blue-600/10 text-white" : "hover:bg-white/5 hover:text-white"
           )}
         >
@@ -94,7 +95,7 @@ export function Sidebar() {
 
       <div className="mt-auto flex flex-col">
         {/* User Profile in Sidebar */}
-        <div className="px-4 py-6 border-t border-white/5">
+        <div className="px-4 py-4 border-t border-white/5">
           <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 border border-white/5">
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-lg shadow-blue-900/40 border border-white/10">
               <Image 
@@ -113,10 +114,10 @@ export function Sidebar() {
           </div>
         </div>
 
-        <div className="px-8 pb-8">
+        <div className="px-6 pb-6 mt-2">
           <button 
             onClick={() => router.push("/pipeline?new=true")}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 hover:opacity-90 active:scale-[0.98] transition-all mb-4"
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 hover:opacity-90 active:scale-[0.98] transition-all mb-3"
           >
             <Plus className="w-4 h-4" />
             Nova Oportunidade

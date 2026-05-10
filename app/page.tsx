@@ -316,7 +316,7 @@ function DashboardContent() {
   return (
     <div className="flex min-h-screen bg-slate-50/50">
       <Sidebar />
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto overflow-x-hidden">
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Header */}
         <header className="h-auto md:h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-12 flex-1">
@@ -385,7 +385,7 @@ function DashboardContent() {
                     title="RECEITA MENSAL" 
                     value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(currentMonthRevenue)} 
                     trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}% vs mês ant.`}
-                    description="Soma do valor de todos os negócios com status 'Vendido / Alugado' este mês."
+                    description="Valor total faturado este mês com imóveis vendidos ou alugados. Reflete o desempenho financeiro direto do período atual."
                     isPositive={revenueTrend >= 0}
                     chartData={getTrendData('revenue')}
                   />
@@ -394,7 +394,7 @@ function DashboardContent() {
                     title="TAXA DE CONVERSÃO" 
                     value={`${winRate.toFixed(1)}%`} 
                     trend="Sucesso do Funil"
-                    description="Calculado como (Negócios Fechados / Total de Negócios) * 100."
+                    description="Percentual de fechamentos bem-sucedidos em relação ao volume total de oportunidades. Indica a eficiência do seu processo comercial."
                     isPositive={winRate > 15}
                     chartData={getTrendData('revenue').reverse()}
                   />
@@ -403,7 +403,7 @@ function DashboardContent() {
                     title="NOVOS LEADS" 
                     value={newLeads.toString()} 
                     trend={`${leadsTrend > 0 ? '+' : ''}${leadsTrend.toFixed(1)}% vs mês ant.`}
-                    description="Quantidade de novos negócios que entraram no estágio 'Novo Lead' este mês."
+                    description="Novos clientes potenciais e negócios que entraram no pipeline este mês. Mede a eficácia das suas ações de prospecção."
                     isPositive={leadsTrend >= 0}
                     chartData={getTrendData('leads')}
                   />
@@ -412,7 +412,7 @@ function DashboardContent() {
                     title="NEGÓCIOS ABERTOS" 
                     value={openDeals.length.toString()} 
                     trend={`Fluxo total ativo`}
-                    description="Total de negociações em andamento (qualificação, proposta ou análise)."
+                    description="Negociações em andamento em todas as fases do funil. Representa o volume de trabalho e oportunidades de receita futura."
                     isPositive={true}
                     isNeutral={true}
                     chartData={getTrendData('deals')}
@@ -422,7 +422,7 @@ function DashboardContent() {
                     title="IMÓVEIS DISPONÍVEIS" 
                     value={activeProperties.toString()} 
                     trend={`Total em portfólio`}
-                    description="Número de unidades no inventário com status 'Disponível'."
+                    description="Unidades prontas para comercialização em seu inventário. Um portfólio atualizado é essencial para gerar novas oportunidades."
                     isPositive={true}
                     isNeutral={true}
                     chartData={getTrendData('leads').reverse()}
@@ -463,7 +463,7 @@ function DashboardContent() {
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Previsão</span>
                           <div className="relative group/info">
                             <HelpCircle className="w-3 h-3 cursor-help text-slate-400 opacity-50 hover:opacity-100 transition-opacity" />
-                            <div className="absolute left-0 bottom-full mb-2 w-56 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover/info:opacity-100 pointer-events-none transition-opacity z-50 shadow-2xl normal-case font-normal tracking-normal whitespace-normal">
+                            <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
                               Previsão baseada em 20% do valor total das negociações em aberto + 100% dos negócios já fechados no mês.
                             </div>
                           </div>
@@ -523,7 +523,7 @@ function DashboardContent() {
                     <div className="flex justify-between items-center mb-8 md:mb-10">
                       <h3 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Atividades</h3>
                       <button 
-                        onClick={() => router.push("/activities")}
+                        onClick={() => router.push("/calendar")}
                         className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all text-slate-400"
                       >
                         <ChevronRight className="w-5 h-5" />
@@ -585,7 +585,7 @@ function DashboardContent() {
                       )}
                     </div>
                     <button 
-                      onClick={() => router.push("/activities")}
+                      onClick={() => router.push("/calendar")}
                       className="w-full mt-8 md:mt-10 py-4 md:py-5 bg-slate-50 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all border border-slate-100"
                     >
                       Gerenciar Agenda
@@ -1231,15 +1231,15 @@ function MetricCard({ title, value, trend, description, isPositive, isNeutral, c
   return (
     <motion.div 
       variants={variants}
-      className="bg-white p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden h-full flex flex-col"
+      className="bg-white p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative h-full flex flex-col"
     >
       <div className="relative z-10 flex-1">
         <div className="flex items-start justify-between mb-1 md:mb-2 text-slate-400 group-hover:text-blue-500 transition-colors">
           <p className="text-[9px] font-bold uppercase tracking-[0.2em]">{title}</p>
           {description && (
             <div className="relative group/info">
-              <HelpCircle className="w-3 h-3 cursor-help opacity-50 hover:opacity-100 transition-opacity" />
-              <div className="absolute right-0 bottom-full mb-2 w-48 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover/info:opacity-100 pointer-events-none transition-opacity z-50 shadow-2xl">
+              <HelpCircle className="w-3 h-3 cursor-help opacity-40 hover:opacity-100 transition-opacity" />
+              <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
                 {description}
               </div>
             </div>
@@ -1271,7 +1271,7 @@ function MetricCard({ title, value, trend, description, isPositive, isNeutral, c
       </div>
 
       {/* Sparkline in the background */}
-      <div className="absolute inset-x-0 bottom-0 h-16 opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none">
+      <div className="absolute inset-x-0 bottom-0 h-16 opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none overflow-hidden rounded-b-[28px] md:rounded-b-[36px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
             <Line 
