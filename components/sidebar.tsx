@@ -57,8 +57,8 @@ export function Sidebar() {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-[#0f172a] h-screen sticky top-0 shrink-0 border-r border-white/5 z-[100]">
-        <Suspense fallback={<div className="w-64 bg-[#0f172a] h-full" />}>
+      <aside className="hidden md:flex w-64 bg-card h-screen sticky top-0 shrink-0 border-r border-border z-[100]">
+        <Suspense fallback={<div className="w-64 bg-card h-full" />}>
           <SidebarContent 
             pathname={pathname} 
             setIsMobileMenuOpen={setIsMobileMenuOpen} 
@@ -86,7 +86,7 @@ export function Sidebar() {
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               className="fixed inset-y-0 left-0 w-64 z-[60] md:hidden shadow-2xl"
             >
-              <Suspense fallback={<div className="w-64 bg-[#0f172a] h-full" />}>
+              <Suspense fallback={<div className="w-64 bg-card h-full" />}>
                 <SidebarContent 
                   pathname={pathname} 
                   setIsMobileMenuOpen={setIsMobileMenuOpen} 
@@ -119,13 +119,13 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
   };
 
   return (
-    <div className="w-64 bg-[#0f172a] h-full flex flex-col text-slate-400">
+    <div className="w-64 bg-card h-full flex flex-col text-muted-foreground transition-colors duration-500">
       <div className="p-6 md:p-8 flex items-center justify-between md:block">
         <Link href="/" className="group">
-          <h1 className="text-xl font-bold text-white tracking-tight group-hover:text-blue-400 transition-colors">SalesScore</h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Enterprise Management</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">SalesScore</h1>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Enterprise Management</p>
         </Link>
-        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-slate-400 hover:text-white">
+        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-muted-foreground hover:text-foreground">
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -144,13 +144,13 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
               className={cn(
                 "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group",
                 isActive 
-                  ? "bg-blue-600/10 text-white" 
-                  : "hover:bg-white/5 hover:text-white"
+                  ? "bg-primary/10 text-primary" 
+                  : "hover:bg-muted/80 hover:text-foreground"
               )}
             >
               <item.icon className={cn(
                 "w-5 h-5",
-                isActive ? "text-blue-500" : "text-slate-500 group-hover:text-slate-300"
+                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
               )} />
               {item.label}
               {item.label === "Mensagens" && unreadCount > 0 && (
@@ -165,19 +165,19 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
           onClick={() => setIsMobileMenuOpen(false)}
           className={cn(
             "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-2",
-            pathname === "/settings" ? "bg-blue-600/10 text-white" : "hover:bg-white/5 hover:text-white"
+            pathname === "/settings" ? "bg-primary/10 text-primary" : "hover:bg-muted/80 hover:text-foreground"
           )}
         >
-          <Settings className="w-5 h-5 text-slate-500 group-hover:text-slate-300" />
+          <Settings className={cn("w-5 h-5", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
           Configurações
         </Link>
       </nav>
 
       <div className="mt-auto flex flex-col">
         {/* User Profile in Sidebar */}
-        <div className="px-4 py-4 border-t border-white/5">
-          <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 border border-white/5">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-lg shadow-blue-900/40 border border-white/10">
+        <div className="px-4 py-4 border-t border-border">
+          <div className="bg-background/50 rounded-2xl p-4 flex items-center gap-3 border border-border">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-lg shadow-primary/40 border border-border">
               <Image 
                 src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
                 alt="User" 
@@ -188,8 +188,8 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white truncate">{profile?.displayName || "Usuário"}</p>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate">{profile?.role || "Membro"}</p>
+              <p className="text-xs font-bold text-foreground truncate">{profile?.displayName || "Usuário"}</p>
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest truncate">{profile?.role || "Membro"}</p>
             </div>
           </div>
         </div>
@@ -197,7 +197,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
         <div className="px-6 pb-6 mt-2">
           <button 
             onClick={() => router.push("/pipeline?new=true")}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-900/20 hover:opacity-90 active:scale-[0.98] transition-all mb-3"
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all mb-3"
           >
             <Plus className="w-4 h-4" />
             Nova Oportunidade
@@ -205,7 +205,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
           
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-slate-500 hover:text-red-400 transition-colors w-full"
+            className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-red-400 transition-colors w-full"
           >
             <LogOut className="w-4 h-4" />
             Sair

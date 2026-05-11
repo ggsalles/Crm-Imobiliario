@@ -180,34 +180,34 @@ export default function PropertiesPage() {
     setEditingProperty(null);
   };
 
-  if (authLoading || loading) {
+  if (authLoading || (loading && !user)) {
     return (
-      <div className="flex min-h-screen bg-slate-50 items-center justify-center">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen bg-background items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-[#fafbfc] font-sans overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground font-sans overflow-hidden transition-colors duration-500">
       <Sidebar />
       
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-auto md:h-20 bg-white border-b border-slate-100 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+        <header className="h-auto md:h-20 bg-card border-b border-border px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 transition-colors">
           <div>
-            <h2 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">Inventário de Imóveis</h2>
-            <p className="text-[10px] md:text-xs text-slate-400 font-medium">Gerencie seu portfólio imobiliário</p>
+            <h2 className="text-lg md:text-xl font-black text-foreground tracking-tight uppercase tracking-widest">Inventário de Imóveis</h2>
+            <p className="text-[10px] md:text-xs text-muted-foreground font-medium uppercase tracking-[0.2em] mt-1">Gerencie seu portfólio imobiliário</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative flex-1 sm:flex-none">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder="Buscar..."
+                placeholder="Buscar imóveis..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full sm:w-64 pl-10 pr-4 py-2.5 md:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full sm:w-64 pl-10 pr-4 py-2.5 md:py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
               />
             </div>
             <button 
@@ -215,7 +215,7 @@ export default function PropertiesPage() {
                 setEditingProperty(null);
                 setIsModalOpen(true);
               }}
-              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 hover:opacity-90 active:scale-[0.98] transition-all"
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
             >
               <Plus className="w-4 h-4" />
               Novo Imóvel
@@ -223,7 +223,7 @@ export default function PropertiesPage() {
           </div>
         </header>
 
-        <div className="p-4 md:p-8 space-y-6 overflow-y-auto flex-1">
+        <div className="p-4 md:p-8 space-y-6 overflow-y-auto flex-1 bg-muted/5">
           {/* Filters - Horizontal scroll on mobile */}
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
             {[
@@ -237,10 +237,10 @@ export default function PropertiesPage() {
                 key={type.id}
                 onClick={() => setFilterType(type.id)}
                 className={cn(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider border transition-all",
+                  "flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all",
                   filterType === type.id 
-                    ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/10" 
-                    : "bg-white text-slate-400 border-slate-100 hover:border-slate-200"
+                    ? "bg-foreground text-background border-foreground shadow-lg shadow-foreground/10" 
+                    : "bg-card text-muted-foreground border-border hover:border-primary/50"
                 )}
               >
                 <type.icon className="w-3.5 h-3.5" />
@@ -268,11 +268,11 @@ export default function PropertiesPage() {
 
           {filteredProperties.length === 0 && (
             <div className="flex flex-col items-center justify-center py-32 text-center">
-              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                <Home className="w-10 h-10 text-slate-300" />
+              <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-4">
+                <Home className="w-10 h-10 text-muted-foreground/30" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Nenhum imóvel encontrado</h3>
-              <p className="text-slate-400 text-sm max-w-xs mt-2">
+              <h3 className="text-lg font-black text-foreground uppercase tracking-tight">Nenhum imóvel encontrado</h3>
+              <p className="text-muted-foreground text-sm font-medium max-w-xs mt-2">
                 Comece adicionando seu primeiro imóvel ao inventário para gerenciar negociações.
               </p>
             </div>
@@ -288,68 +288,70 @@ export default function PropertiesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-2xl bg-white rounded-t-[32px] md:rounded-[32px] shadow-2xl overflow-y-auto max-h-[95vh] md:max-h-auto"
+              className="relative w-full max-w-2xl bg-card border border-border rounded-t-[32px] md:rounded-[32px] shadow-2xl overflow-y-auto max-h-[95vh]"
             >
-              <div className="p-6 md:p-8 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div className="p-6 md:p-8 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
                 <div>
-                  <h3 className="text-lg md:text-xl font-bold text-slate-900">{editingProperty ? "Editar Imóvel" : "Novo Imóvel"}</h3>
-                  <p className="text-xs md:text-sm text-slate-400 font-medium">Preencha os detalhes da unidade imobiliária</p>
+                  <h3 className="text-lg md:text-xl font-black text-foreground tracking-tight uppercase">{editingProperty ? "Editar Imóvel" : "Novo Imóvel"}</h3>
+                  <p className="text-xs md:text-sm text-muted-foreground font-medium mt-1">Preencha os detalhes da unidade imobiliária</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-400 transition-colors">
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <form onSubmit={handleCreateOrUpdate} className="p-6 md:p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 font-medium text-start">
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Título do Imóvel</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Título do Imóvel</label>
                     <input 
                       name="title"
                       required
                       defaultValue={editingProperty?.title}
                       placeholder="Ex: Apartamento Vista Mar Premium"
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                     />
                   </div>
 
                   <div className="space-y-2 text-start">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Tipo</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Tipo</label>
                     <select 
                       name="type"
                       defaultValue={editingProperty?.type || "apartamento"}
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all appearance-none font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all appearance-none font-bold text-foreground bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
                     >
-                      <option value="casa">Casa</option>
-                      <option value="apartamento">Apartamento</option>
-                      <option value="comercial">Comercial</option>
-                      <option value="terreno">Terreno</option>
+                      <option value="casa" className="bg-card">Casa</option>
+                      <option value="apartamento" className="bg-card">Apartamento</option>
+                      <option value="comercial" className="bg-card">Comercial</option>
+                      <option value="terreno" className="bg-card">Terreno</option>
                     </select>
                   </div>
 
                   <div className="space-y-2 text-start">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Status</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Status</label>
                     <select 
                       name="status"
                       defaultValue={editingProperty?.status || "disponível"}
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all appearance-none font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all appearance-none font-bold text-foreground bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
                     >
-                      <option value="disponível">Disponível</option>
-                      <option value="reservado">Reservado</option>
-                      <option value="vendido">Vendido</option>
-                      <option value="alugado">Alugado</option>
+                      <option value="disponível" className="bg-card">Disponível</option>
+                      <option value="reservado" className="bg-card">Reservado</option>
+                      <option value="vendido" className="bg-card">Vendido</option>
+                      <option value="alugado" className="bg-card">Alugado</option>
                     </select>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Preço (R$)</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Preço (R$)</label>
                     <input 
                       name="price"
                       type="text"
@@ -357,14 +359,14 @@ export default function PropertiesPage() {
                       value={displayPrice}
                       onChange={(e) => setDisplayPrice(formatCurrencyBRL(e.target.value))}
                       placeholder="R$ 0,00"
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 flex justify-between">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex justify-between items-center">
                       CEP
-                      {isFetchingCep && <span className="animate-pulse text-blue-500 lowercase">buscando...</span>}
+                      {isFetchingCep && <span className="animate-pulse text-primary lowercase font-medium">buscando...</span>}
                     </label>
                     <input 
                       name="cep"
@@ -372,126 +374,126 @@ export default function PropertiesPage() {
                       required
                       defaultValue={editingProperty?.cep}
                       placeholder="00000-000"
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-mono"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-mono font-bold text-foreground"
                     />
                   </div>
 
                   <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Rua / Logradouro</label>
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Rua / Logradouro</label>
                       <input 
                         name="street"
                         required
                         value={addressData.street}
                         onChange={(e) => setAddressData({ ...addressData, street: e.target.value })}
-                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                        className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Número</label>
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Número</label>
                       <input 
                         name="number"
                         required
                         defaultValue={editingProperty?.number}
-                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                        className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                       />
                     </div>
                   </div>
 
                   <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Bairro</label>
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Bairro</label>
                       <input 
                         name="neighborhood"
                         required
                         value={addressData.neighborhood}
                         onChange={(e) => setAddressData({ ...addressData, neighborhood: e.target.value })}
-                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                        className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Cidade</label>
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Cidade</label>
                       <input 
                         name="city"
                         required
                         value={addressData.city}
                         onChange={(e) => setAddressData({ ...addressData, city: e.target.value })}
-                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                        className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">UF</label>
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">UF</label>
                       <input 
                         name="state"
                         required
                         maxLength={2}
                         value={addressData.state}
                         onChange={(e) => setAddressData({ ...addressData, state: e.target.value })}
-                        className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all uppercase text-center font-bold"
+                        className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all uppercase text-center font-black"
                       />
                     </div>
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Complemento / Descrição Curta de Localização</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Complemento / Descrição Curta de Localização</label>
                     <input 
                       name="complement"
                       defaultValue={editingProperty?.complement}
                       placeholder="Ex: Próximo ao Shopping X"
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-medium text-foreground"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 md:col-span-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Área (m²)</label>
-                      <input name="area" type="number" defaultValue={editingProperty?.area} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium" />
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Área (m²)</label>
+                      <input name="area" type="number" defaultValue={editingProperty?.area} className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-sm font-bold text-foreground" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Quartos</label>
-                      <input name="bedrooms" type="number" defaultValue={editingProperty?.bedrooms} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium" />
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Quartos</label>
+                      <input name="bedrooms" type="number" defaultValue={editingProperty?.bedrooms} className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-sm font-bold text-foreground" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Banheiros</label>
-                      <input name="bathrooms" type="number" defaultValue={editingProperty?.bathrooms} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium" />
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Banheiros</label>
+                      <input name="bathrooms" type="number" defaultValue={editingProperty?.bathrooms} className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-sm font-bold text-foreground" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Vagas</label>
-                      <input name="parkingSpots" type="number" defaultValue={editingProperty?.parkingSpots} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium" />
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Vagas</label>
+                      <input name="parkingSpots" type="number" defaultValue={editingProperty?.parkingSpots} className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-sm font-bold text-foreground" />
                     </div>
                   </div>
 
-                  <div className="md:col-span-2 flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="md:col-span-2 flex items-center gap-3 p-4 bg-muted/40 rounded-2xl border border-border/50">
                     <input 
                       type="checkbox" 
                       name="acceptsFinancing" 
                       id="acceptsFinancing"
                       defaultChecked={editingProperty?.acceptsFinancing}
-                      className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
                     />
-                    <label htmlFor="acceptsFinancing" className="text-sm font-bold text-slate-700 cursor-pointer">
+                    <label htmlFor="acceptsFinancing" className="text-sm font-black text-foreground cursor-pointer uppercase tracking-tight">
                       Aceita Financiamento Bancário?
                     </label>
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Observações Internas (Não visível ao cliente)</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Observações Internas (Não visível ao cliente)</label>
                     <textarea 
                       name="notes"
                       defaultValue={editingProperty?.notes}
                       placeholder="Notas sobre proprietário, chaves, comissão ou pendências..."
                       rows={3}
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all resize-none font-medium text-slate-600"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none font-bold text-foreground"
                     />
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">URL da Imagem</label>
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">URL da Imagem</label>
                     <input 
                       name="imageUrl"
                       defaultValue={editingProperty?.imageUrl}
                       placeholder="https://exemplo.com/foto.jpg"
-                      className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
                     />
                   </div>
                 </div>
@@ -501,22 +503,22 @@ export default function PropertiesPage() {
                     <button 
                       type="button" 
                       onClick={() => { handleDelete(editingProperty.id); setIsModalOpen(false); }} 
-                      className="px-6 py-4 font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-colors border border-red-100 flex items-center justify-center"
+                      className="px-6 py-4 font-black text-red-500 hover:bg-red-500/10 rounded-2xl transition-colors border border-red-500/20 flex items-center justify-center"
                       title="Excluir imóvel"
                     >
-                      <Trash2 className="w-5 h-5 text-red-500" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   )}
                   <button 
                     type="button" 
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all"
+                    className="flex-1 py-4 bg-muted text-muted-foreground rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit" 
-                    className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-600/20 hover:opacity-90 active:scale-[0.98] transition-all"
+                    className="flex-1 py-4 bg-primary text-primary-foreground rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
                   >
                     {editingProperty ? "Salvar Alterações" : "Criar Imóvel"}
                   </button>
@@ -537,7 +539,7 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="bg-white rounded-[32px] border border-slate-100 overflow-hidden group hover:shadow-2xl hover:shadow-slate-200/50 transition-all flex flex-col"
+      className="bg-card rounded-[32px] border border-border overflow-hidden group hover:shadow-2xl hover:shadow-primary/10 transition-all flex flex-col"
     >
       <div className="h-48 relative overflow-hidden shrink-0">
         <Image 
@@ -549,18 +551,18 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
         />
         <div className="absolute top-4 left-4 flex gap-2">
           <span className={cn(
-            "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest backdrop-blur-md border",
+            "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border",
             property.status === 'disponível' ? "bg-emerald-500/80 text-white border-emerald-400" :
             property.status === 'reservado' ? "bg-amber-500/80 text-white border-amber-400" :
             "bg-slate-800/80 text-white border-slate-700"
           )}>
             {property.status}
           </span>
-          <span className="px-3 py-1.5 bg-white/80 backdrop-blur-md text-slate-900 border border-white/40 rounded-xl text-[10px] font-bold uppercase tracking-widest">
+          <span className="px-3 py-1.5 bg-card/80 backdrop-blur-md text-foreground border border-border/40 rounded-xl text-[10px] font-black uppercase tracking-widest">
             {property.type}
           </span>
           {property.acceptsFinancing && (
-            <span className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+            <span className="px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
               <TrendingUp className="w-3 h-3" />
               Financia
             </span>
@@ -568,10 +570,10 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
         </div>
         <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 transition-opacity">
            <div className="flex gap-1">
-             <button onClick={onEdit} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-600 hover:text-blue-600 shadow-lg ring-1 ring-black/5">
+             <button onClick={onEdit} className="w-8 h-8 bg-card rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary shadow-lg ring-1 ring-white/10">
                 <Edit className="w-4 h-4" />
              </button>
-             <button onClick={onDelete} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-600 hover:text-red-600 shadow-lg ring-1 ring-black/5">
+             <button onClick={onDelete} className="w-8 h-8 bg-card rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-600 shadow-lg ring-1 ring-white/10">
                 <Trash2 className="w-4 h-4" />
              </button>
            </div>
@@ -580,33 +582,33 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
 
       <div className="p-6 flex flex-col flex-1">
         <div className="mb-4">
-          <h4 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">{property.title}</h4>
-          <div className="flex items-center gap-1.5 text-slate-400 mt-1">
+          <h4 className="text-base font-black text-foreground group-hover:text-primary transition-colors line-clamp-1 uppercase tracking-tight">{property.title}</h4>
+          <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
             <MapPin className="w-3 h-3" />
-            <span className="text-[10px] font-bold uppercase tracking-widest truncate">{property.location}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest truncate">{property.location}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            <Bed className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs font-bold text-slate-600">{property.bedrooms} Quartos</span>
+          <div className="flex items-center gap-2 bg-muted p-2.5 rounded-xl border border-border/50">
+            <Bed className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold text-foreground">{property.bedrooms} Quartos</span>
           </div>
-          <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            <Square className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs font-bold text-slate-600">{property.area}m²</span>
+          <div className="flex items-center gap-2 bg-muted p-2.5 rounded-xl border border-border/50">
+            <Square className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold text-foreground">{property.area}m²</span>
           </div>
         </div>
 
-        <div className="mt-auto pt-6 border-t border-slate-50 flex items-center justify-between">
+        <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
           <div>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Valor Venda</p>
-            <p className="text-lg font-black text-slate-900 tracking-tight">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Valor Venda</p>
+            <p className="text-lg font-black text-foreground tracking-tight">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
             </p>
           </div>
-          <button className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-            <ChevronRight className="w-5 h-5" />
+          <button className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm">
+            <ChevronRight className="w-6 h-6" />
           </button>
         </div>
       </div>

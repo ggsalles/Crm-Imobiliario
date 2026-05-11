@@ -14,7 +14,6 @@ import {
   Clock, 
   CheckCircle2,
   Search,
-  Bell,
   HelpCircle,
   MoreHorizontal,
   ChevronRight,
@@ -85,8 +84,8 @@ const STAGES = [
 export default function DashboardPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
       </div>
     }>
       <DashboardContent />
@@ -120,11 +119,7 @@ function DashboardContent() {
         router.push("/login");
       } else {
         // Stop showing generic loader if auth is done and user is here
-        // Even if profile is still syncing, the UI will handle it
-        const timer = setTimeout(() => {
-          setLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+        setLoading(false);
       }
     }
   }, [user, authLoading, router]);
@@ -150,10 +145,6 @@ function DashboardContent() {
       setActivities(data);
     }, ownerId);
 
-    // Initial load markers - we can set loading to false quickly
-    // as Firestore is very responsive
-    setLoading(false);
-
     // Fetch team members if Admin
     let unsubUsers = () => {};
     if (profile.role === 'Admin') {
@@ -172,16 +163,18 @@ function DashboardContent() {
     };
   }, [user, profile]);
 
-  if (authLoading || loading || !user) {
+  if (authLoading || (loading && !user)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-          <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando painel...</p>
+          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest animate-pulse">Carregando painel...</p>
         </div>
       </div>
     );
   }
+
+  if (!user) return null;
 
   // --- Calculations ---
   const now = new Date();
@@ -320,23 +313,23 @@ function DashboardContent() {
     });
 
   return (
-    <div className="flex min-h-screen bg-slate-50/50">
+    <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Header */}
-        <header className="h-auto md:h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
+        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-12 flex-1">
             <div className="flex flex-col">
-              <h2 className="text-lg md:text-xl font-bold text-slate-900 shrink-0">Dashboard</h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
+              <h2 className="text-lg md:text-xl font-bold text-foreground shrink-0">Dashboard</h2>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
             </div>
             
             <div className="w-full md:max-w-md relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Pesquisar..." 
-                className="w-full bg-slate-100/50 border-none rounded-2xl py-2.5 md:py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 transition-all border border-transparent focus:border-slate-200"
+                className="w-full bg-muted/50 border-none rounded-2xl py-2.5 md:py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all border border-transparent focus:border-border"
               />
             </div>
 
@@ -348,13 +341,13 @@ function DashboardContent() {
                     setActiveTab(tab);
                     router.push(`/?tab=${tab}`);
                   }}
-                  className={`text-sm font-bold transition-all relative py-9 ${activeTab === tab ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`text-sm font-bold transition-all relative py-9 ${activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {tab}
                   {activeTab === tab && (
                     <motion.div 
                       layoutId="activeTab"
-                      className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full"
+                      className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full"
                     />
                   )}
                 </button>
@@ -362,13 +355,8 @@ function DashboardContent() {
             </nav>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
-            <div className="flex items-center gap-2">
-              <button className="p-2.5 md:p-3 hover:bg-slate-100 rounded-2xl transition-all relative group">
-                <Bell className="w-5 h-5 text-slate-500 group-hover:scale-110 transition-transform" />
-                <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-blue-600 rounded-full border-2 border-white shadow-sm" />
-              </button>
-            </div>
+          <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0 border-border">
+            {/* Notifications removed as per user request */}
           </div>
         </header>
 
@@ -440,41 +428,41 @@ function DashboardContent() {
                   {/* Chart Column */}
                   <motion.div 
                     variants={itemVariants}
-                    className="lg:col-span-2 bg-white rounded-[32px] md:rounded-[40px] border border-slate-100 p-6 md:p-10 shadow-sm relative overflow-hidden"
+                    className="lg:col-span-2 bg-card rounded-[32px] md:rounded-[40px] border border-border p-6 md:p-10 shadow-sm relative overflow-hidden card-hover"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-10 gap-4">
                       <div className="text-left">
-                        <h3 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Análise de Performance</h3>
-                        <p className="text-xs md:text-sm text-slate-500 mt-1 md:mt-2">Vendas e previsões atuais.</p>
+                        <h3 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">Análise de Performance</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground mt-1 md:mt-2">Vendas e previsões atuais.</p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button className="px-3 md:px-4 py-2 bg-slate-50 text-[10px] font-bold uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-100 transition-colors">Semanal</button>
-                        <button className="px-3 md:px-4 py-2 bg-blue-50 text-[10px] font-bold uppercase tracking-widest text-blue-600 rounded-xl">Mensal</button>
+                        <button className="px-3 md:px-4 py-2 bg-muted text-[10px] font-bold uppercase tracking-widest text-muted-foreground rounded-xl hover:bg-muted/80 transition-colors">Semanal</button>
+                        <button className="px-3 md:px-4 py-2 bg-primary/10 text-[10px] font-bold uppercase tracking-widest text-primary rounded-xl">Mensal</button>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-10 mb-8 md:mb-10 border-b border-slate-50 pb-8 md:pb-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-10 mb-8 md:mb-10 border-b border-border pb-8 md:pb-10">
                       <div>
                         <div className="flex items-center gap-2 mb-1 md:mb-2">
-                          <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-blue-600 shadow-lg shadow-blue-500/40" />
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Receita Real</span>
+                          <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40" />
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Receita Real</span>
                         </div>
-                        <p className="text-2xl md:text-3xl font-light text-slate-900 tracking-tighter">
+                        <p className="text-2xl md:text-3xl font-light text-foreground tracking-tighter">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(currentMonthRevenue)}
                         </p>
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1 md:mb-2">
-                          <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-slate-200" />
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Previsão</span>
+                          <div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full bg-border" />
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Previsão</span>
                           <div className="relative group/info">
-                            <HelpCircle className="w-3 h-3 cursor-help text-slate-400 opacity-50 hover:opacity-100 transition-opacity" />
-                            <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
+                            <HelpCircle className="w-3 h-3 cursor-help text-muted-foreground opacity-50 hover:opacity-100 transition-opacity" />
+                            <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
                               Previsão baseada em 20% do valor total das negociações em aberto + 100% dos negócios já fechados no mês.
                             </div>
                           </div>
                         </div>
-                        <p className="text-2xl md:text-3xl font-light text-slate-900 tracking-tighter">
+                        <p className="text-2xl md:text-3xl font-light text-foreground tracking-tighter">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}
                         </p>
                       </div>
@@ -515,7 +503,7 @@ function DashboardContent() {
                             }}
                           />
                           <Bar dataKey="projected" fill="#F1F5F9" radius={[12, 12, 12, 12]} barSize={32} />
-                          <Bar dataKey="actual" fill="#2563EB" radius={[12, 12, 12, 12]} barSize={32} />
+                          <Bar dataKey="actual" fill="hsl(var(--primary))" radius={[12, 12, 12, 12]} barSize={32} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -524,13 +512,13 @@ function DashboardContent() {
                   {/* Activities Column */}
                   <motion.div 
                     variants={itemVariants}
-                    className="bg-white rounded-[32px] md:rounded-[40px] border border-slate-100 p-6 md:p-10 shadow-sm flex flex-col relative overflow-hidden"
+                    className="bg-card rounded-[32px] md:rounded-[40px] border border-border p-6 md:p-10 shadow-sm flex flex-col relative overflow-hidden card-hover"
                   >
                     <div className="flex justify-between items-center mb-8 md:mb-10">
-                      <h3 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Atividades</h3>
+                      <h3 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">Atividades</h3>
                       <button 
                         onClick={() => router.push("/calendar")}
-                        className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all text-slate-400"
+                        className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all text-muted-foreground"
                       >
                         <ChevronRight className="w-5 h-5" />
                       </button>
@@ -548,8 +536,8 @@ function DashboardContent() {
                           <div className={cn(
                             "flex flex-col items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-2xl md:rounded-3xl shrink-0 transition-all shadow-sm ring-1",
                             activity.isCompleted 
-                              ? "bg-slate-100 text-slate-400 ring-slate-200" 
-                              : "bg-slate-50 text-slate-900 ring-slate-100 group-hover:bg-blue-600 group-hover:text-white group-hover:ring-blue-500/20"
+                              ? "bg-muted text-muted-foreground ring-border" 
+                              : "bg-background text-foreground ring-border group-hover:bg-primary group-hover:text-white group-hover:ring-primary/20"
                           )}>
                             <span className="text-[9px] md:text-[10px] font-bold uppercase leading-none tracking-widest">{activity.date.split(' ')[1]}</span>
                             <span className="text-lg md:text-xl font- black leading-none mt-1 tracking-tighter">{activity.date.split(' ')[0]}</span>
@@ -557,19 +545,19 @@ function DashboardContent() {
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <h4 className={cn(
                               "text-xs md:text-sm font-bold transition-colors truncate mb-1",
-                              activity.isCompleted ? "text-slate-400 line-through" : "text-slate-900 group-hover:text-blue-600"
+                              activity.isCompleted ? "text-muted-foreground line-through" : "text-foreground group-hover:text-primary"
                             )}>
                               {activity.title}
                             </h4>
                             <div className="flex items-center gap-2 md:gap-3">
                               <span className={cn(
                                 "text-[10px] font-bold uppercase tracking-widest",
-                                activity.isCompleted ? "text-slate-400" : "text-blue-600"
+                                activity.isCompleted ? "text-muted-foreground" : "text-primary"
                               )}>
                                 {activity.time}
                               </span>
-                              <div className="w-1 h-1 rounded-full bg-slate-200" />
-                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">
+                              <div className="w-1 h-1 rounded-full bg-border" />
+                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest truncate">
                                 {activity.statusLabel}
                               </p>
                             </div>
@@ -577,14 +565,14 @@ function DashboardContent() {
                           <div className={cn(
                             "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
                             activity.isCompleted 
-                              ? "bg-blue-600 border-blue-600 text-white" 
-                              : "border-slate-200 text-transparent group-hover:border-blue-400"
+                              ? "bg-primary border-primary text-white" 
+                              : "border-border text-transparent group-hover:border-primary/50"
                           )}>
                             <CheckCircle2 className="w-3.5 h-3.5" />
                           </div>
                         </div>
                       )) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-300 py-12">
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
                           <Calendar className="w-12 md:w-16 h-12 md:h-16 mb-4 opacity-10" />
                           <p className="text-xs font-bold uppercase tracking-widest">Sem tarefas</p>
                         </div>
@@ -592,7 +580,7 @@ function DashboardContent() {
                     </div>
                     <button 
                       onClick={() => router.push("/calendar")}
-                      className="w-full mt-8 md:mt-10 py-4 md:py-5 bg-slate-50 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all border border-slate-100"
+                      className="w-full mt-8 md:mt-10 py-4 md:py-5 bg-muted rounded-2xl text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all border border-border"
                     >
                       Gerenciar Agenda
                     </button>
@@ -602,25 +590,25 @@ function DashboardContent() {
                 {/* Recent Deals Table */}
                 <motion.div 
                   variants={itemVariants}
-                  className="bg-white rounded-[32px] md:rounded-[40px] border border-slate-100 p-6 md:p-10 shadow-sm overflow-hidden"
+                  className="bg-card rounded-[32px] md:rounded-[40px] border border-border p-6 md:p-10 shadow-sm overflow-hidden card-hover"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-10 gap-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-50 text-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-primary/10 text-primary rounded-xl md:rounded-2xl flex items-center justify-center">
                         <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
                       </div>
                       <div>
-                        <h3 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Negócios Recentes</h3>
-                        <p className="text-xs md:text-sm text-slate-400">Últimas movimentações</p>
+                        <h3 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">Negócios Recentes</h3>
+                        <p className="text-xs md:text-sm text-muted-foreground">Últimas movimentações</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all">
+                      <button className="p-2.5 bg-muted text-muted-foreground rounded-xl hover:bg-muted/80 transition-all">
                         <Filter className="w-5 h-5" />
                       </button>
                       <button 
                         onClick={() => router.push("/pipeline")}
-                        className="flex-1 sm:flex-none px-6 md:px-8 py-2.5 md:py-3 bg-blue-600 text-white rounded-xl md:rounded-2xl text-[10px] font-bold shadow-xl shadow-blue-900/20 hover:opacity-90 transition-all font-sans uppercase tracking-widest"
+                        className="flex-1 sm:flex-none px-6 md:px-8 py-2.5 md:py-3 bg-primary text-white rounded-xl md:rounded-2xl text-[10px] font-bold shadow-xl shadow-primary/20 hover:opacity-90 transition-all font-sans uppercase tracking-widest"
                       >
                         Pipeline
                       </button>
@@ -630,7 +618,7 @@ function DashboardContent() {
                   <div className="overflow-x-auto -mx-6 md:-mx-10 px-6 md:px-10">
                     <table className="w-full border-separate border-spacing-y-4">
                       <thead>
-                        <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-left">
+                        <tr className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-left">
                           <th className="px-6 pb-2">Empresa / Projeto</th>
                           <th className="px-6 pb-2">Valor</th>
                           <th className="px-6 pb-2">Fase Atual</th>
@@ -641,30 +629,30 @@ function DashboardContent() {
                       <tbody className="">
                         {displayRecentDeals.length > 0 ? displayRecentDeals.map((deal) => (
                           <tr key={deal.id} className="group cursor-pointer" onClick={() => router.push("/pipeline")}>
-                            <td className="px-6 py-6 bg-slate-50 group-hover:bg-white border-y border-l border-transparent group-hover:border-slate-100 ring-1 ring-slate-100 group-hover:shadow-lg transition-all rounded-l-[28px]">
+                            <td className="px-6 py-6 bg-muted/30 group-hover:bg-card border-y border-l border-transparent group-hover:border-border ring-1 ring-border group-hover:shadow-lg transition-all rounded-l-[28px]">
                               <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-bold bg-white text-blue-600 shadow-sm`}>
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-bold bg-background text-primary shadow-sm`}>
                                   {deal.initials}
                                 </div>
-                                <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{deal.account}</span>
+                                <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors uppercase tracking-tight">{deal.account}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-6 bg-slate-50 group-hover:bg-white border-y border-transparent group-hover:border-slate-100 ring-1 ring-slate-100 group-hover:shadow-lg transition-all">
-                              <span className="text-sm font-bold text-slate-900">{deal.value}</span>
+                            <td className="px-6 py-6 bg-muted/30 group-hover:bg-card border-y border-transparent group-hover:border-border ring-1 ring-border group-hover:shadow-lg transition-all">
+                              <span className="text-sm font-bold text-foreground">{deal.value}</span>
                             </td>
-                            <td className="px-6 py-6 bg-slate-50 group-hover:bg-white border-y border-transparent group-hover:border-slate-100 ring-1 ring-slate-100 group-hover:shadow-lg transition-all">
+                            <td className="px-6 py-6 bg-muted/30 group-hover:bg-card border-y border-transparent group-hover:border-border ring-1 ring-border group-hover:shadow-lg transition-all">
                               <span className={cn(
                                 "inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest ring-1 ring-inset",
-                                deal.color === 'emerald' ? "bg-emerald-50 text-emerald-600 ring-emerald-600/10" :
-                                deal.color === 'blue' ? "bg-blue-50 text-blue-600 ring-blue-600/10" :
-                                deal.color === 'purple' ? "bg-purple-50 text-purple-600 ring-purple-600/10" :
-                                deal.color === 'orange' ? "bg-orange-50 text-orange-600 ring-orange-600/10" :
-                                "bg-yellow-50 text-yellow-600 ring-yellow-600/10"
+                                deal.color === 'emerald' ? "bg-emerald-500/10 text-emerald-500 ring-emerald-500/20" :
+                                deal.color === 'blue' ? "bg-primary/10 text-primary ring-primary/20" :
+                                deal.color === 'purple' ? "bg-purple-500/10 text-purple-500 ring-purple-500/20" :
+                                deal.color === 'orange' ? "bg-orange-500/10 text-orange-500 ring-orange-500/20" :
+                                "bg-yellow-500/10 text-yellow-500 ring-yellow-500/20"
                               )}>
                                 <div className={cn(
                                   "w-1.5 h-1.5 rounded-full animate-pulse",
                                   deal.color === 'emerald' ? "bg-emerald-500" :
-                                  deal.color === 'blue' ? "bg-blue-500" :
+                                  deal.color === 'blue' ? "bg-primary" :
                                   deal.color === 'purple' ? "bg-purple-500" :
                                   deal.color === 'orange' ? "bg-orange-500" :
                                   "bg-yellow-500"
@@ -672,30 +660,30 @@ function DashboardContent() {
                                 {deal.stage}
                               </span>
                             </td>
-                            <td className="px-6 py-6 bg-slate-50 group-hover:bg-white border-y border-transparent group-hover:border-slate-100 ring-1 ring-slate-100 group-hover:shadow-lg transition-all">
+                            <td className="px-6 py-6 bg-muted/30 group-hover:bg-card border-y border-transparent group-hover:border-border ring-1 ring-border group-hover:shadow-lg transition-all">
                               <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-bold text-slate-400 w-8">{deal.probability}%</span>
-                                <div className="h-1.5 w-24 bg-white rounded-full overflow-hidden shadow-inner ring-1 ring-slate-100">
+                                <span className="text-[10px] font-bold text-muted-foreground w-8">{deal.probability}%</span>
+                                <div className="h-1.5 w-24 bg-background rounded-full overflow-hidden shadow-inner ring-1 ring-border">
                                   <motion.div 
                                     initial={{ width: 0 }}
                                     animate={{ width: `${deal.probability}%` }}
                                     className={cn(
-                                      "h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(59,130,246,0.5)]",
-                                      deal.color === 'emerald' ? "bg-emerald-500 shadow-emerald-500/50" : "bg-blue-600"
+                                      "h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(var(--primary),0.5)]",
+                                      deal.color === 'emerald' ? "bg-emerald-500 shadow-emerald-500/50" : "bg-primary"
                                     )} 
                                   />
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-6 bg-slate-50 group-hover:bg-white border-y border-r border-transparent group-hover:border-slate-100 ring-1 ring-slate-100 group-hover:shadow-lg transition-all rounded-r-[28px] text-right">
-                              <button className="p-3 hover:bg-slate-50 rounded-xl transition-all text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100">
+                            <td className="px-6 py-6 bg-muted/30 group-hover:bg-card border-y border-r border-transparent group-hover:border-border ring-1 ring-border group-hover:shadow-lg transition-all rounded-r-[28px] text-right">
+                              <button className="p-3 hover:bg-muted rounded-xl transition-all text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100">
                                 < MoreHorizontal className="w-5 h-5" />
                               </button>
                             </td>
                           </tr>
                         )) : (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-slate-400 font-medium text-sm">
+                            <td colSpan={5} className="py-12 text-center text-muted-foreground font-medium text-sm">
                               Nenhum negócio encontrado recentemente.
                             </td>
                           </tr>
@@ -726,7 +714,7 @@ function DashboardContent() {
           onClick={() => router.push("/pipeline")}
           className="fixed bottom-6 right-6 md:bottom-12 md:right-12 bg-slate-900 text-white p-4 md:p-6 rounded-2xl md:rounded-[32px] shadow-2xl hover:scale-110 active:scale-95 transition-all z-30 flex items-center gap-3 md:gap-4 group ring-2 md:ring-4 ring-white"
         >
-          <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-600 rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/40">
+          <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-primary/40">
             <Plus className="w-4 h-4 md:w-5 md:h-5" />
           </div>
           <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 font-bold uppercase tracking-widest text-[9px] md:text-[10px] whitespace-nowrap">Novo Lead</span>
@@ -795,34 +783,34 @@ function TeamView({ users, deals }: { users: UserProfile[], deals: Deal[] }) {
             </thead>
             <tbody>
               {agents.map((agent) => (
-                <tr key={agent.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-10 py-6 border-b border-slate-50">
+                <tr key={agent.id} className="group hover:bg-muted/50 transition-colors">
+                  <td className="px-10 py-6 border-b border-border">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center font-bold text-blue-600 text-xs shadow-sm shadow-blue-200/50 overflow-hidden relative">
-                        {agent.photoURL ? <Image src={agent.photoURL} alt="" fill className="w-full h-full object-cover" /> : agent.displayName?.[0]}
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary text-xs shadow-sm shadow-primary/5 overflow-hidden relative">
+                        {agent.photoURL ? <Image src={agent.photoURL} alt="" fill className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : agent.displayName?.[0]}
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{agent.displayName}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{agent.role}</p>
+                        <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{agent.displayName}</p>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{agent.role}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-10 py-6 border-b border-slate-50">
-                    <p className="text-sm font-bold text-slate-900">
+                  <td className="px-10 py-6 border-b border-border">
+                    <p className="text-sm font-bold text-foreground">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(agent.stats.totalValue)}
                     </p>
                   </td>
-                  <td className="px-10 py-6 border-b border-slate-50 text-sm font-medium text-slate-600">{agent.stats.count}</td>
-                  <td className="px-10 py-6 border-b border-slate-50">
+                  <td className="px-10 py-6 border-b border-border text-sm font-medium text-muted-foreground">{agent.stats.count}</td>
+                  <td className="px-10 py-6 border-b border-border">
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-900">{agent.stats.winRate.toFixed(1)}%</span>
-                      <div className="h-1 w-20 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 rounded-full" style={{ width: `${agent.stats.winRate}%` }} />
+                      <span className="text-xs font-bold text-foreground">{agent.stats.winRate.toFixed(1)}%</span>
+                      <div className="h-1 w-20 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full" style={{ width: `${agent.stats.winRate}%` }} />
                       </div>
                     </div>
                   </td>
-                  <td className="px-10 py-6 border-b border-slate-50">
-                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase tracking-widest ring-1 ring-blue-600/10">
+                  <td className="px-10 py-6 border-b border-border">
+                    <span className="px-3 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-bold uppercase tracking-widest ring-1 ring-primary/10">
                       {agent.stats.active} ativos
                     </span>
                   </td>
@@ -858,23 +846,23 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
   return (
     <div className="space-y-10 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 bg-card rounded-[40px] border border-border p-10 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Funil de Vendas</h3>
-              <p className="text-sm text-slate-500 mt-1">Estimativa de conversão por estágio.</p>
+              <h3 className="text-2xl font-bold text-foreground tracking-tight">Funil de Vendas</h3>
+              <p className="text-sm text-muted-foreground mt-1">Estimativa de conversão por estágio.</p>
             </div>
             <div className="text-right group relative">
               <div className="flex items-center justify-end gap-1.5 mb-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valor Total Pipeline</p>
-                <div className="cursor-help text-slate-300 hover:text-blue-500 transition-colors">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valor Total Pipeline</p>
+                <div className="cursor-help text-muted-foreground/30 hover:text-primary transition-colors">
                   <Info className="w-3 h-3" />
                   <div className="absolute right-0 top-full mt-2 w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10 font-medium normal-case tracking-normal">
                     <p>A &quot;Previsão de Fechamento&quot; é calculada somando suas vendas realizadas ao 20% do valor total deste pipeline.</p>
                   </div>
                 </div>
               </div>
-              <p className="text-2xl font-light text-slate-900 tracking-tighter">
+              <p className="text-2xl font-light text-foreground tracking-tighter">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPipelineValue)}
               </p>
             </div>
@@ -891,34 +879,34 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-2 h-2 rounded-full",
-                        stage.color === 'blue' ? "bg-blue-600" :
+                        stage.color === 'blue' ? "bg-primary" :
                         stage.color === 'purple' ? "bg-purple-600" :
                         stage.color === 'orange' ? "bg-orange-600" :
                         stage.color === 'yellow' ? "bg-yellow-600" : "bg-emerald-600"
                       )} />
-                      <span className="text-sm font-bold text-slate-900">{stage.name}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">
+                      <span className="text-sm font-bold text-foreground">{stage.name}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-2">
                         {stage.count} negócios
                       </span>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-bold text-slate-900">
+                      <p className="text-xs font-bold text-foreground">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.value)}
                       </p>
                       {stage.goal > 0 && (
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                           Meta: {stage.goal} units
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="h-4 bg-slate-50 rounded-full overflow-hidden shadow-inner ring-1 ring-slate-100 p-0.5">
+                  <div className="h-4 bg-muted rounded-full overflow-hidden shadow-inner ring-1 ring-border p-0.5">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${funnelWidth}%` }}
                       className={cn(
                         "h-full rounded-full transition-all duration-1000",
-                        stage.color === 'blue' ? "bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.4)]" :
+                        stage.color === 'blue' ? "bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)]" :
                         stage.color === 'purple' ? "bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.4)]" :
                         stage.color === 'orange' ? "bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.4)]" :
                         stage.color === 'yellow' ? "bg-yellow-600 shadow-[0_0_8px_rgba(202,138,4,0.4)]" : 
@@ -952,7 +940,7 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(100, progressPercentage)}%` }}
-                  className="h-full bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.6)]"
+                  className="h-full bg-primary rounded-full shadow-[0_0_15px_rgba(var(--primary),0.6)]"
                 />
               </div>
               <div className="flex justify-between items-center mt-4">
@@ -989,7 +977,7 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
 function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], contacts: Contact[], progressPercentage: number }) {
   // Define color mapping for the chart to match STAGES colors
   const STAGE_COLORS: Record<string, string> = {
-    blue: '#2563EB',
+    blue: 'hsl(var(--primary))',
     purple: '#7C3AED',
     orange: '#EA580C',
     yellow: '#F59E0B',
@@ -1090,43 +1078,43 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm">
+        <div className="lg:col-span-2 bg-card rounded-[40px] border border-border p-10 shadow-sm">
           <div className="mb-10">
-            <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Fluxo de Receita</h3>
-            <p className="text-sm text-slate-500 mt-1">Sazonalidade das vendas (últimos 6 meses).</p>
+            <h3 className="text-2xl font-bold text-foreground tracking-tight">Fluxo de Receita</h3>
+            <p className="text-sm text-muted-foreground mt-1">Sazonalidade das vendas (últimos 6 meses).</p>
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }}
                   dy={15}
                 />
                 <YAxis hide />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px' }}
+                  contentStyle={{ borderRadius: '24px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px' }}
                   formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#2563EB" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
+                <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm flex flex-col items-center justify-center">
+        <div className="bg-card rounded-[40px] border border-border p-10 shadow-sm flex flex-col items-center justify-center">
           <div className="mb-8 w-full text-center">
-            <h3 className="text-xl font-bold text-slate-900 tracking-tight">Fases do Funil</h3>
-            <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Distribuição por Status</p>
+            <h3 className="text-xl font-bold text-foreground tracking-tight">Fases do Funil</h3>
+            <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-bold">Distribuição por Status</p>
           </div>
           <div className="h-[280px] w-full relative">
             <ResponsiveContainer width="100%" height="100%">
@@ -1146,21 +1134,21 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                   ))}
                 </Pie>
                 <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-3xl font-black text-slate-900">{validDeals.length}</span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Negócios</span>
+              <span className="text-3xl font-black text-foreground">{validDeals.length}</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Negócios</span>
             </div>
           </div>
           <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 justify-center">
             {stageData.map((stage, i) => (
               <div key={stage.name} className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{stage.name}</span>
-                <span className="text-[10px] font-bold text-slate-300 ml-0.5">{stage.value}</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{stage.name}</span>
+                <span className="text-[10px] font-bold text-muted-foreground/50 ml-0.5">{stage.value}</span>
               </div>
             ))}
           </div>
@@ -1168,10 +1156,10 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm">
+        <div className="bg-card rounded-[40px] border border-border p-10 shadow-sm">
           <div className="mb-10">
-            <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Saúde da Carteira</h3>
-            <p className="text-sm text-slate-500 mt-1">Eficiência multidimensional.</p>
+            <h3 className="text-2xl font-bold text-foreground tracking-tight">Saúde da Carteira</h3>
+            <p className="text-sm text-muted-foreground mt-1">Eficiência multidimensional.</p>
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -1182,13 +1170,13 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                 { subject: 'Retenção', A: 70 },
                 { subject: 'Meta', A: progressPercentage },
               ]}>
-                <PolarGrid stroke="#f1f5f9" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }} />
                 <Radar
                    name="Enterprise"
                    dataKey="A"
-                   stroke="#2563EB"
-                   fill="#2563EB"
+                   stroke="hsl(var(--primary))"
+                   fill="hsl(var(--primary))"
                    fillOpacity={0.1}
                  />
               </RadarChart>
@@ -1196,14 +1184,14 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
           </div>
         </div>
 
-        <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm">
+        <div className="bg-card rounded-[40px] border border-border p-10 shadow-sm">
           <div className="flex items-center gap-4 mb-10">
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
                <Layers className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Performance Proativa</h3>
-              <p className="text-sm text-slate-500">Acompanhamento vs Objetivos.</p>
+              <h3 className="text-2xl font-bold text-foreground tracking-tight">Performance Proativa</h3>
+              <p className="text-sm text-muted-foreground">Acompanhamento vs Objetivos.</p>
             </div>
           </div>
           
@@ -1216,11 +1204,11 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                     <span>{item}</span>
                     <span className={val > 50 ? 'text-emerald-500' : 'text-blue-500'}>{val}%</span>
                   </div>
-                  <div className="h-2 bg-slate-50 rounded-full overflow-hidden">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${val}%` }}
-                      className={cn("h-full rounded-full", val > 50 ? "bg-emerald-500" : "bg-blue-600")}
+                      className={cn("h-full rounded-full", val > 50 ? "bg-emerald-500" : "bg-primary")}
                     />
                   </div>
                 </div>
@@ -1233,14 +1221,14 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
   );
 }
 
-function MetricCard({ title, value, trend, description, isPositive, isNeutral, chartData, variants }: any) {
+function MetricCard({ title, value, trend, description, isNeutral, isPositive, chartData, variants }: any) {
   return (
     <motion.div 
       variants={variants}
-      className="bg-white p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative h-full flex flex-col"
+      className="bg-card p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-border shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all group relative h-full flex flex-col"
     >
       <div className="relative z-10 flex-1">
-        <div className="flex items-start justify-between mb-1 md:mb-2 text-slate-400 group-hover:text-blue-500 transition-colors">
+        <div className="flex items-start justify-between mb-1 md:mb-2 text-muted-foreground group-hover:text-primary transition-colors">
           <p className="text-[9px] font-bold uppercase tracking-[0.2em]">{title}</p>
           {description && (
             <div className="relative group/info">
@@ -1251,27 +1239,27 @@ function MetricCard({ title, value, trend, description, isPositive, isNeutral, c
             </div>
           )}
         </div>
-        <p className="text-2xl md:text-3xl font-light text-slate-900 tracking-tighter group-hover:text-blue-600 transition-colors leading-none">{value}</p>
+        <p className="text-2xl md:text-3xl font-light text-foreground tracking-tighter group-hover:text-primary transition-colors leading-none">{value}</p>
         
         <div className="mt-3 md:mt-4 flex items-center gap-2">
           {isNeutral ? (
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+            <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
               <Plus className="w-2.5 h-2.5" />
             </div>
           ) : isPositive ? (
-            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+            <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg">
                <ArrowUpRight className="w-2.5 h-2.5" />
             </div>
           ) : (
-            <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
+            <div className="p-1.5 bg-red-500/10 text-red-500 rounded-lg">
                <ArrowDownRight className="w-2.5 h-2.5" />
             </div>
           )}
           <div className="flex flex-col">
-            <span className={`text-[10px] font-bold leading-none ${isNeutral ? 'text-blue-600' : isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+            <span className={`text-[10px] font-bold leading-none ${isNeutral ? 'text-primary' : isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
               {trend.split(' ')[0]}
             </span>
-            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{trend.split(' ').slice(1).join(' ')}</span>
+            <span className="text-[8px] font-bold text-muted-foreground/30 uppercase tracking-widest mt-0.5">{trend.split(' ').slice(1).join(' ')}</span>
           </div>
         </div>
       </div>
@@ -1283,7 +1271,7 @@ function MetricCard({ title, value, trend, description, isPositive, isNeutral, c
             <Line 
               type="monotone" 
               dataKey="value" 
-              stroke={isNeutral ? "#3b82f6" : isPositive ? "#10b981" : "#ef4444"} 
+              stroke={isNeutral ? "hsl(var(--primary))" : isPositive ? "#10b981" : "#ef4444"} 
               strokeWidth={3} 
               dot={false}
               animationDuration={2000}

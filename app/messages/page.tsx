@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Search, 
-  Bell, 
   History, 
   Settings,
   MoreVertical,
@@ -294,10 +293,10 @@ function MessagesContent() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex min-h-screen bg-background">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
         </main>
       </div>
     );
@@ -307,23 +306,20 @@ function MessagesContent() {
     <>
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0 z-20">
+        <header className="h-20 bg-card border-b border-border px-8 flex items-center justify-between shrink-0 z-20 transition-colors">
           <div className="flex-1 max-w-2xl relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input 
               type="text" 
               value={convSearchQuery}
               onChange={(e) => setConvSearchQuery(e.target.value)}
               placeholder="Pesquisar conversas..." 
-              className="w-full bg-slate-50 border-none rounded-2xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 transition-all"
+              className="w-full bg-background border border-border rounded-2xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
             />
           </div>
           
           <div className="flex items-center gap-6">
-            <button className="text-slate-400 hover:text-slate-600 transition-colors">
-              <Bell className="w-6 h-6" />
-            </button>
-            <button className="text-slate-400 hover:text-slate-600 transition-colors">
+            <button className="text-muted-foreground hover:text-foreground transition-colors">
               <History className="w-6 h-6" />
             </button>
           </div>
@@ -331,22 +327,22 @@ function MessagesContent() {
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left: Conversation List */}
-          <section className="w-96 bg-white border-r flex flex-col shrink-0">
+          <section className="w-96 bg-card border-r border-border flex flex-col shrink-0 transition-colors">
             <div className="p-6 shrink-0">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Centro de Mensagens</h2>
+                <h2 className="text-2xl font-black tracking-tight">Centro de Mensagens</h2>
                 <button 
                   onClick={() => setIsNewChatModalOpen(true)}
-                  className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                  className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors"
                 >
                   <Edit3 className="w-5 h-5" />
                 </button>
               </div>
 
               {/* No more tabs - focusing on Team */}
-              <div className="flex p-1 bg-slate-100 rounded-2xl">
+              <div className="flex p-1 bg-muted/50 rounded-2xl">
                 <button 
-                  className="flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-xl bg-white text-blue-600 shadow-sm"
+                  className="flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-xl bg-background text-primary shadow-sm"
                 >
                   Equipe
                 </button>
@@ -356,11 +352,11 @@ function MessagesContent() {
             <div className="flex-1 overflow-y-auto px-2 pb-6">
               {loading ? (
                 <div className="flex justify-center p-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="text-center py-20 px-8">
-                  <p className="text-sm text-slate-400 italic">Nenhuma conversa encontrada nesta categoria.</p>
+                  <p className="text-sm text-muted-foreground italic">Nenhuma conversa encontrada nesta categoria.</p>
                 </div>
               ) : (
                 conversations
@@ -379,7 +375,7 @@ function MessagesContent() {
                       onClick={() => setSelectedConv(conv)}
                       className={cn(
                         "w-full flex items-center gap-4 p-4 rounded-3xl transition-all mb-2 text-left group",
-                        isActive ? "bg-blue-50" : "hover:bg-slate-50"
+                        isActive ? "bg-primary/10" : "hover:bg-muted/50"
                       )}
                     >
                       <div className="relative shrink-0">
@@ -388,29 +384,29 @@ function MessagesContent() {
                           alt={partner?.name || "Partner"} 
                           width={56}
                           height={56}
-                          className="w-14 h-14 rounded-2xl object-cover shadow-sm bg-slate-100"
+                          className="w-14 h-14 rounded-2xl object-cover shadow-sm bg-muted"
                           referrerPolicy="no-referrer"
                           unoptimized
                         />
-                        <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm" />
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background shadow-sm" />
                       </div>
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start mb-1">
-                          <h4 className={cn("font-bold truncate text-sm transition-colors", isActive ? "text-blue-600" : "text-slate-900")}>
+                          <h4 className={cn("font-bold truncate text-sm transition-colors", isActive ? "text-primary" : "text-foreground")}>
                             {partner?.name}
                           </h4>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter shrink-0 pt-0.5">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter shrink-0 pt-0.5">
                             {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 truncate group-hover:text-slate-700 transition-colors">
+                        <p className={cn("text-xs truncate transition-colors", isActive ? "text-primary/70" : "text-muted-foreground group-hover:text-foreground")}>
                           {conv.lastMessage || "Nenhuma mensagem ainda"}
                         </p>
                       </div>
 
                       {(conv.unreadCount?.[user?.id || ""] || 0) > 0 && (
-                        <span className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 shadow-lg shadow-blue-500/20">
+                        <span className="w-5 h-5 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 shadow-lg shadow-primary/20">
                           {conv.unreadCount?.[user?.id || ""]}
                         </span>
                       )}
@@ -422,21 +418,21 @@ function MessagesContent() {
           </section>
 
           {/* Middle: Chat Area */}
-          <section className="flex-1 flex flex-col bg-white overflow-hidden relative">
+          <section className="flex-1 flex flex-col bg-background overflow-hidden relative transition-colors">
             {!selectedConv ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                  <Mail className="w-10 h-10 text-slate-200" />
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
+                <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
+                  <Mail className="w-10 h-10 text-muted-foreground/30" />
                 </div>
-                <h3 className="font-bold text-slate-700">Bem-vindo ao Centro de Mensagens</h3>
-                <p className="text-sm mt-1 max-w-xs mx-auto">Selecione uma conversa para começar a interagir com seus contatos e equipe.</p>
+                <h3 className="font-black text-foreground">Bem-vindo ao Centro de Mensagens</h3>
+                <p className="text-sm mt-1 max-w-xs mx-auto font-medium">Selecione uma conversa para começar a interagir com seus contatos e equipe.</p>
               </div>
             ) : (
               <>
                 {/* Chat Header */}
-                <header className="h-20 border-b px-8 flex items-center justify-between shrink-0">
+                <header className="h-20 border-b border-border px-8 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-md transition-colors">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-sm border border-slate-100">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-sm border border-border">
                       <Image 
                         src={getPartner(selectedConv)?.photoURL || ""} 
                         alt="Partner" 
@@ -447,30 +443,30 @@ function MessagesContent() {
                       />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-sm leading-none">{getPartner(selectedConv)?.name}</h3>
-                      <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-1">Online agora</p>
+                      <h3 className="font-bold text-foreground text-sm leading-none">{getPartner(selectedConv)?.name}</h3>
+                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Online agora</p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <button className="p-3 hover:bg-slate-50 rounded-2xl text-slate-400 transition-colors">
+                    <button className="p-3 hover:bg-muted rounded-2xl text-muted-foreground transition-colors">
                       <Video className="w-5 h-5" />
                     </button>
-                    <button className="p-3 hover:bg-slate-50 rounded-2xl text-slate-400 transition-colors">
+                    <button className="p-3 hover:bg-muted rounded-2xl text-muted-foreground transition-colors">
                       <Phone className="w-5 h-5" />
                     </button>
-                    <div className="w-px h-6 bg-slate-100 mx-1" />
-                    <button className="p-3 hover:bg-slate-50 rounded-2xl text-slate-400 transition-colors">
+                    <div className="w-px h-6 bg-border mx-1" />
+                    <button className="p-3 hover:bg-muted rounded-2xl text-muted-foreground transition-colors">
                       <MoreVertical className="w-5 h-5" />
                     </button>
                   </div>
                 </header>
 
                 {/* Messages Body */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/20">
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-muted/5 transition-colors">
                   {/* Date Separator */}
                   <div className="flex items-center justify-center">
-                    <span className="px-4 py-1 bg-white text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] rounded-full border border-slate-100 shadow-sm">
+                    <span className="px-4 py-1 bg-card text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] rounded-full border border-border shadow-md">
                       Hoje
                     </span>
                   </div>
@@ -494,7 +490,7 @@ function MessagesContent() {
                             isOwn ? "self-end flex-row-reverse" : "self-start"
                           )}
                         >
-                          <div className="w-10 h-10 rounded-xl overflow-hidden relative shrink-0 mt-1 shadow-sm bg-slate-200">
+                          <div className="w-10 h-10 rounded-xl overflow-hidden relative shrink-0 mt-1 shadow-md bg-muted">
                             <Image 
                               src={senderPhoto || ""} 
                               alt={senderName} 
@@ -514,19 +510,22 @@ function MessagesContent() {
                               isOwn ? "items-end text-right" : "items-start text-left"
                             )}>
                               <div className={cn(
-                                "rounded-[24px] p-4 text-sm shadow-sm transition-all group-hover:shadow-md",
+                                "rounded-[24px] p-4 text-sm shadow-md transition-all group-hover:shadow-lg",
                                 isOwn 
-                                  ? "bg-blue-600 text-white rounded-tr-none" 
-                                  : "bg-white text-slate-700 rounded-tl-none border border-slate-100"
+                                  ? "bg-primary text-primary-foreground rounded-tr-none" 
+                                  : "bg-card text-foreground rounded-tl-none border border-border/50"
                               )}>
-                                <p className="font-bold text-[10px] uppercase tracking-widest opacity-60 mb-1">
+                                <p className={cn(
+                                  "font-black text-[10px] uppercase tracking-widest mt-1 mb-1",
+                                  isOwn ? "text-primary-foreground/60" : "text-muted-foreground"
+                                )}>
                                   {senderName}
                                 </p>
                                 {msg.type === 'text' ? (
-                                  msg.content
+                                  <span className="font-medium">{msg.content}</span>
                                 ) : msg.type === 'image' ? (
                                   <div className="space-y-2">
-                                    <div className="relative w-full aspect-square min-w-[200px] rounded-xl overflow-hidden bg-slate-100">
+                                    <div className="relative w-full aspect-square min-w-[200px] rounded-xl overflow-hidden bg-muted">
                                       <Image 
                                         src={msg.fileUrl || ""} 
                                         alt={msg.fileName || "Imagem"} 
@@ -536,18 +535,18 @@ function MessagesContent() {
                                         unoptimized
                                       />
                                     </div>
-                                    <p className="text-[10px] opacity-70 italic">Imagem enviada</p>
+                                    <p className="text-[10px] opacity-70 italic font-medium">Imagem enviada</p>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-3 p-2 bg-black/5 rounded-xl">
-                                    <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                                  <div className="flex items-center gap-3 p-2 bg-black/10 rounded-xl">
+                                    <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
                                       <FileText className="w-6 h-6" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="font-bold truncate text-xs">{msg.fileName}</p>
                                       <button 
                                         onClick={() => msg.fileUrl && downloadFile(msg.fileUrl, msg.fileName || "arquivo")}
-                                        className="text-[10px] font-bold underline hover:opacity-80 uppercase tracking-widest block"
+                                        className="text-[10px] font-black underline hover:opacity-80 uppercase tracking-widest block"
                                       >
                                         Download
                                       </button>
@@ -560,10 +559,10 @@ function MessagesContent() {
                                 "mt-1.5 flex items-center gap-2 px-1",
                                 isOwn ? "flex-row-reverse" : "flex-row"
                               )}>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                                   {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
                                 </span>
-                                {isOwn && <CheckCheck className="w-3.5 h-3.5 text-blue-500" />}
+                                {isOwn && <CheckCheck className="w-3.5 h-3.5 text-primary" />}
                               </div>
                             </div>
                           </div>
@@ -575,7 +574,7 @@ function MessagesContent() {
                 </div>
 
                 {/* Chat Footer / Input */}
-                <footer className="p-6 border-t shrink-0">
+                <footer className="p-6 border-t border-border shrink-0 bg-card/30 backdrop-blur-md transition-colors">
                   <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -590,16 +589,16 @@ function MessagesContent() {
                     onChange={(e) => handleFileUpload(e, 'image')}
                   />
 
-                  <form onSubmit={handleSendMessage} className="flex items-center gap-4 bg-slate-50 rounded-[32px] p-2 pr-2 border border-slate-100 focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
+                  <form onSubmit={handleSendMessage} className="flex items-center gap-4 bg-card rounded-[32px] p-2 pr-2 border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                     <div className="flex gap-1">
-                      <button type="button" className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all">
+                      <button type="button" className="p-3 text-muted-foreground hover:text-primary hover:bg-background rounded-full transition-all">
                         <Plus className="w-5 h-5" />
                       </button>
                       <button 
                         type="button" 
                         onClick={() => imageInputRef.current?.click()}
                         disabled={isUploading}
-                        className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all disabled:opacity-50"
+                        className="p-3 text-muted-foreground hover:text-primary hover:bg-background rounded-full transition-all disabled:opacity-50"
                       >
                         {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
                       </button>
@@ -607,7 +606,7 @@ function MessagesContent() {
                         type="button" 
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all disabled:opacity-50"
+                        className="p-3 text-muted-foreground hover:text-primary hover:bg-background rounded-full transition-all disabled:opacity-50"
                       >
                         {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
                       </button>
@@ -618,17 +617,17 @@ function MessagesContent() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Escreva uma mensagem..."
-                      className="flex-1 bg-transparent border-none py-4 px-4 text-sm focus:ring-0 font-medium placeholder:text-slate-400"
+                      className="flex-1 bg-transparent border-none py-4 px-4 text-sm focus:ring-0 font-bold text-foreground placeholder:text-muted-foreground"
                     />
                     
-                    <button type="button" className="p-3 text-slate-400 hover:text-blue-600 transition-colors">
+                    <button type="button" className="p-3 text-muted-foreground hover:text-primary transition-colors">
                       <Smile className="w-5 h-5" />
                     </button>
 
                     <button 
                       type="submit"
                       disabled={!newMessage.trim() || isSubmitting}
-                      className="w-12 h-12 bg-blue-600 text-white rounded-[20px] flex items-center justify-center hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/30 shrink-0"
+                      className="w-12 h-12 bg-primary text-primary-foreground rounded-[20px] flex items-center justify-center hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-primary/30 shrink-0"
                     >
                       {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     </button>
@@ -639,17 +638,17 @@ function MessagesContent() {
           </section>
 
           {/* Right: Contact Context (Mini 360) */}
-          <section className="w-96 bg-white border-l shrink-0 hidden xl:flex flex-col overflow-y-auto">
+          <section className="w-96 bg-card border-l border-border shrink-0 hidden xl:flex flex-col overflow-y-auto transition-colors">
             {!selectedConv ? (
-              <div className="p-12 text-center text-slate-400 mt-20">
+              <div className="p-12 text-center text-muted-foreground mt-20">
                 <Target className="w-10 h-10 mx-auto mb-4 opacity-10" />
-                <p className="text-xs">Contexto do contato aparecerá aqui</p>
+                <p className="text-xs font-medium">Contexto do contato aparecerá aqui</p>
               </div>
             ) : (
               <div className="p-8 space-y-10">
                 {/* Profile Header */}
                 <div className="text-center">
-                  <div className="w-32 h-32 rounded-[40px] overflow-hidden border-4 border-blue-50 p-1 mx-auto shadow-md mb-6 relative group">
+                  <div className="w-32 h-32 rounded-[40px] overflow-hidden border-4 border-primary/20 p-1 mx-auto shadow-md mb-6 relative group">
                     <Image 
                       src={getPartner(selectedConv)?.photoURL || ""} 
                       fill
@@ -659,51 +658,51 @@ function MessagesContent() {
                       unoptimized
                     />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">{getPartner(selectedConv)?.name}</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">
+                  <h3 className="text-xl font-black text-foreground tracking-tight">{getPartner(selectedConv)?.name}</h3>
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mt-1">
                     {getPartner(selectedConv)?.type === 'team' ? (getPartner(selectedConv)?.role || 'Equipe') : 'Contato Cadastrado'}
                   </p>
                   
                   <div className="flex justify-center gap-2 mt-4">
-                    <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-bold uppercase rounded-lg border border-green-100">ATIVO</span>
+                    <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase rounded-lg border border-emerald-500/20">ATIVO</span>
                     {getPartner(selectedConv)?.type === 'team' ? (
-                      <span className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-bold uppercase rounded-lg border border-purple-100">EQUIPE</span>
+                      <span className="px-3 py-1 bg-purple-500/10 text-purple-500 text-[10px] font-black uppercase rounded-lg border border-purple-500/20">EQUIPE</span>
                     ) : (
-                      <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase rounded-lg border border-blue-100">CLIENTE</span>
+                      <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase rounded-lg border border-primary/20">CLIENTE</span>
                     )}
                   </div>
                 </div>
 
                 {/* Contact Info */}
                 <div className="space-y-6">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Informações de Contato</h4>
+                  <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest border-b border-border pb-2">Informações de Contato</h4>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4 text-slate-500 transition-colors group">
-                      <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center">
+                    <div className="flex items-center gap-4 text-muted-foreground hover:text-foreground transition-colors group">
+                      <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center">
                         <Mail className="w-5 h-5" />
                       </div>
-                      <span className="text-sm font-medium truncate">{getPartner(selectedConv)?.email || 'Sem e-mail'}</span>
+                      <span className="text-sm font-bold truncate">{getPartner(selectedConv)?.email || 'Sem e-mail'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Recent Activities Shortcut */}
                 <div className="space-y-6">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b pb-2">Atalhos</h4>
+                  <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest border-b border-border pb-2">Atalhos</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <Link 
                       href={getPartner(selectedConv)?.type === 'client' 
                         ? `/contacts/${getPartner(selectedConv)?.id}` 
                         : `/users`
                       }
-                      className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all border border-slate-100"
+                      className="flex flex-col items-center justify-center p-4 bg-muted rounded-2xl hover:bg-primary/10 hover:text-primary transition-all border border-border"
                     >
                       <User className="w-5 h-5 mb-2" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Ver Perfil</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider">Ver Perfil</span>
                     </Link>
-                    <button className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all border border-slate-100">
+                    <button className="flex flex-col items-center justify-center p-4 bg-muted rounded-2xl hover:bg-primary/10 hover:text-primary transition-all border border-border">
                       <Target className="w-5 h-5 mb-2" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Novo Negócio</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider">Novo Negócio</span>
                     </button>
                   </div>
                 </div>
@@ -728,38 +727,38 @@ function MessagesContent() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-card border border-border rounded-[40px] shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b">
-                <h3 className="text-2xl font-bold text-slate-900">Nova Conversa</h3>
-                <p className="text-slate-500 text-sm mt-1">Selecione um contato para iniciar o chat.</p>
+              <div className="p-8 border-b border-border">
+                <h3 className="text-2xl font-black text-foreground tracking-tight">Nova Conversa</h3>
+                <p className="text-muted-foreground text-sm mt-1 font-medium">Selecione um contato para iniciar o chat.</p>
               </div>
               
               <div className="p-6">
                 <div className="relative mb-6">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input 
                     type="text" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Pesquisar contatos..." 
-                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full bg-background border border-border rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-primary/20 text-foreground font-bold"
                   />
                 </div>
 
                 <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
                   {filteredItems.length === 0 ? (
                     <div className="text-center py-12">
-                      <p className="text-slate-400 text-sm italic">Nenhum {activeTab === 'client' ? 'contato' : 'membro da equipe'} encontrado.</p>
+                      <p className="text-muted-foreground text-sm italic font-medium">Nenhum {activeTab === 'client' ? 'contato' : 'membro da equipe'} encontrado.</p>
                     </div>
                   ) : (
                     filteredItems.map(item => (
                       <button
                         key={item.id}
                         onClick={() => activeTab === 'client' ? startNewConversation(item) : startNewConversationFromProfile(item)}
-                        className="w-full flex items-center gap-4 p-4 rounded-3xl hover:bg-slate-50 transition-all text-left group"
+                        className="w-full flex items-center gap-4 p-4 rounded-3xl hover:bg-muted transition-all text-left group"
                       >
-                        <div className="w-12 h-12 rounded-xl overflow-hidden relative shadow-sm bg-slate-100 border border-slate-200">
+                        <div className="w-12 h-12 rounded-xl overflow-hidden relative shadow-sm bg-muted border border-border">
                           <Image 
                             src={(activeTab === 'client' ? item.photoURL : item.photoURL) || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeTab === 'client' ? item.name : item.displayName)}&background=0D8ABC&color=fff`} 
                             alt={activeTab === 'client' ? item.name : item.displayName} 
@@ -770,22 +769,22 @@ function MessagesContent() {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors uppercase tracking-tight">
+                          <h4 className="font-black text-foreground text-sm group-hover:text-primary transition-colors uppercase tracking-tight">
                             {activeTab === 'client' ? item.name : item.displayName}
                           </h4>
-                          <p className="text-xs text-slate-500 truncate">{item.email}</p>
+                          <p className="text-xs text-muted-foreground truncate font-medium">{item.email}</p>
                         </div>
-                        <Plus className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                        <Plus className="w-5 h-5 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                       </button>
                     ))
                   )}
                 </div>
               </div>
               
-              <div className="p-6 bg-slate-50 flex justify-end">
+              <div className="p-6 bg-muted/30 flex justify-end">
                 <button 
                   onClick={() => setIsNewChatModalOpen(false)}
-                  className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                  className="px-6 py-3 text-sm font-black text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest"
                 >
                   Cancelar
                 </button>
@@ -800,11 +799,11 @@ function MessagesContent() {
 
 export default function MessagesPage() {
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans selection:bg-blue-100">
+    <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500 font-sans selection:bg-primary/20">
       <Sidebar />
       <Suspense fallback={
         <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
         </main>
       }>
         <MessagesContent />

@@ -89,9 +89,9 @@ export default function LoginPage() {
   if (authLoading) return null;
 
   return (
-    <div className="min-h-screen flex bg-white font-sans selection:bg-blue-100">
+    <div className="min-h-screen flex bg-background font-sans selection:bg-primary/10 text-foreground transition-colors duration-500">
       {/* Left side: Branding & Hero */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#1e3a8a] relative overflow-hidden flex-col justify-between p-12 text-white">
+      <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative overflow-hidden flex-col justify-between p-12 text-white border-r border-border">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
@@ -117,7 +117,7 @@ export default function LoginPage() {
             transition={{ delay: 0.2 }}
           >
             <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-8 backdrop-blur-md">
-              <Zap className="w-8 h-8 text-blue-300" />
+              <Zap className="w-8 h-8 text-primary/40" />
             </div>
             <h1 className="text-5xl font-bold leading-[1.1] tracking-tight mb-6">
               Gerencie seu pipeline com precisão absoluta.
@@ -152,21 +152,21 @@ export default function LoginPage() {
         </div>
 
         {/* Decorative circle */}
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-blue-500 rounded-full blur-[120px] opacity-20" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-primary rounded-full blur-[120px] opacity-20" />
       </div>
 
       {/* Right side: Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 bg-white">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 bg-background">
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="w-full max-w-sm"
         >
           <div className="mb-10 text-left">
-            <h2 className="text-3xl font-bold text-slate-900 mb-3">
+            <h2 className="text-3xl font-bold text-foreground mb-3">
               {mode === "login" ? "Bem-vindo de volta" : "Criar sua conta"}
             </h2>
-            <p className="text-slate-500">
+            <p className="text-muted-foreground">
               {mode === "login" 
                 ? "Acesse sua conta para continuar gerenciando seus negócios." 
                 : "Cadastre-se para começar a usar o SalesScore Corporate."}
@@ -176,9 +176,9 @@ export default function LoginPage() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             {mode === "register" && (
               <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Seu Nome</label>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Seu Nome</label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground">
                     <LogIn className="w-4 h-4" />
                   </div>
                   <input 
@@ -187,52 +187,52 @@ export default function LoginPage() {
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="João Silva"
                     required
-                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm"
+                    className="w-full pl-11 pr-4 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
                   />
                 </div>
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Endereço de E-mail</label>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Endereço de E-mail</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="nome@empresa.com"
                   required
-                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm"
+                  className="w-full pl-11 pr-4 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Senha</label>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Senha</label>
                 <button 
                   type="button" 
                   disabled={isResettingPassword}
                   onClick={handleForgotPassword}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                  className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
                 >
                   {isResettingPassword ? "Enviando..." : "Esqueci minha senha"}
                 </button>
               </div>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input 
                   type={showPassword ? "text" : "password"} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-11 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-sm"
+                  className="w-full pl-11 pr-11 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
                 />
                 <button 
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
@@ -240,15 +240,15 @@ export default function LoginPage() {
             </div>
 
             <div className="flex items-center gap-3 px-1">
-              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-              <label className="text-sm text-slate-600 font-medium">Lembrar de mim</label>
+              <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary bg-muted" />
+              <label className="text-sm text-muted-foreground font-medium">Lembrar de mim</label>
             </div>
 
             <div className="text-center mt-6">
               <button 
                 type="button" 
                 onClick={() => setMode(mode === "login" ? "register" : "login")}
-                className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                className="text-sm font-medium text-primary hover:text-primary/80"
               >
                 {mode === "login" 
                   ? "Não tem uma senha ainda? Cadastre-se aqui" 
@@ -259,7 +259,7 @@ export default function LoginPage() {
             <button 
               type="submit"
               disabled={isLoggingIn || isRegistering}
-              className="w-full bg-[#1e3a8a] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#1e3a8a]/90 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-primary/20"
             >
               {isLoggingIn || isRegistering ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

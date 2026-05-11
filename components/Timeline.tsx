@@ -68,7 +68,7 @@ export function Timeline({ category, relatedId }: TimelineProps) {
   if (loading) {
     return (
       <div className="flex justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -76,18 +76,18 @@ export function Timeline({ category, relatedId }: TimelineProps) {
   return (
     <div className="space-y-8">
       {/* Note Input Area */}
-      <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
+      <div className="bg-card rounded-[32px] border border-border p-6 shadow-sm">
         <form onSubmit={handleAddNote} className="relative">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Adicione uma nota ou comentário sobre este registro..."
-            className="w-full bg-slate-50 border-none rounded-3xl p-6 pr-20 text-sm focus:ring-2 focus:ring-blue-500/20 transition-all resize-none h-32"
+            className="w-full bg-muted/50 border-none rounded-3xl p-6 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all resize-none h-32"
           />
           <button 
             type="submit"
             disabled={!note.trim() || isSubmitting}
-            className="absolute bottom-4 right-4 p-4 bg-blue-600 text-white rounded-2xl hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20"
+            className="absolute bottom-4 right-4 p-4 bg-primary text-white rounded-2xl hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
           >
             {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>
@@ -97,7 +97,7 @@ export function Timeline({ category, relatedId }: TimelineProps) {
       {/* Events List */}
       <div className="relative space-y-12">
         {events.length > 0 && (
-          <div className="absolute left-[59px] top-8 bottom-8 w-px bg-slate-100" />
+          <div className="absolute left-[59px] top-8 bottom-8 w-px bg-border" />
         )}
 
         <AnimatePresence mode="popLayout">
@@ -107,11 +107,11 @@ export function Timeline({ category, relatedId }: TimelineProps) {
               animate={{ opacity: 1 }}
               className="text-center py-20"
             >
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <History className="w-8 h-8 text-slate-300" />
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <History className="w-8 h-8 text-muted-foreground" />
               </div>
-              <h3 className="font-bold text-slate-700">Sem atividades registradas</h3>
-              <p className="text-slate-400 text-sm mt-1">Interações e notas automáticas aparecerão aqui.</p>
+              <h3 className="font-bold text-foreground">Sem atividades registradas</h3>
+              <p className="text-muted-foreground text-sm mt-1">Interações e notas automáticas aparecerão aqui.</p>
             </motion.div>
           ) : (
             events.map((event, index) => (
@@ -134,9 +134,9 @@ function TimelineItem({ event, index }: { event: TimelineEvent, index: number })
   };
 
   const getIconColor = () => {
-    if (event.metadata?.type === 'stage_change') return "bg-green-50 text-green-600";
-    if (event.metadata?.type === 'creation') return "bg-blue-50 text-blue-600";
-    return isSystem ? "bg-slate-50 text-slate-600" : "bg-purple-50 text-purple-600";
+    if (event.metadata?.type === 'stage_change') return "bg-green-500/10 text-green-500";
+    if (event.metadata?.type === 'creation') return "bg-primary/10 text-primary";
+    return isSystem ? "bg-muted text-muted-foreground" : "bg-purple-500/10 text-purple-500";
   };
 
   return (
@@ -153,14 +153,14 @@ function TimelineItem({ event, index }: { event: TimelineEvent, index: number })
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-start mb-2 pt-1">
           <div>
-            <h4 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+            <h4 className="font-bold text-foreground group-hover:text-primary transition-colors">
               {event.title || (isSystem ? 'Evento de Sistema' : 'Nota')}
             </h4>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-              Por <span className="text-slate-600">{event.authorName || 'Desconhecido'}</span>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+              Por <span className="text-foreground">{event.authorName || 'Desconhecido'}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-400 whitespace-nowrap">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap">
             <Clock className="w-3 h-3" />
             {event.createdAt ? formatDistanceToNow(new Date(event.createdAt), { addSuffix: true, locale: ptBR }) : 'Agora'}
           </div>
@@ -169,15 +169,15 @@ function TimelineItem({ event, index }: { event: TimelineEvent, index: number })
         <div className={cn(
           "rounded-3xl p-6 text-sm leading-relaxed border transition-all",
           isSystem 
-            ? "bg-slate-50/50 text-slate-500 border-slate-100 italic" 
-            : "bg-white text-slate-700 border-slate-200 shadow-sm group-hover:shadow-md group-hover:border-blue-100"
+            ? "bg-muted/50 text-muted-foreground border-border italic" 
+            : "bg-card text-foreground border-border shadow-sm group-hover:shadow-md group-hover:border-primary/20"
         )}>
           {event.content}
           
           {event.metadata?.newStage && (
             <div className="mt-4 flex items-center gap-2 not-italic">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Novo Estágio:</span>
-              <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded-lg border border-green-100 uppercase">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Novo Estágio:</span>
+              <span className="px-2 py-0.5 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-lg border border-green-500/20 uppercase">
                 {event.metadata.newStage}
               </span>
             </div>
