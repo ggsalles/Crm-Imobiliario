@@ -213,10 +213,13 @@ export async function updateContact(id: string, data: any) {
   if (data.phone !== undefined) updateData.phone = data.phone;
   if (data.type !== undefined) updateData.type = data.type;
   if (data.department !== undefined) updateData.department = data.department;
-  if (data.companyId !== undefined) updateData.company_id = data.companyId;
+  if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
 
   const { error } = await supabase.from('contacts').update(updateData).eq('id', id);
-  if (error) throw error;
+  if (error) {
+    console.error("Supabase error updating contact:", error);
+    throw error;
+  }
 }
 
 export async function deleteContact(id: string) {
@@ -369,9 +372,9 @@ export async function updateDeal(id: string, data: any) {
   if (data.title !== undefined) updateData.title = data.title;
   if (data.value !== undefined) updateData.value = data.value;
   if (data.stage !== undefined) updateData.stage = data.stage;
-  if (data.companyId !== undefined) updateData.company_id = data.companyId;
-  if (data.contactId !== undefined) updateData.contact_id = data.contactId;
-  if (data.propertyId !== undefined) updateData.property_id = data.propertyId;
+  if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
+  if (data.contactId !== undefined) updateData.contact_id = data.contactId || null;
+  if (data.propertyId !== undefined) updateData.property_id = data.propertyId || null;
 
   const { error } = await supabase.from('deals').update(updateData).eq('id', id);
   if (error) throw error;

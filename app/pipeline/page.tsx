@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
@@ -44,7 +44,7 @@ import {
 } from "@/lib/db";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import Link from "next/link";
 
 const STAGES = [
@@ -68,6 +68,29 @@ export default function PipelinePage() {
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [displayValue, setDisplayValue] = useState("");
+  const [displayGoals, setDisplayGoals] = useState<{ [key: string]: string }>({});
+
+  const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
+  const currentGoal = useMemo(() => goals.find(g => g.month === currentMonth), [goals, currentMonth]);
+  const stageGoals = useMemo(() => currentGoal?.stageGoals || {}, [currentGoal]);
+  const goalValue = useMemo(() => stageGoals['closed'] || 0, [stageGoals]);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setDisplayValue(formatCurrencyBRL(editingDeal?.value || 0));
+    }
+  }, [isModalOpen, editingDeal]);
+
+  useEffect(() => {
+    if (isGoalModalOpen) {
+      const goalsObj: { [key: string]: string } = {};
+      STAGES.forEach(stage => {
+        goalsObj[stage.id] = formatCurrencyBRL(stageGoals[stage.id] || 0);
+      });
+      setDisplayGoals(goalsObj);
+    }
+  }, [isGoalModalOpen, stageGoals]);
 
   const fetchDealsData = async () => {
     if (!user || !profile) return;
@@ -79,11 +102,6 @@ export default function PipelinePage() {
     setDeals(dealsData);
     setGoals(goalsData);
   };
-
-  const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
-  const currentGoal = goals.find(g => g.month === currentMonth);
-  const stageGoals = currentGoal?.stageGoals || {};
-  const goalValue = stageGoals['closed'] || 0; // Total goal is usually what's closed
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -170,7 +188,7 @@ export default function PipelinePage() {
     const formData = new FormData(e.currentTarget);
     const data = {
       title: formData.get('title') as string,
-      value: Number(formData.get('value')),
+      value: parseCurrencyBRLToNumber(formData.get('value') as string),
       stage: formData.get('stage') as string,
       companyId: formData.get('companyId') as string || undefined,
       contactId: formData.get('contactId') as string || undefined,
@@ -222,7 +240,7 @@ export default function PipelinePage() {
     const newStageGoals: { [key: string]: number } = {};
     
     STAGES.forEach(stage => {
-      newStageGoals[stage.id] = Number(formData.get(`goal_${stage.id}`)) || 0;
+      newStageGoals[stage.id] = parseCurrencyBRLToNumber(formData.get(`goal_${stage.id}`) as string);
     });
     
     try {
@@ -461,7 +479,15 @@ export default function PipelinePage() {
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase text-muted-foreground mb-1 block">Valor (R$)</label>
-                  <input name="value" type="number" required defaultValue={editingDeal?.value} placeholder="0.00" className="w-full px-4 py-3 rounded-xl border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input 
+                    name="value" 
+                    type="text" 
+                    required 
+                    value={displayValue} 
+                    onChange={(e) => setDisplayValue(formatCurrencyBRL(e.target.value))}
+                    placeholder="R$ 0,00" 
+                    className="w-full px-4 py-3 rounded-xl border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -556,10 +582,11 @@ export default function PipelinePage() {
                     </label>
                     <input 
                       name={`goal_${stage.id}`} 
-                      type="number" 
+                      type="text" 
                       required 
-                      defaultValue={stageGoals[stage.id] || 0} 
-                      placeholder="0.00" 
+                      value={displayGoals[stage.id] || "R$ 0,00"} 
+                      onChange={(e) => setDisplayGoals(prev => ({ ...prev, [stage.id]: formatCurrencyBRL(e.target.value) }))}
+                      placeholder="R$ 0,00" 
                       className="w-full px-4 py-3 rounded-xl border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20" 
                     />
                   </div>

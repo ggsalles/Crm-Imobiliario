@@ -34,7 +34,7 @@ import {
   deleteProperty, 
   Property 
 } from "@/lib/db";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import Image from "next/image";
 
 export default function PropertiesPage() {
@@ -48,6 +48,7 @@ export default function PropertiesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [displayPrice, setDisplayPrice] = useState("");
 
   const fetchData = async () => {
     if (!user || !profile) return;
@@ -55,6 +56,12 @@ export default function PropertiesPage() {
     const data = await getProperties(ownerId);
     setProperties(data);
   };
+  
+  useEffect(() => {
+    if (isModalOpen) {
+      setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
+    }
+  }, [isModalOpen, editingProperty]);
 
   // Address form states (for auto-fill)
   const [addressData, setAddressData] = useState({
@@ -144,7 +151,7 @@ export default function PropertiesPage() {
       title: formData.get("title") as string,
       type: formData.get("type") as any,
       status: formData.get("status") as any,
-      price: Number(formData.get("price")),
+      price: parseCurrencyBRLToNumber(formData.get("price") as string),
       location,
       cep: formData.get("cep") as string,
       street: formData.get("street") as string,
@@ -345,10 +352,11 @@ export default function PropertiesPage() {
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Preço (R$)</label>
                     <input 
                       name="price"
-                      type="number"
+                      type="text"
                       required
-                      defaultValue={editingProperty?.price}
-                      placeholder="0.00"
+                      value={displayPrice}
+                      onChange={(e) => setDisplayPrice(formatCurrencyBRL(e.target.value))}
+                      placeholder="R$ 0,00"
                       className="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 transition-all font-medium"
                     />
                   </div>

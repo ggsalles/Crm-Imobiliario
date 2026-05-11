@@ -19,7 +19,7 @@ import {
   Edit2,
   Building2
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -75,6 +75,15 @@ function ContactsContent() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
+  const [displayPhone, setDisplayPhone] = useState("");
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setDisplayPhone(editingContact?.phone || "");
+    } else {
+      setDisplayPhone("");
+    }
+  }, [isModalOpen, editingContact]);
 
   const fetchData = async () => {
     if (!user || !profile) return;
@@ -221,8 +230,9 @@ function ContactsContent() {
       await fetchData();
       setIsModalOpen(false);
       setEditingContact(null);
-    } catch (err) {
-      toast.error("Erro ao salvar contato.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Erro ao salvar contato.");
     }
   };
 
@@ -401,8 +411,9 @@ function ContactsContent() {
                     <label className="text-xs font-bold uppercase text-muted-foreground mb-1 block">Telefone</label>
                     <input 
                       name="phone"
-                      defaultValue={editingContact?.phone}
-                      placeholder="(11) 99999-9999"
+                      value={displayPhone}
+                      onChange={(e) => setDisplayPhone(formatPhone(e.target.value))}
+                      placeholder="55 11 99999-9999"
                       className="w-full px-4 py-3 rounded-xl border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
