@@ -1037,6 +1037,51 @@ export async function createConversation(participants: string[], category: 'clie
   return result[0].id;
 }
 
+export async function uploadChatFile(file: File) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+  const filePath = `${user.id}/${fileName}`;
+
+  const bucketName = 'chat-attachments';
+
+  const { error: uploadError, data } = await supabase.storage
+    .from(bucketName)
+    .upload(filePath, file);
+
+  if (uploadError) {
+    console.error(`[Storage] Error uploading to "${bucketName}":`, uploadError);
+    throw uploadError;
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucketName)
+    .getPublicUrl(filePath);
+
+  return { name: file.name, url: publicUrl };
+}
+
+export async function downloadFile(url: string, fileName: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Error downloading file:", error);
+    // Fallback to opening in new tab if fetch fails
+    window.open(url, '_blank');
+  }
+}
+
 export async function findOrCreateConversation(participantId: string, category: 'client' | 'team', partnerDetails: any) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");

@@ -36,12 +36,15 @@ import {
   subscribeToConversations, 
   subscribeToMessages, 
   sendChatMessage,
-  markAsRead
+  markAsRead,
+  uploadChatFile,
+  downloadFile
 } from "@/lib/db";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 import Image from "next/image";
+import { toast } from "sonner";
 
 import { Suspense } from "react";
 
@@ -57,6 +60,7 @@ function MessagesContent() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,6 +69,8 @@ function MessagesContent() {
   const [profiles, setProfiles] = useState<any[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -158,8 +164,35 @@ function MessagesContent() {
       // Scroll behavior is handled in the messages subscriber
     } catch (error) {
       console.error("Error sending message:", error);
+      toast.error("Erro ao enviar mensagem");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedConv) return;
+
+    setIsUploading(true);
+    const toastId = toast.loading("Enviando arquivo...");
+
+    try {
+      const fileData = await uploadChatFile(file);
+      await sendChatMessage(
+        selectedConv.id, 
+        type === 'image' ? "Enviou uma imagem" : `Enviou um arquivo: ${file.name}`,
+        type,
+        fileData
+      );
+      toast.success("Arquivo enviado com sucesso", { id: toastId });
+    } catch (error: any) {
+      console.error("Error uploading file:", error);
+      const errorMessage = error?.message || error?.error_code || "Erro desconhecido";
+      toast.error(`Erro ao enviar arquivo: ${errorMessage}`, { id: toastId });
+    } finally {
+      setIsUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -489,7 +522,38 @@ function MessagesContent() {
                                 <p className="font-bold text-[10px] uppercase tracking-widest opacity-60 mb-1">
                                   {senderName}
                                 </p>
-                                {msg.content}
+                                {msg.type === 'text' ? (
+                                  msg.content
+                                ) : msg.type === 'image' ? (
+                                  <div className="space-y-2">
+                                    <div className="relative w-full aspect-square min-w-[200px] rounded-xl overflow-hidden bg-slate-100">
+                                      <Image 
+                                        src={msg.fileUrl || ""} 
+                                        alt={msg.fileName || "Imagem"} 
+                                        fill
+                                        className="object-cover cursor-pointer hover:scale-105 transition-transform"
+                                        onClick={() => window.open(msg.fileUrl, '_blank')}
+                                        unoptimized
+                                      />
+                                    </div>
+                                    <p className="text-[10px] opacity-70 italic">Imagem enviada</p>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-3 p-2 bg-black/5 rounded-xl">
+                                    <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                                      <FileText className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold truncate text-xs">{msg.fileName}</p>
+                                      <button 
+                                        onClick={() => msg.fileUrl && downloadFile(msg.fileUrl, msg.fileName || "arquivo")}
+                                        className="text-[10px] font-bold underline hover:opacity-80 uppercase tracking-widest block"
+                                      >
+                                        Download
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                               
                               <div className={cn(
@@ -512,16 +576,40 @@ function MessagesContent() {
 
                 {/* Chat Footer / Input */}
                 <footer className="p-6 border-t shrink-0">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={(e) => handleFileUpload(e, 'file')}
+                  />
+                  <input 
+                    type="file" 
+                    ref={imageInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, 'image')}
+                  />
+
                   <form onSubmit={handleSendMessage} className="flex items-center gap-4 bg-slate-50 rounded-[32px] p-2 pr-2 border border-slate-100 focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
                     <div className="flex gap-1">
                       <button type="button" className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all">
                         <Plus className="w-5 h-5" />
                       </button>
-                      <button type="button" className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all">
-                        <ImageIcon className="w-5 h-5" />
+                      <button 
+                        type="button" 
+                        onClick={() => imageInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all disabled:opacity-50"
+                      >
+                        {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
                       </button>
-                      <button type="button" className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all">
-                        <Paperclip className="w-5 h-5" />
+                      <button 
+                        type="button" 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="p-3 text-slate-400 hover:text-blue-600 hover:bg-white rounded-full transition-all disabled:opacity-50"
+                      >
+                        {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
                       </button>
                     </div>
                     
