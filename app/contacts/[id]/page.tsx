@@ -32,7 +32,19 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
-import { Contact, Company, getContact, getCompany, deleteContact } from "@/lib/db";
+import { 
+  Contact, 
+  Company, 
+  Deal,
+  Activity,
+  getContact, 
+  getCompany, 
+  deleteContact,
+  getDealsByContact,
+  getActivitiesByContact,
+  createActivity,
+  createTimelineEvent
+} from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
 import Image from "next/image";
@@ -46,6 +58,8 @@ export default function ContactDetail360Page() {
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,6 +91,14 @@ export default function ContactDetail360Page() {
           }
 
           setContact(contactData);
+          
+          const [dealsData, activitiesData] = await Promise.all([
+            getDealsByContact(id),
+            getActivitiesByContact(id)
+          ]);
+          
+          setDeals(dealsData);
+          setActivities(activitiesData);
 
           if (contactData.companyId) {
             const companyData = await getCompany(contactData.companyId);
@@ -115,6 +137,43 @@ export default function ContactDetail360Page() {
     // For now we just go back to the list and open the modal
     // In a real app we might have a dedicated edit page or pass state
     router.push("/contacts?edit=" + id);
+  };
+
+  const handleQuickAction = async (type: 'call' | 'meeting' | 'task' | 'other') => {
+    if (!user || !profile || !contact) return;
+    
+    const titles = {
+      call: "Ligação com " + contact.name,
+      meeting: "Reunião com " + contact.name,
+      task: "Tarefa para " + contact.name,
+      other: "Outra atividade com " + contact.name
+    };
+
+    try {
+      await createActivity({
+        title: titles[type],
+        type: type === 'meeting' ? 'meeting' : (type === 'task' ? 'task' : (type === 'call' ? 'call' : 'other')),
+        date: new Date().toISOString(),
+        status: 'pending',
+        contactId: contact.id
+      });
+
+      await createTimelineEvent({
+        type: 'system',
+        category: 'contact',
+        relatedId: contact.id,
+        content: `Nova ${type === 'meeting' ? 'reunião' : (type === 'task' ? 'tarefa' : (type === 'call' ? 'ligação' : 'atividade'))} agendada.`,
+        title: titles[type]
+      });
+
+      toast.success("Ação registrada com sucesso!");
+      // Refresh activities
+      const updated = await getActivitiesByContact(contact.id);
+      setActivities(updated);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao registrar ação.");
+    }
   };
 
   if (authLoading || loading) {
@@ -171,6 +230,14 @@ export default function ContactDetail360Page() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
+          
+          {/* Page Title */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-800">Visão 360</h2>
+            <div className="text-sm text-slate-500 font-medium bg-white px-4 py-2 rounded-xl border border-slate-200">
+              ID: {contact.id.substring(0, 8)}...
+            </div>
+          </div>
           
           {/* Main Card: Profile */}
           <section className="bg-white rounded-[32px] border border-slate-200 p-8 shadow-sm">
@@ -249,9 +316,9 @@ export default function ContactDetail360Page() {
               {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[ 
-                  { label: "TOTAL EM NEGÓCIOS", value: "R$ 0", icon: TrendingUp },
-                  { label: "ENGAJAMENTO", value: "Normal", icon: Users, color: "text-blue-600" },
-                  { label: "ÚLTIMO CONTATO", value: "Recentemente", icon: Clock },
+                  { label: "TOTAL EM NEGÓCIOS", value: `R$ ${deals.reduce((acc, deal) => acc + (deal.value || 0), 0).toLocaleString('pt-BR')}`, icon: TrendingUp },
+                  { label: "ENGAJAMENTO", value: activities.length > 5 ? "Alto" : (activities.length > 2 ? "Normal" : "Baixo"), icon: Users, color: "text-blue-600" },
+                  { label: "ÚLTIMO CONTATO", value: activities.length > 0 ? "Recentemente" : "Nenhum", icon: Clock },
                 ].map((stat, i) => (
                   <div key={i} className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{stat.label}</div>
@@ -275,19 +342,41 @@ export default function ContactDetail360Page() {
                 </div>
               </div>
 
-              {/* Active Deals Table - Empty for now */}
+              {/* Active Deals Table */}
               <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
-                <div className="p-8 border-b flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-slate-900">Negócios Ativos</h2>
-                  <button className="text-blue-600 font-bold text-sm hover:text-blue-700">Ver todos</button>
+                <div className="p-8 border-b flex items-center justify-between text-slate-900 bg-white sticky top-0 z-10">
+                  <h2 className="text-xl font-bold">Negócios Ativos</h2>
+                  <button onClick={() => router.push('/pipeline')} className="text-blue-600 font-bold text-sm hover:text-blue-700">Ver todos</button>
                 </div>
-                <div className="p-20 text-center flex flex-col items-center">
-                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                    <TrendingUp className="w-8 h-8 text-slate-300" />
+                {deals.length > 0 ? (
+                  <div className="divide-y">
+                    {deals.map((deal) => (
+                      <div key={deal.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                            <TrendingUp className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800">{deal.title}</h4>
+                            <div className="text-sm text-slate-500 font-medium">Estágio: <span className="text-blue-600 uppercase text-[10px] bg-blue-50 px-2 py-0.5 rounded-md font-bold">{deal.stage}</span></div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-slate-900">R$ {deal.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-slate-400">{new Date(deal.createdAt || '').toLocaleDateString('pt-BR')}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <h3 className="font-bold text-slate-700">Sem negócios ativos no momento</h3>
-                  <p className="text-slate-400 text-sm mt-1">Crie um novo negócio para começar o pipeline.</p>
-                </div>
+                ) : (
+                  <div className="p-20 text-center flex flex-col items-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                      <TrendingUp className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 className="font-bold text-slate-700">Sem negócios ativos no momento</h3>
+                    <p className="text-slate-400 text-sm mt-1">Crie um novo negócio para começar o pipeline.</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -303,12 +392,16 @@ export default function ContactDetail360Page() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { label: "Reunião", icon: Calendar },
-                    { label: "Tarefa", icon: CheckSquare },
-                    { label: "Documento", icon: FileText },
-                    { label: "Ligação", icon: Phone },
+                    { label: "Reunião", icon: Calendar, type: 'meeting' },
+                    { label: "Tarefa", icon: CheckSquare, type: 'task' },
+                    { label: "Documento", icon: FileText, type: 'other' },
+                    { label: "Ligação", icon: Phone, type: 'call' },
                   ].map((action, i) => (
-                    <button key={i} className="bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group">
+                    <button 
+                      key={i} 
+                      onClick={() => handleQuickAction(action.type as any)}
+                      className="bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group"
+                    >
                       <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                         <action.icon className="w-5 h-5 text-blue-200" />
                       </div>
@@ -321,11 +414,26 @@ export default function ContactDetail360Page() {
               {/* Tasks & Reminders */}
               <div className="bg-white rounded-[32px] border border-slate-200 p-8 shadow-sm">
                 <h3 className="text-lg font-bold text-slate-900 mb-6">Tarefas & Lembretes</h3>
-                <div className="py-8 text-center bg-slate-50 rounded-3xl border border-dashed">
-                  <CheckSquare className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sem tarefas</p>
-                </div>
-                <button className="w-full mt-6 py-3 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-all">Nova Tarefa</button>
+                {activities.filter(a => a.type === 'task').length > 0 ? (
+                  <div className="space-y-4">
+                    {activities.filter(a => a.type === 'task').slice(0, 3).map(task => (
+                      <div key={task.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className={cn("w-5 h-5 rounded-md border-2 mt-0.5", task.status === 'completed' ? "bg-blue-600 border-blue-600 flex items-center justify-center" : "border-slate-300")}>
+                          {task.status === 'completed' && <CheckSquare className="w-3 h-3 text-white" />}
+                        </div>
+                        <div>
+                          <p className={cn("text-xs font-bold", task.status === 'completed' ? "text-slate-400 line-through" : "text-slate-700")}>{task.title}</p>
+                          <p className="text-[10px] text-slate-400">{new Date(task.date).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center bg-slate-50 rounded-3xl border border-dashed">
+                    <CheckSquare className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sem tarefas</p>
+                  </div>
+                )}
               </div>
 
               {/* Location Widget */}

@@ -35,7 +35,8 @@ import {
   ChatMessage, 
   subscribeToConversations, 
   subscribeToMessages, 
-  sendChatMessage 
+  sendChatMessage,
+  markAsRead
 } from "@/lib/db";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -133,8 +134,14 @@ function MessagesContent() {
       setMessages([]);
       return;
     }
+    
+    // Initial mark as read when selecting a conversation
+    markAsRead(selectedConv.id);
+
     const unsub = subscribeToMessages(selectedConv.id, (data) => {
       setMessages(data);
+      // Also mark as read when new messages are received while viewing the conversation
+      markAsRead(selectedConv.id);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return unsub;
@@ -523,7 +530,7 @@ function MessagesContent() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Escreva uma mensagem..."
-                      className="flex-1 bg-transparent border-none py-4 text-sm focus:ring-0 font-medium placeholder:text-slate-400"
+                      className="flex-1 bg-transparent border-none py-4 px-4 text-sm focus:ring-0 font-medium placeholder:text-slate-400"
                     />
                     
                     <button type="button" className="p-3 text-slate-400 hover:text-blue-600 transition-colors">

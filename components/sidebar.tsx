@@ -22,8 +22,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { subscribeToTotalUnreadMessages } from "@/lib/db";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -105,6 +106,12 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab');
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
+    return unsub;
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -146,6 +153,9 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
                 isActive ? "text-blue-500" : "text-slate-500 group-hover:text-slate-300"
               )} />
               {item.label}
+              {item.label === "Mensagens" && unreadCount > 0 && (
+                <span className="ml-auto w-2 h-2 bg-green-500 rounded-full shadow-lg shadow-green-500/50 animate-pulse" />
+              )}
             </Link>
           );
         })}

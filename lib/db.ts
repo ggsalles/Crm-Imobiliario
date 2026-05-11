@@ -328,6 +328,23 @@ export async function getDeals(ownerId?: string) {
   })) as Deal[];
 }
 
+export async function getDealsByContact(contactId: string) {
+  const { data } = await supabase.from('deals').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+  if (!data) return [];
+  return data.map(item => ({
+    id: item.id,
+    title: item.title,
+    value: item.value,
+    stage: item.stage,
+    companyId: item.company_id,
+    contactId: item.contact_id,
+    propertyId: item.property_id,
+    ownerId: item.owner_id,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at
+  })) as Deal[];
+}
+
 export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: string) {
   const fetchDeals = async () => {
     const data = await getDeals(ownerId);
@@ -512,6 +529,24 @@ export async function createUserProfile(data: { displayName: string; email: stri
 }
 
 // Activities
+export async function getActivitiesByContact(contactId: string) {
+  const { data } = await supabase.from('activities').select('*').eq('contact_id', contactId).order('date', { ascending: true });
+  if (!data) return [];
+  return data.map(item => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    date: item.date,
+    type: item.type,
+    status: item.status,
+    contactId: item.contact_id,
+    dealId: item.deal_id,
+    ownerId: item.owner_id,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at
+  })) as Activity[];
+}
+
 export function subscribeToActivities(callback: (activities: Activity[]) => void, ownerId?: string) {
   const fetchActivities = async () => {
     let query = supabase.from('activities').select('*').order('date', { ascending: true });
@@ -910,13 +945,78 @@ export async function sendChatMessage(conversationId: string, content: string, t
 
   if (error) throw error;
 
-  // Update conversation last message
-  await supabase.from('conversations').update({
+  // Fetch conversation to update unread count for other participants
+  const { data: conv } = await supabase.from('conversations').select('participants, unread_count').eq('id', conversationId).maybeSingle();
+  
+  const updateData: any = {
     last_message: content,
     last_message_at: new Date().toISOString()
-  }).eq('id', conversationId);
+  };
+
+  if (conv) {
+    const unreadCount = conv.unread_count || {};
+    conv.participants.forEach((pId: string) => {
+      if (pId !== user.id) {
+        unreadCount[pId] = (unreadCount[pId] || 0) + 1;
+      }
+    });
+    updateData.unread_count = unreadCount;
+  }
+
+  // Update conversation
+  await supabase.from('conversations').update(updateData).eq('id', conversationId);
 
   return result[0].id;
+}
+
+export async function markAsRead(conversationId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { data: conv } = await supabase.from('conversations').select('unread_count').eq('id', conversationId).maybeSingle();
+  
+  if (conv && conv.unread_count && (conv.unread_count[user.id] || 0) > 0) {
+    const newUnreadCount = { ...conv.unread_count };
+    newUnreadCount[user.id] = 0;
+
+    await supabase.from('conversations').update({
+      unread_count: newUnreadCount
+    }).eq('id', conversationId);
+  }
+}
+
+export function subscribeToTotalUnreadMessages(callback: (count: number) => void) {
+  const fetchTotalUnread = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      callback(0);
+      return;
+    }
+
+    const { data } = await supabase.from('conversations')
+      .select('unread_count')
+      .filter('participants', 'cs', `{${user.id}}`);
+
+    if (data) {
+      const total = data.reduce((acc, conv) => {
+        return acc + (conv.unread_count?.[user.id] || 0);
+      }, 0);
+      callback(total);
+    }
+  };
+
+  fetchTotalUnread();
+
+  const subscription = supabase
+    .channel(`public:conversations_unread:${Math.random()}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+      fetchTotalUnread();
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(subscription);
+  };
 }
 
 export async function createConversation(participants: string[], category: 'client' | 'team', details: Record<string, any>) {
