@@ -281,13 +281,13 @@ export default function PropertiesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
               className="relative w-full max-w-2xl bg-white rounded-t-[32px] md:rounded-[32px] shadow-2xl overflow-y-auto max-h-[95vh] md:max-h-auto"
             >
               <div className="p-6 md:p-8 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white z-10">
@@ -489,6 +489,16 @@ export default function PropertiesPage() {
                 </div>
 
                 <div className="flex flex-col-reverse md:flex-row gap-4 pt-4">
+                  {editingProperty && (
+                    <button 
+                      type="button" 
+                      onClick={() => { handleDelete(editingProperty.id); setIsModalOpen(false); }} 
+                      className="px-6 py-4 font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-colors border border-red-100 flex items-center justify-center"
+                      title="Excluir imóvel"
+                    >
+                      <Trash2 className="w-5 h-5 text-red-500" />
+                    </button>
+                  )}
                   <button 
                     type="button" 
                     onClick={() => setIsModalOpen(false)}
@@ -548,7 +558,7 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
             </span>
           )}
         </div>
-        <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 transition-opacity">
            <div className="flex gap-1">
              <button onClick={onEdit} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-600 hover:text-blue-600 shadow-lg ring-1 ring-black/5">
                 <Edit className="w-4 h-4" />

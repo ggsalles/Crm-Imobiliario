@@ -25,13 +25,14 @@ import {
   Zap,
   Building2,
   ArrowLeft,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
-import { Contact, Company, getContact, getCompany } from "@/lib/db";
+import { Contact, Company, getContact, getCompany, deleteContact } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
 import Image from "next/image";
@@ -94,6 +95,27 @@ export default function ContactDetail360Page() {
     }
     fetchData();
   }, [id, user, profile, router]);
+
+  const handleDelete = async () => {
+    if (!id) return;
+    if (confirm("Tem certeza que deseja excluir este contato? Esta ação não pode ser desfeita.")) {
+      try {
+        await deleteContact(id);
+        toast.success("Contato excluído com sucesso!");
+        router.push("/contacts");
+      } catch (err: any) {
+        console.error("Error deleting contact:", err);
+        const errorMessage = err.message || "Erro ao excluir contato.";
+        toast.error(`Erro: ${errorMessage}`);
+      }
+    }
+  };
+
+  const handleEdit = () => {
+    // For now we just go back to the list and open the modal
+    // In a real app we might have a dedicated edit page or pass state
+    router.push("/contacts?edit=" + id);
+  };
 
   if (authLoading || loading) {
     return (
@@ -191,17 +213,29 @@ export default function ContactDetail360Page() {
               </div>
 
               <div className="flex gap-3 w-full lg:w-auto">
-                <button className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50 transition-all">
+                <button 
+                  onClick={handleEdit}
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                >
                   <Edit2 className="w-4 h-4" />
                   Editar
                 </button>
                 <button 
-                  onClick={() => router.push('/messages')}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-[#1e3a8a] text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg shadow-blue-900/20"
+                  onClick={handleDelete}
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-red-100 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  Mensagem
+                  <Trash2 className="w-4 h-4" />
+                  Excluir
                 </button>
+                {contact.type === 'equipe' && (
+                  <button 
+                    onClick={() => router.push('/messages')}
+                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-[#1e3a8a] text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg shadow-blue-900/20"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Mensagem
+                  </button>
+                )}
               </div>
             </div>
           </section>

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { 
   Contact, 
@@ -41,16 +41,38 @@ import {
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 
+import { Suspense } from "react";
+
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+    </div>}>
+      <ContactsContent />
+    </Suspense>
+  );
+}
+
+function ContactsContent() {
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
+  const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'cliente' | 'equipe'>('cliente');
+
+  useEffect(() => {
+    if (tabParam === 'cliente' || tabParam === 'equipe') {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [searchQuery, setSearchQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
 
@@ -94,6 +116,24 @@ export default function ContactsPage() {
     };
   }, [user, profile]);
 
+  useEffect(() => {
+    if (!isModalOpen) {
+      setDeleteConfirmId(null);
+    }
+  }, [isModalOpen]);
+
+  useEffect(() => {
+    if (editId && contacts.length > 0) {
+      const contactToEdit = contacts.find(c => c.id === editId);
+      if (contactToEdit) {
+        setEditingContact(contactToEdit);
+        setIsModalOpen(true);
+        // Clear the query param to avoid re-opening on refresh
+        router.replace('/contacts');
+      }
+    }
+  }, [editId, contacts, router]);
+
   const filteredContacts = contacts.filter(c => 
     c.type === activeTab &&
     (c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -107,14 +147,24 @@ export default function ContactsPage() {
   );
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este contato?")) {
-      try {
-        await deleteContact(id);
-        toast.success("Contato excluído com sucesso!");
-        await fetchData();
-      } catch (err) {
-        toast.error("Erro ao excluir contato.");
+    console.log("handleDelete called for id:", id);
+    try {
+      console.log("Deleting contact...");
+      await deleteContact(id);
+      toast.success("Contato excluído com sucesso!");
+      
+      // Close modal if deleting the contact being edited
+      if (editingContact && editingContact.id === id) {
+        setIsModalOpen(false);
+        setEditingContact(null);
       }
+      
+      setDeleteConfirmId(null);
+      await fetchData();
+    } catch (err: any) {
+      console.error("Error deleting contact:", err);
+      const errorMessage = err.message || "Erro ao excluir contato.";
+      toast.error(`Erro: ${errorMessage}`);
     }
   };
 
@@ -263,8 +313,10 @@ export default function ContactsPage() {
                     }}
                     onDelete={() => handleDelete(contact.id)}
                     isActiveTabEquipe={activeTab === 'equipe'}
-                    onMessage={() => handleMessage(contact, 'cliente')}
+                    onMessage={() => handleMessage(contact, activeTab === 'equipe' ? 'equipe' : 'cliente')}
                     isMessaging={isMessaging === contact.id}
+                    isConfirmingDelete={deleteConfirmId === contact.id}
+                    setConfirmingDelete={(val) => setDeleteConfirmId(val ? contact.id : null)}
                   />
                 ))}
 
@@ -301,13 +353,14 @@ export default function ContactsPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              // Removido onClick propositalmente para obedecer o botão cancelar/X, atendendo solicitação do usuário
             />
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl overflow-hidden"
             >
               <button 
@@ -407,6 +460,27 @@ export default function ContactsPage() {
                 </div>
 
                 <div className="pt-4 flex gap-3">
+                  {editingContact && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (deleteConfirmId === editingContact.id) {
+                          handleDelete(editingContact.id);
+                        } else {
+                          setDeleteConfirmId(editingContact.id);
+                        }
+                      }}
+                      className={cn(
+                        "px-4 py-3 font-bold rounded-2xl transition-all border",
+                        deleteConfirmId === editingContact.id 
+                          ? "bg-red-500 text-white border-red-500 hover:bg-red-600" 
+                          : "text-red-500 hover:bg-red-50 border-red-100"
+                      )}
+                      title={deleteConfirmId === editingContact.id ? "Clique novamente para confirmar" : "Excluir este contato"}
+                    >
+                      {deleteConfirmId === editingContact.id ? "Confirmar?" : <Trash2 className="w-5 h-5" />}
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -430,26 +504,95 @@ export default function ContactsPage() {
   );
 }
 
-function ContactCard({ contact, companyName, onEdit, onDelete, isActiveTabEquipe, onMessage, isMessaging }: { contact: Contact, companyName?: string, onEdit: () => void, onDelete: () => void, isActiveTabEquipe: boolean, onMessage: () => void, isMessaging: boolean }) {
+function ContactCard({ 
+  contact, 
+  companyName, 
+  onEdit, 
+  onDelete, 
+  isActiveTabEquipe, 
+  onMessage, 
+  isMessaging,
+  isConfirmingDelete,
+  setConfirmingDelete
+}: { 
+  contact: Contact, 
+  companyName?: string, 
+  onEdit: () => void, 
+  onDelete: () => void, 
+  isActiveTabEquipe: boolean, 
+  onMessage: () => void, 
+  isMessaging: boolean,
+  isConfirmingDelete?: boolean,
+  setConfirmingDelete?: (val: boolean) => void
+}) {
   return (
     <div className="bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-shadow group h-full flex flex-col justify-between">
       <div>
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-4">
+        <div className="flex items-start justify-between mb-4 gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl uppercase",
+              "w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-xl uppercase shrink-0",
               isActiveTabEquipe ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600"
             )}>
               {contact.name.charAt(0)}
             </div>
-            <div>
-              <h3 className="font-bold text-lg">{contact.name}</h3>
-              <p className="text-xs text-muted-foreground">{contact.role}</p>
+            <div className="min-w-0">
+              <h3 className="font-bold text-lg truncate" title={contact.name}>{contact.name}</h3>
+              <p className="text-xs text-muted-foreground truncate">{contact.role}</p>
             </div>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={onEdit} className="p-1.5 text-muted-foreground hover:text-primary"><Edit2 className="w-4 h-4" /></button>
-            <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+          <div className="flex gap-1 shrink-0 items-center">
+            {!isConfirmingDelete ? (
+              <>
+                <button 
+                  onClick={(e) => { 
+                    console.log("Edit clicked");
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    onEdit(); 
+                  }} 
+                  className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all" 
+                  title="Editar"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={(e) => { 
+                    console.log("Delete button clicked, confirming...");
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    setConfirmingDelete?.(true); 
+                  }} 
+                  className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" 
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2 duration-200">
+                <button 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    setConfirmingDelete?.(false); 
+                  }}
+                  className="text-[10px] font-bold px-2 py-1 text-slate-400 hover:text-slate-600"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    onDelete(); 
+                  }}
+                  className="text-[10px] font-bold px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all shadow-sm shadow-red-200"
+                >
+                  Excluir
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -471,17 +614,23 @@ function ContactCard({ contact, companyName, onEdit, onDelete, isActiveTabEquipe
       <div className="flex gap-2">
         <Link 
           href={`/contacts/${contact.id}`}
-          className="flex-1 text-center text-sm font-bold py-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm"
+          className={cn(
+            "text-center text-sm font-bold py-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm",
+            isActiveTabEquipe ? "flex-1" : "w-full"
+          )}
         >
           {isActiveTabEquipe ? 'Ver Detalhes' : 'Visão 360°'}
         </Link>
-        <button 
-          onClick={onMessage}
-          disabled={isMessaging}
-          className="flex-1 text-center text-sm font-bold py-2 bg-muted text-muted-foreground rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm disabled:opacity-50"
-        >
-          {isMessaging ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Mensagem'}
-        </button>
+        {isActiveTabEquipe && (
+          <button 
+            onClick={onMessage}
+            disabled={isMessaging}
+            className="flex-1 text-center text-sm font-bold py-2 bg-muted text-muted-foreground rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isMessaging && <Loader2 className="w-4 h-4 animate-spin" />}
+            Mensagem
+          </button>
+        )}
       </div>
     </div>
   );
@@ -520,15 +669,16 @@ function UserCard({ user, onMessage, isMessaging }: { user: UserProfile, onMessa
             <span>Conta Vinculada</span>
           </div>
         </div>
+
+        <button 
+          onClick={onMessage}
+          disabled={isMessaging}
+          className="w-full text-sm font-bold py-2 bg-muted text-muted-foreground rounded-xl hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
+        >
+          {isMessaging && <Loader2 className="w-4 h-4 animate-spin" />}
+          Enviar Mensagem
+        </button>
       </div>
-      <button 
-        onClick={onMessage}
-        disabled={isMessaging}
-        className="w-full text-sm font-bold py-2 bg-muted text-muted-foreground rounded-xl hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-      >
-        {isMessaging && <Loader2 className="w-4 h-4 animate-spin" />}
-        Enviar Mensagem
-      </button>
     </div>
   );
 }

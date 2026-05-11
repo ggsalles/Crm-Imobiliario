@@ -196,11 +196,12 @@ export async function createContact(data: any) {
     phone: data.phone,
     type: data.type,
     department: data.department,
-    company_id: data.companyId,
+    company_id: data.companyId || null,
     owner_id: user.id
   }]).select();
 
   if (error) throw error;
+  if (!result || result.length === 0) throw new Error("Failed to create contact");
   return result[0].id;
 }
 
@@ -219,8 +220,22 @@ export async function updateContact(id: string, data: any) {
 }
 
 export async function deleteContact(id: string) {
-  const { error } = await supabase.from('contacts').delete().eq('id', id);
-  if (error) throw error;
+  console.log("Attempting to delete contact with id:", id);
+  // Using .select() ensures we get the deleted data back if it was successful
+  const { data, error } = await supabase.from('contacts').delete().eq('id', id).select();
+  
+  if (error) {
+    console.error("Supabase Error deleting contact:", error);
+    throw error;
+  }
+  
+  if (!data || data.length === 0) {
+    console.warn("No contact was deleted. This might be due to permissions or the contact not existing.");
+    throw new Error("Não foi possível excluir o contato. Verifique se você tem permissão ou se o contato ainda existe.");
+  }
+  
+  console.log("Successfully deleted contact:", data[0]);
+  return data[0];
 }
 
 // Companies
@@ -338,13 +353,14 @@ export async function createDeal(data: any) {
     title: data.title,
     value: data.value,
     stage: data.stage,
-    company_id: data.companyId,
-    contact_id: data.contactId,
-    property_id: data.propertyId,
+    company_id: data.companyId || null,
+    contact_id: data.contactId || null,
+    property_id: data.propertyId || null,
     owner_id: user.id
   }]).select();
 
   if (error) throw error;
+  if (!result || result.length === 0) throw new Error("Failed to create deal");
   return result[0].id;
 }
 
@@ -539,12 +555,13 @@ export async function createActivity(data: any) {
     date: data.date,
     type: data.type,
     status: data.status,
-    contact_id: data.contactId,
-    deal_id: data.dealId,
+    contact_id: data.contactId || null,
+    deal_id: data.dealId || null,
     owner_id: user.id
   }]).select();
 
   if (error) throw error;
+  if (!result || result.length === 0) throw new Error("Failed to create activity");
   return result[0].id;
 }
 

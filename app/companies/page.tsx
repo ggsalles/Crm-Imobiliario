@@ -161,9 +161,9 @@ export default function CompaniesPage() {
                         <p className="text-xs text-muted-foreground">{company.industry || 'Setor não informado'}</p>
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => handleDelete(company.id)} className="p-1.5 text-muted-foreground hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                    <div className="flex gap-1">
+                      <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(company.id)} className="p-1.5 text-muted-foreground hover:text-red-500 transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                   {company.website && (
@@ -192,8 +192,14 @@ export default function CompaniesPage() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl overflow-hidden">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl overflow-hidden"
+            >
               <button onClick={() => setIsModalOpen(false)} className="absolute right-6 top-6 p-2 rounded-full hover:bg-muted transition-colors">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -212,6 +218,16 @@ export default function CompaniesPage() {
                   <input name="website" defaultValue={editingCompany?.website} placeholder="www.empresa.com.br" className="w-full px-4 py-3 rounded-xl border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20" />
                 </div>
                 <div className="pt-4 flex gap-3">
+                  {editingCompany && (
+                    <button 
+                      type="button" 
+                      onClick={() => { handleDelete(editingCompany.id); setIsModalOpen(false); }} 
+                      className="px-4 py-3 font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-colors border border-red-100"
+                      title="Excluir empresa"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 font-bold text-muted-foreground hover:bg-muted rounded-2xl transition-colors">Cancelar</button>
                   <button type="submit" className="flex-1 py-3 font-bold bg-[#1e3a8a] text-white rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-primary/20">Salvar</button>
                 </div>

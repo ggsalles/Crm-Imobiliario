@@ -51,7 +51,7 @@ function MessagesContent() {
   const targetId = searchParams.get('id');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeTab, setActiveTab] = useState<'client' | 'team'>('client');
+  const [activeTab, setActiveTab] = useState<'client' | 'team'>('team');
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -215,12 +215,7 @@ function MessagesContent() {
     };
   };
 
-  const filteredItems = activeTab === 'client' 
-    ? contacts.filter(c => 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : profiles.filter(p => 
+  const filteredItems = profiles.filter(p => 
         p.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -269,9 +264,7 @@ function MessagesContent() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans selection:bg-blue-100">
-      <Sidebar />
-      
+    <>
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
         <header className="h-20 bg-white border-b px-8 flex items-center justify-between shrink-0 z-20">
@@ -310,23 +303,10 @@ function MessagesContent() {
                 </button>
               </div>
 
-              {/* Tabs */}
+              {/* No more tabs - focusing on Team */}
               <div className="flex p-1 bg-slate-100 rounded-2xl">
                 <button 
-                  onClick={() => setActiveTab('client')}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
-                    activeTab === 'client' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                  )}
-                >
-                  Clientes
-                </button>
-                <button 
-                  onClick={() => setActiveTab('team')}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
-                    activeTab === 'team' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                  )}
+                  className="flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-xl bg-white text-blue-600 shadow-sm"
                 >
                   Equipe
                 </button>
@@ -719,21 +699,21 @@ function MessagesContent() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
 export default function MessagesPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen bg-slate-50">
-        <Sidebar />
+    <div className="flex min-h-screen bg-slate-50 font-sans selection:bg-blue-100">
+      <Sidebar />
+      <Suspense fallback={
         <main className="flex-1 flex items-center justify-center">
           <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
         </main>
-      </div>
-    }>
-      <MessagesContent />
-    </Suspense>
+      }>
+        <MessagesContent />
+      </Suspense>
+    </div>
   );
 }

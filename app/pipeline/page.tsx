@@ -388,8 +388,8 @@ export default function PipelinePage() {
                               >
                                 <div className="flex justify-between items-start mb-3">
                                   <div className="flex gap-1">
-                                    <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 transition-all"><Edit2 className="w-3 h-3" /></button>
-                                    <button onClick={() => handleDelete(deal.id)} className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"><Trash2 className="w-3 h-3" /></button>
+                                    <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-1 text-slate-400 hover:text-blue-600 transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
+                                    <button onClick={() => handleDelete(deal.id)} className="p-1 text-slate-400 hover:text-red-500 transition-all" title="Excluir"><Trash2 className="w-3 h-3" /></button>
                                   </div>
                                   <div className="flex -space-x-2">
                                     <div className="w-6 h-6 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600 uppercase">
@@ -442,8 +442,14 @@ export default function PipelinePage() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-8 w-full max-w-lg relative shadow-2xl"
+            >
               <button onClick={() => setIsModalOpen(false)} className="absolute right-6 top-6 p-2 rounded-full hover:bg-muted transition-colors">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -506,6 +512,16 @@ export default function PipelinePage() {
                   </select>
                 </div>
                 <div className="pt-4 flex gap-3">
+                  {editingDeal?.id && (
+                    <button 
+                      type="button" 
+                      onClick={() => { handleDelete(editingDeal.id); setIsModalOpen(false); }} 
+                      className="px-4 py-3 font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-colors border border-red-100"
+                      title="Excluir negócio"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 font-bold text-muted-foreground hover:bg-muted rounded-2xl transition-colors">Cancelar</button>
                   <button type="submit" className="flex-1 py-3 font-bold bg-[#1e3a8a] text-white rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-primary/20">Salvar</button>
                 </div>
@@ -518,8 +534,14 @@ export default function PipelinePage() {
       <AnimatePresence>
         {isGoalModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsGoalModalOpen(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} className="bg-white rounded-3xl p-8 w-full max-w-sm relative shadow-2xl">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-8 w-full max-w-sm relative shadow-2xl"
+            >
               <button onClick={() => setIsGoalModalOpen(false)} className="absolute right-6 top-6 p-2 rounded-full hover:bg-muted transition-colors">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>

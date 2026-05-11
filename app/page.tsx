@@ -115,8 +115,17 @@ function DashboardContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.push("/login");
+      } else {
+        // Stop showing generic loader if auth is done and user is here
+        // Even if profile is still syncing, the UI will handle it
+        const timer = setTimeout(() => {
+          setLoading(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
     }
   }, [user, authLoading, router]);
 
@@ -143,9 +152,7 @@ function DashboardContent() {
 
     // Initial load markers - we can set loading to false quickly
     // as Firestore is very responsive
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    setLoading(false);
 
     // Fetch team members if Admin
     let unsubUsers = () => {};
@@ -156,7 +163,6 @@ function DashboardContent() {
     }
 
     return () => {
-      clearTimeout(timer);
       unsubDeals();
       unsubContacts();
       unsubProperties();

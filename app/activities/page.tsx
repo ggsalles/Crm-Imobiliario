@@ -44,6 +44,7 @@ export default function ActivitiesPage() {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   // Form State
@@ -149,6 +150,12 @@ export default function ActivitiesPage() {
     if (filter === 'all') return true;
     return a.status === filter;
   });
+
+  useEffect(() => {
+    if (!isAddModalOpen) {
+      setDeleteConfirmId(null);
+    }
+  }, [isAddModalOpen]);
 
   if (authLoading || !user) return null;
 
@@ -268,7 +275,7 @@ export default function ActivitiesPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2">
                       <button 
                         onClick={() => handleOpenEditModal(activity)}
                         className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all"
@@ -307,7 +314,10 @@ export default function ActivitiesPage() {
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300"
+          >
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">
                 {editingActivity ? 'Editar Atividade' : 'Nova Atividade'}
@@ -391,6 +401,28 @@ export default function ActivitiesPage() {
               </div>
 
               <div className="flex gap-4 pt-4">
+                {editingActivity && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (deleteConfirmId === editingActivity.id) {
+                        handleDelete(editingActivity.id);
+                        setIsAddModalOpen(false);
+                      } else {
+                        setDeleteConfirmId(editingActivity.id);
+                      }
+                    }}
+                    className={cn(
+                      "px-6 py-4 border-2 rounded-2xl font-bold transition-all font-sans",
+                      deleteConfirmId === editingActivity.id
+                        ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
+                        : "border-red-50 text-red-500 hover:bg-red-50"
+                    )}
+                    title={deleteConfirmId === editingActivity.id ? "Clique para confirmar" : "Excluir atividade"}
+                  >
+                    {deleteConfirmId === editingActivity.id ? "Confirmar?" : <Trash2 className="w-5 h-5" />}
+                  </button>
+                )}
                 <button 
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
