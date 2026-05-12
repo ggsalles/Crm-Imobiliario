@@ -750,35 +750,35 @@ function TeamView({ users, deals }: { users: UserProfile[], deals: Deal[] }) {
   return (
     <div className="space-y-8 pb-20">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Média de Vendas/Agente</p>
-          <p className="text-2xl font-light text-slate-900 tracking-tighter">
+        <div className="bg-card p-8 rounded-[32px] border border-border shadow-sm card-hover">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Média de Vendas/Agente</p>
+          <p className="text-2xl font-light text-foreground tracking-tighter">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
               agents.reduce((acc, a) => acc + a.stats.totalValue, 0) / (agents.length || 1)
             )}
           </p>
         </div>
-        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Melhor Performance</p>
-          <p className="text-2xl font-light text-slate-900 tracking-tighter truncate">
+        <div className="bg-card p-8 rounded-[32px] border border-border shadow-sm card-hover">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Melhor Performance</p>
+          <p className="text-2xl font-light text-foreground tracking-tighter truncate">
             {agents[0]?.displayName || '-'}
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-10 border-b border-slate-50">
-          <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Performance da Equipe</h3>
+      <div className="bg-card rounded-[32px] md:rounded-[40px] border border-border shadow-sm overflow-hidden card-hover">
+        <div className="p-10 border-b border-border">
+          <h3 className="text-2xl font-bold text-foreground tracking-tight">Performance da Equipe</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-4 md:px-0">
           <table className="w-full border-separate border-spacing-0">
             <thead>
-              <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left">
-                <th className="px-10 py-6 border-b border-slate-50">Membro</th>
-                <th className="px-10 py-6 border-b border-slate-50">Vendas Totais</th>
-                <th className="px-10 py-6 border-b border-slate-50">Negócios Fechados</th>
-                <th className="px-10 py-6 border-b border-slate-50">Taxa de Conversão</th>
-                <th className="px-10 py-6 border-b border-slate-50">Ativos</th>
+              <tr className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-left">
+                <th className="px-10 py-6 border-b border-border">Membro</th>
+                <th className="px-10 py-6 border-b border-border">Vendas Totais</th>
+                <th className="px-10 py-6 border-b border-border">Negócios Fechados</th>
+                <th className="px-10 py-6 border-b border-border">Taxa de Conversão</th>
+                <th className="px-10 py-6 border-b border-border">Ativos</th>
               </tr>
             </thead>
             <tbody>
