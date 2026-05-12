@@ -72,6 +72,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Suspense } from "react";
+import { IntelligenceWidget } from "@/components/IntelligenceWidget";
 
 const STAGES = [
   { id: "lead", title: "Novo Lead", color: "blue" },
@@ -105,6 +106,28 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState("Visão Geral");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const loadProbabilities = () => {
+      const saved = localStorage.getItem("pipeline_probabilities");
+      if (saved) {
+        setCustomProbabilities(JSON.parse(saved));
+      } else {
+        const defaults = STAGES.reduce((acc, stage, idx) => {
+          acc[stage.id] = (idx + 1) * 20;
+          return acc;
+        }, {} as Record<string, number>);
+        setCustomProbabilities(defaults);
+      }
+    };
+
+    loadProbabilities();
+
+    const handleUpdate = () => loadProbabilities();
+    window.addEventListener("storage_probabilities_updated", handleUpdate);
+    return () => window.removeEventListener("storage_probabilities_updated", handleUpdate);
+  }, []);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -185,7 +208,6 @@ function DashboardContent() {
   const currentGoal = goals.find(g => g.month === currentMonthStr);
   const goalRevenue = currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 100000;
   const closedDealsTotal = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
-  const progressPercentage = Math.round((closedDealsTotal / goalRevenue) * 100);
 
   // Metric Data helper for Sparklines
   const getTrendData = (type: 'revenue' | 'leads' | 'deals') => {
@@ -227,6 +249,10 @@ function DashboardContent() {
   const validDeals = deals.filter(d => STAGES.some(s => s.id === d.stage));
   const totalDealsFinished = validDeals.filter(d => d.stage === 'closed').length;
   const winRate = validDeals.length > 0 ? (totalDealsFinished / validDeals.length) * 100 : 0;
+  const winRateDetails = `${totalDealsFinished} de ${validDeals.length} negócios`;
+
+  // progressPercentage - Use monthly revenue for monthly goal
+  const progressPercentage = Math.round((currentMonthRevenue / goalRevenue) * 100);
 
   // New Leads (Deals in Novo Lead stage created this month) - Force Sync trigger
   // We use deals instead of contacts as it aligns better with the pipeline view
@@ -239,12 +265,17 @@ function DashboardContent() {
   // Open Deals
   const openDeals = deals.filter(d => d.stage !== 'closed');
 
-  // Forecast Calculation (consistency with ForecastView)
+  // Forecast Calculation (Weighted by custom probabilities)
   const closedDealsTotalForForecast = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
-  const totalPipelineValue = deals
-    .filter(d => STAGES.some(s => s.id === d.stage && s.id !== 'closed'))
-    .reduce((acc, d) => acc + d.value, 0);
-  const forecastValue = (totalPipelineValue * 0.2) + closedDealsTotalForForecast;
+  
+  const weightedPipelineValue = deals
+    .filter(d => d.stage !== 'closed')
+    .reduce((acc, d) => {
+      const prob = customProbabilities[d.stage] ?? (STAGES.findIndex(s => s.id === d.stage) + 1) * 20;
+      return acc + (d.value * (prob / 100));
+    }, 0);
+
+  const forecastValue = weightedPipelineValue + closedDealsTotalForForecast;
   
   // Properties Available
   const activeProperties = properties.filter(p => p.status === 'disponível').length;
@@ -280,7 +311,7 @@ function DashboardContent() {
         stage: stage?.title || d.stage,
         color: stage?.color || 'slate',
         date: d.updatedAt ? format(new Date(d.updatedAt), "MMM dd, yyyy") : '-',
-        probability: d.stage === 'closed' ? 100 : (STAGES.findIndex(s => s.id === d.stage) + 1) * 20
+        probability: customProbabilities[d.stage] ?? (d.stage === 'closed' ? 100 : (STAGES.findIndex(s => s.id === d.stage) + 1) * 20)
       };
     });
 
@@ -387,7 +418,7 @@ function DashboardContent() {
                     variants={itemVariants}
                     title="TAXA DE CONVERSÃO" 
                     value={`${winRate.toFixed(1)}%`} 
-                    trend="Sucesso do Funil"
+                    trend={winRateDetails}
                     description="Percentual de fechamentos bem-sucedidos em relação ao volume total de oportunidades. Indica a eficiência do seu processo comercial."
                     isPositive={winRate > 15}
                     chartData={getTrendData('revenue').reverse()}
@@ -509,81 +540,13 @@ function DashboardContent() {
                     </div>
                   </motion.div>
 
-                  {/* Activities Column */}
-                  <motion.div 
-                    variants={itemVariants}
-                    className="bg-card rounded-[32px] md:rounded-[40px] border border-border p-6 md:p-10 shadow-sm flex flex-col relative overflow-hidden card-hover"
-                  >
-                    <div className="flex justify-between items-center mb-8 md:mb-10">
-                      <h3 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">Atividades</h3>
-                      <button 
-                        onClick={() => router.push("/calendar")}
-                        className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all text-muted-foreground"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="space-y-6 md:space-y-8 flex-1">
-                      {displayActivities.length > 0 ? displayActivities.map((activity) => (
-                        <div 
-                          key={activity.id} 
-                          className={cn(
-                            "flex gap-4 md:gap-6 group cursor-pointer items-center",
-                            activity.isCompleted && "opacity-60"
-                          )}
-                          onClick={() => handleToggleActivity(activity.raw)}
-                        >
-                          <div className={cn(
-                            "flex flex-col items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-2xl md:rounded-3xl shrink-0 transition-all shadow-sm ring-1",
-                            activity.isCompleted 
-                              ? "bg-muted text-muted-foreground ring-border" 
-                              : "bg-background text-foreground ring-border group-hover:bg-primary group-hover:text-white group-hover:ring-primary/20"
-                          )}>
-                            <span className="text-[9px] md:text-[10px] font-bold uppercase leading-none tracking-widest">{activity.date.split(' ')[1]}</span>
-                            <span className="text-lg md:text-xl font- black leading-none mt-1 tracking-tighter">{activity.date.split(' ')[0]}</span>
-                          </div>
-                          <div className="flex-1 min-w-0 flex flex-col justify-center">
-                            <h4 className={cn(
-                              "text-xs md:text-sm font-bold transition-colors truncate mb-1",
-                              activity.isCompleted ? "text-muted-foreground line-through" : "text-foreground group-hover:text-primary"
-                            )}>
-                              {activity.title}
-                            </h4>
-                            <div className="flex items-center gap-2 md:gap-3">
-                              <span className={cn(
-                                "text-[10px] font-bold uppercase tracking-widest",
-                                activity.isCompleted ? "text-muted-foreground" : "text-primary"
-                              )}>
-                                {activity.time}
-                              </span>
-                              <div className="w-1 h-1 rounded-full bg-border" />
-                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest truncate">
-                                {activity.statusLabel}
-                              </p>
-                            </div>
-                          </div>
-                          <div className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                            activity.isCompleted 
-                              ? "bg-primary border-primary text-white" 
-                              : "border-border text-transparent group-hover:border-primary/50"
-                          )}>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </div>
-                        </div>
-                      )) : (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
-                          <Calendar className="w-12 md:w-16 h-12 md:h-16 mb-4 opacity-10" />
-                          <p className="text-xs font-bold uppercase tracking-widest">Sem tarefas</p>
-                        </div>
-                      )}
-                    </div>
-                    <button 
-                      onClick={() => router.push("/calendar")}
-                      className="w-full mt-8 md:mt-10 py-4 md:py-5 bg-muted rounded-2xl text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all border border-border"
-                    >
-                      Gerenciar Agenda
-                    </button>
+                  {/* Activities Column: Intelligence Widget */}
+                  <motion.div variants={itemVariants}>
+                    <IntelligenceWidget 
+                      activities={activities} 
+                      deals={deals} 
+                      onToggle={handleToggleActivity}
+                    />
                   </motion.div>
                 </div>
 
@@ -704,7 +667,13 @@ function DashboardContent() {
             )}
 
             {activeTab === 'Previsões' && (
-              <ForecastView deals={deals} goals={goals} goalRevenue={goalRevenue} progressPercentage={progressPercentage} />
+              <ForecastView 
+                deals={deals} 
+                goals={goals} 
+                goalRevenue={goalRevenue} 
+                progressPercentage={progressPercentage}
+                customProbabilities={customProbabilities}
+              />
             )}
           </motion.div>
         </AnimatePresence>
@@ -824,7 +793,19 @@ function TeamView({ users, deals }: { users: UserProfile[], deals: Deal[] }) {
   );
 }
 
-function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals: Deal[], goals: Goal[], goalRevenue: number, progressPercentage: number }) {
+function ForecastView({ 
+  deals, 
+  goals, 
+  goalRevenue, 
+  progressPercentage,
+  customProbabilities
+}: { 
+  deals: Deal[], 
+  goals: Goal[], 
+  goalRevenue: number, 
+  progressPercentage: number,
+  customProbabilities: Record<string, number>
+}) {
   const currentMonthStr = format(new Date(), "yyyy-MM");
   const currentGoal = goals.find(g => g.month === currentMonthStr);
   
@@ -833,7 +814,14 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
     .filter(d => STAGES.some(s => s.id === d.stage && s.id !== 'closed'))
     .reduce((acc, d) => acc + d.value, 0);
 
-  const forecastValue = (totalPipelineValue * 0.2) + closedDealsTotal;
+  const weightedPipelineValue = deals
+    .filter(d => d.stage !== 'closed')
+    .reduce((acc, d) => {
+      const prob = customProbabilities[d.stage] ?? (STAGES.findIndex(s => s.id === d.stage) + 1) * 20;
+      return acc + (d.value * (prob / 100));
+    }, 0);
+
+  const forecastValue = weightedPipelineValue + closedDealsTotal;
   
   const stageCounts = STAGES.map(stage => ({
     name: stage.title,
@@ -870,8 +858,14 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
 
           <div className="space-y-6">
             {stageCounts.map((stage, idx) => {
-              const progress = stage.goal > 0 ? (stage.count / stage.goal) * 100 : 0;
-              const funnelWidth = 100 - (idx * 10); // Simple visual funnel effect
+              // Calculate progress based on value vs goal if goal exists, 
+              // otherwise show value relative to total pipeline
+              const progressByValue = stage.goal > 0 
+                ? (stage.value / stage.goal) * 100 
+                : (totalPipelineValue > 0 ? (stage.value / totalPipelineValue) * 100 : 0);
+              
+              // For visual fallback: 0% if value is 0, at least 2% if value > 0 for visibility
+              const visualProgress = stage.value > 0 ? Math.max(2, Math.min(100, progressByValue)) : 0;
 
               return (
                 <div key={stage.name} className="relative group">
@@ -886,7 +880,7 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
                       )} />
                       <span className="text-sm font-bold text-foreground">{stage.name}</span>
                       <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-2">
-                        {stage.count} negócios
+                        {stage.count} {stage.count === 1 ? 'negócio' : 'negócios'}
                       </span>
                     </div>
                     <div className="text-right">
@@ -895,7 +889,7 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
                       </p>
                       {stage.goal > 0 && (
                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          Meta: {stage.goal} units
+                          Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.goal)}
                         </p>
                       )}
                     </div>
@@ -903,7 +897,7 @@ function ForecastView({ deals, goals, goalRevenue, progressPercentage }: { deals
                   <div className="h-4 bg-muted rounded-full overflow-hidden shadow-inner ring-1 ring-border p-0.5">
                     <motion.div 
                       initial={{ width: 0 }}
-                      animate={{ width: `${funnelWidth}%` }}
+                      animate={{ width: `${visualProgress}%` }}
                       className={cn(
                         "h-full rounded-full transition-all duration-1000",
                         stage.color === 'blue' ? "bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)]" :

@@ -28,6 +28,7 @@ import { subscribeToTotalUnreadMessages } from "@/lib/db";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
+  { label: "Atividades", icon: Calendar, href: "/activities" },
   { label: "Pipeline", icon: Trello, href: "/pipeline" },
   { label: "Calendário", icon: Calendar, href: "/calendar" },
   { label: "Clientes", icon: Users, href: "/contacts?tab=cliente" },

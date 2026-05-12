@@ -19,11 +19,23 @@ import {
   Home,
   ChevronDown,
   Building2,
-  UserCircle
+  UserCircle,
+  Target,
+  Percent,
+  Calculator,
+  Sigma
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const STAGES_CONFIG = [
+  { id: "lead", title: "Novo Lead", defaultProb: 20 },
+  { id: "qualification", title: "Qualificação / Visita", defaultProb: 40 },
+  { id: "proposal", title: "Proposta", defaultProb: 60 },
+  { id: "negotiation", title: "Análise Jurídica", defaultProb: 80 },
+  { id: "closed", title: "Vendido / Alugado", defaultProb: 100 },
+];
 
 const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | "rose" | "indigo"; hex: string }[] = [
   { name: "Ocean Blue", value: "blue", hex: "#3b82f6" },
@@ -73,6 +85,38 @@ function DocItem({ title, icon: Icon, content }: { title: string; icon: any; con
 
 export default function SettingsPage() {
   const { primaryColor, setPrimaryColor, appearance, setAppearance } = useTheme();
+  const [probabilities, setProbabilities] = useState<Record<string, number>>({});
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pipeline_probabilities");
+    if (saved) {
+      setProbabilities(JSON.parse(saved));
+    } else {
+      const defaults = STAGES_CONFIG.reduce((acc, stage) => {
+        acc[stage.id] = stage.defaultProb;
+        return acc;
+      }, {} as Record<string, number>);
+      setProbabilities(defaults);
+    }
+  }, []);
+
+  const handleProbChange = (id: string, value: string) => {
+    const numValue = Math.min(100, Math.max(0, parseInt(value) || 0));
+    setProbabilities(prev => ({
+      ...prev,
+      [id]: numValue
+    }));
+    setIsSaved(false);
+  };
+
+  const saveProbabilities = () => {
+    localStorage.setItem("pipeline_probabilities", JSON.stringify(probabilities));
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+    // Trigger storage event so other tabs/components can update
+    window.dispatchEvent(new Event("storage_probabilities_updated"));
+  };
 
   return (
     <div className="flex min-h-screen bg-background transition-colors duration-500">
@@ -171,6 +215,58 @@ export default function SettingsPage() {
             </section>
 
             <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-bold text-foreground">Probabilidades do Pipeline (Score)</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Defina o percentual de sucesso projetado para cada estágio do seu funil.</p>
+                </div>
+                <button
+                  onClick={saveProbabilities}
+                  disabled={isSaved}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2",
+                    isSaved 
+                      ? "bg-emerald-500 text-white border-emerald-600" 
+                      : "bg-primary text-white border-primary/20 hover:bg-primary/90"
+                  )}
+                >
+                  {isSaved ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Salvo com Sucesso
+                    </>
+                  ) : (
+                    "Salvar Alterações"
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                {STAGES_CONFIG.map((stage) => (
+                  <div key={stage.id} className="p-4 bg-muted/30 rounded-2xl border border-border">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">
+                      {stage.title}
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        value={probabilities[stage.id] ?? stage.defaultProb}
+                        onChange={(e) => handleProbChange(stage.id, e.target.value)}
+                        className="w-full bg-background border-none rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-primary/20"
+                        min="0"
+                        max="100"
+                      />
+                      <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Layout className="w-5 h-5 text-primary" />
@@ -228,6 +324,49 @@ export default function SettingsPage() {
                     title="Perfis de Usuários" 
                     icon={UserCircle} 
                     content="Cada usuário no sistema possui um perfil personalizável. Aqui você pode atualizar sua foto, e-mail de contato e senha. Lembre-se de manter seu perfil atualizado, pois essas informações são usadas automaticamente na geração de contratos e materiais de marketing."
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Sigma className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-bold text-foreground">Dicionário de Fórmulas e Cálculos</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">Entenda como o SalesScore CRM processa seus dados para gerar inteligência comercial.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DocItem 
+                    title="Cálculo da Taxa de Conversão" 
+                    icon={Percent} 
+                    content="Fórmula: (Total de Negócios Fechados / Total de Negócios no Pipeline) × 100. Consideramos todos os negócios que passaram pelo seu funil este mês. Se você tem 10 negócios e fechou 3, sua taxa é 30%."
+                  />
+                  <DocItem 
+                    title="Previsão de Fechamento (Forecast)" 
+                    icon={Calculator} 
+                    content="Fórmula: Σ (Valor do Negócio × Probabilidade da Etapa) + Receita Realizada. Nós somamos o que você já vendeu com a expectativa estatística do seu pipeline atual. É a ferramenta mais poderosa para prever o faturamento futuro."
+                  />
+                  <DocItem 
+                    title="Score de Probabilidade" 
+                    icon={Target} 
+                    content="A probabilidade é atribuída a cada estágio (ex: Proposta = 60%). No Dashboard, o Score de um negócio individual reflete a chance de fechamento baseada na etapa atual dele. Isso ajuda a priorizar esforços nos leads mais quentes."
+                  />
+                  <DocItem 
+                    title="Ticket Médio" 
+                    icon={Sigma} 
+                    content="Fórmula: Valor Total de Vendas / Número de Negócios Fechados. Esta métrica indica o valor médio de cada contrato assinado em sua imobiliária, essencial para entender se você está focando em imóveis de alto padrão ou volume."
+                  />
+                  <DocItem 
+                    title="Saúde da Carteira (Radar)" 
+                    icon={Sparkles} 
+                    content="O gráfico de radar analisa 5 dimensões: Volume de Leads, Velocidade de Vendas, Ticket Médio, Taxa de Retenção e Batimento de Metas. Quanto mais equilibrada a área do gráfico, mais saudável é o seu processo comercial."
+                  />
+                  <DocItem 
+                    title="Progressão de Meta" 
+                    icon={Target} 
+                    content="Fórmula: (Receita do Mês Atual / Meta Estabelecida) × 100. No Dashboard de Performance, a barra de progresso mostra quão perto você está do objetivo financeiro configurado para o período atual."
                   />
                 </div>
               </div>
