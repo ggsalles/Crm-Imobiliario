@@ -2,9 +2,28 @@
 
 import { Sidebar } from "@/components/sidebar";
 import { useTheme } from "@/providers/theme-provider";
-import { Palette, Check, Layout, Sparkles, Smartphone, Monitor } from "lucide-react";
-import { motion } from "framer-motion";
+import { 
+  Palette, 
+  Check, 
+  Layout, 
+  Sparkles, 
+  Smartphone, 
+  Monitor,
+  LayoutDashboard,
+  Trello,
+  Calendar,
+  Users,
+  BarChart3,
+  ShieldCheck,
+  MessageSquare,
+  Home,
+  ChevronDown,
+  Building2,
+  UserCircle
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | "rose" | "indigo"; hex: string }[] = [
   { name: "Ocean Blue", value: "blue", hex: "#3b82f6" },
@@ -14,6 +33,43 @@ const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | 
   { name: "Velvet Rose", value: "rose", hex: "#f43f5e" },
   { name: "Deep Indigo", value: "indigo", hex: "#6366f1" },
 ];
+
+function DocItem({ title, icon: Icon, content }: { title: string; icon: any; content: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="bg-background rounded-2xl border border-border overflow-hidden transition-all hover:border-primary/30 group">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Icon className="w-4 h-4 text-primary" />
+          </div>
+          <span className="text-sm font-bold text-foreground">{title}</span>
+        </div>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="px-4 pb-4 pt-0">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {content}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { primaryColor, setPrimaryColor, appearance, setAppearance } = useTheme();
@@ -110,6 +166,69 @@ export default function SettingsPage() {
                       </span>
                     </button>
                   ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Layout className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-bold text-foreground">Guia do Sistema (Documentação)</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">Explicação detalhada de cada módulo e recurso do SalesScore CRM.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <DocItem 
+                    title="Dashboard" 
+                    icon={LayoutDashboard} 
+                    content="A tela principal (Dashboard) é onde você tem o pulso do seu negócio. O gráfico de performance da equipe mostra o ranking dos agentes por volume de vendas e taxa de conversão. Os cards superiores mostram métricas rápidas como média de vendas e melhor performance individual. Use o filtro de período para analisar tendências históricas."
+                  />
+                  <DocItem 
+                    title="Pipeline (Funil de Vendas)" 
+                    icon={Trello} 
+                    content="O Pipeline é o coração operacional do CRM. Cada card representa um negócio (Deal). Você pode arrastar os cards entre as colunas (Prospecção, Qualificação, Proposta, Negociação, Fechado) para atualizar o status. Clique em um card para ver o histórico completo, documentos anexos e atividades relacionadas a esse negócio específico."
+                  />
+                  <DocItem 
+                    title="Calendário e Atividades" 
+                    icon={Calendar} 
+                    content="No Calendário, você gerencia seu tempo. As atividades (reuniões, visitas, chamadas) são sincronizadas em tempo real. Você pode criar novas atividades clicando em qualquer data, definir lembretes e associá-las a contatos ou imóveis. O sistema sinaliza atividades atrasadas em vermelho para evitar perda de oportunidades."
+                  />
+                  <DocItem 
+                    title="Clientes e Contatos" 
+                    icon={Users} 
+                    content="Este módulo centraliza todas as informações de pessoas físicas e jurídicas. Cada perfil de cliente armazena dados de contato, preferências de imóveis pesquisados, histórico de conversas e documentos (como RG/CPF). Você pode segmentar clientes por 'Tipo' (Comprador, Proprietário, Investidor) para campanhas de marketing direcionadas."
+                  />
+                  <DocItem 
+                    title="Relatórios e Analytics" 
+                    icon={BarChart3} 
+                    content="A aba de Relatórios transforma dados brutos em inteligência comercial. Analise a origem dos seus leads, o ticket médio das vendas, o tempo médio de fechamento e a eficácia de cada canal de aquisição. Os relatórios podem ser exportados para apresentações de resultados da equipe."
+                  />
+                  <DocItem 
+                    title="Gestão de Imóveis" 
+                    icon={Home} 
+                    content="Gerencie seu portfólio completo de propriedades. Adicione fotos em alta resolução, tour virtual, especificações técnicas (área, quartos, vagas) e localização. O sistema permite cruzar automaticamente as características dos imóveis com as preferências cadastradas nos perfis dos clientes (Matching)."
+                  />
+                  <DocItem 
+                    title="Equipe e Permissões" 
+                    icon={ShieldCheck} 
+                    content="Como Administrador, você pode gerenciar os níveis de acesso da sua equipe. Defina quem pode excluir registros, quem visualiza apenas os próprios leads e quem tem acesso aos relatórios financeiros. Mantenha a segurança dos dados da sua empresa garantindo o acesso correto para cada função."
+                  />
+                  <DocItem 
+                    title="Mensagens Internas" 
+                    icon={MessageSquare} 
+                    content="O sistema de Mensagens (Chat) elimina a necessidade de ferramentas externas para comunicação rápida. Troque informações sobre imóveis, peça ajuda em negociações complexas ou envie atualizações para toda a empresa. Notificações em tempo real garantem que ninguém perca uma mensagem importante."
+                  />
+                  <DocItem 
+                    title="Empresas e Parceiros" 
+                    icon={Building2} 
+                    content="Gerencie as entidades jurídicas parceiras, como bancos para financiamento, administradoras de condomínios e outras imobiliárias. Manter os contatos das empresas atualizados facilita agilizar processos de documentação e fechamento de novos negócios."
+                  />
+                  <DocItem 
+                    title="Perfis de Usuários" 
+                    icon={UserCircle} 
+                    content="Cada usuário no sistema possui um perfil personalizável. Aqui você pode atualizar sua foto, e-mail de contato e senha. Lembre-se de manter seu perfil atualizado, pois essas informações são usadas automaticamente na geração de contratos e materiais de marketing."
+                  />
                 </div>
               </div>
             </section>
