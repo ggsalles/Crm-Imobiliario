@@ -24,41 +24,64 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
     const checkRecovery = async () => {
-      console.log("--- DEBUG RECOVERY ---");
-      console.log("URL Atual:", window.location.href);
-      
-      // Tentativa 1: Pegar sessão existente
-      let { data: { session }, error } = await supabase.auth.getSession();
-      
-      // Se não houver sessão, mas houver código na URL, tentamos forçar o processamento
-      if (!session && (window.location.hash || window.location.search.includes('code='))) {
-        console.log("Detectado token na URL, aguardando processamento do Supabase...");
-      }
+      try {
+        console.log("--- DEBUG RECOVERY ---");
+        const url = window.location.href;
+        const hash = window.location.hash;
+        const search = window.location.search;
+        
+        console.log("URL:", url);
+        
+        // Verifica se existe algum indício de token na URL
+        const hasToken = hash.includes("access_token=") || search.includes("code=");
+        
+        // Tentativa 1 imediata
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        
+        // Se tem token, liberamos o form. Se o token for inválido, o update falhará depois.
+        if (hasToken) {
+          console.log("Token detectado na URL, liberando formulário.");
+          setIsReady(true);
+          return;
+        }
 
-      if (session) {
-        setIsReady(true);
-      } else {
-        // Intervalo de tentativas
-        let attempts = 0;
-        const interval = setInterval(async () => {
-          attempts++;
-          const { data: { session: retrySession } } = await supabase.auth.getSession();
-          console.log(`Tentativa ${attempts} de recuperar sessão...`, retrySession);
+        if (session) {
+          console.log("Sessão encontrada imediatamente.");
+          setIsReady(true);
+          return;
+        }
 
-          if (retrySession) {
-            setIsReady(true);
-            clearInterval(interval);
-          } else if (attempts >= 8) { // Aumentado para 8 segundos
-            console.log("Tempo esgotado. Se você continua vendo esta tela, o link pode ter expirado.");
-            clearInterval(interval);
-            // NÃO vamos redirecionar para o login automaticamente para não perder o log do console
-          }
-        }, 1000);
+        if (!hasToken && !session) {
+          console.log("Nenhum token detectado na URL e nenhuma sessão ativa.");
+          // Pequena espera antes de redirecionar para evitar falsos negativos
+          timeoutId = setTimeout(async () => {
+            const { data: { session: finalSession } } = await supabase.auth.getSession();
+            if (!finalSession) {
+              console.log("Sem sessão após timeout. Redirecionando...");
+              toast.error("Link de redefinição inválido ou expirado.");
+              router.push("/login");
+            } else {
+              console.log("Sessão recuperada após timeout.");
+              setIsReady(true);
+            }
+          }, 2500);
+        }
+      } catch (err: any) {
+        console.error("Erro no checkRecovery:", err);
+        toast.error("Erro ao processar sua solicitação. Tente novamente.");
+        setIsReady(true); // Liberamos o form mesmo assim como fallback
       }
     };
 
     checkRecovery();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [router]);
 
   const handleReset = async (e: React.FormEvent) => {
@@ -93,8 +116,12 @@ export default function ResetPasswordPage() {
 
   if (!isReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <h3 className="text-lg font-medium">Validando link de acesso...</h3>
+        <p className="text-sm text-muted-foreground mt-2 max-w-xs">
+          Aguarde um instante enquanto verificamos seus dados de segurança.
+        </p>
       </div>
     );
   }
