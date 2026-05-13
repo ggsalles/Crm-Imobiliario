@@ -119,15 +119,23 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
+      console.log("Iniciando redefinição de senha...");
       const { error } = await supabase.auth.updateUser({
         password: password,
       });
 
       if (error) throw error;
 
+      console.log("Senha redefinida com sucesso. Redirecionando para login...");
       toast.success("Senha redefinida com sucesso!");
-      router.push("/login");
+      
+      // Desloga o usuário para que ele possa logar com a nova senha e cair na tela de login
+      await supabase.auth.signOut();
+      
+      // Forçamos o redirecionamento
+      router.replace("/login");
     } catch (error: any) {
+      console.error("Erro ao redefinir senha:", error);
       toast.error(error.message || "Erro ao redefinir senha.");
     } finally {
       setLoading(false);
