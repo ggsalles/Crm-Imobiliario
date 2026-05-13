@@ -226,11 +226,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
+    // Função para detectar a URL correta (Vercel, AI Studio ou Local)
+    const getURL = () => {
+      // Prioridade 1: Variável de ambiente (Vercel)
+      // Prioridade 2: URL manual (para garantir que funcione agora)
+      // Prioridade 3: Origin do window
+      let url = "https://crm-imobiliario-tau.vercel.app";
+      
+      console.log("URL de base definida para reset:", url);
+      return url;
+    };
+
+    const redirectUrl = `${getURL()}/reset-password`;
+    
+    console.log("--- DEBUG AUTH ---");
+    console.log("URL Base detectada:", getURL());
+    console.log("URL de redirecionamento (redirectTo):", redirectUrl);
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: redirectUrl,
     });
-    if (error) throw error;
-    toast.success("Link de recuperação enviado para o seu e-mail.");
+    
+    if (error) {
+      if (error.message.includes("40 seconds")) {
+        toast.error("Aguarde alguns segundos antes de solicitar um novo link.");
+      } else {
+        console.error("Erro Supabase:", error.message);
+        toast.error(`Erro: ${error.message}`);
+      }
+      throw error;
+    }
+    
+    toast.success("E-mail enviado! Verifique seu link de recuperação.");
   };
 
   const logout = async () => {

@@ -23,7 +23,8 @@ import {
   Building2,
   ExternalLink,
   Target,
-  FileText
+  FileText,
+  Wand2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,8 @@ import { toast } from "sonner";
 
 import { Suspense } from "react";
 
+import { AIMessageDrafter } from "@/components/AIMessageDrafter";
+
 function MessagesContent() {
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -62,6 +65,7 @@ function MessagesContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [isAiDrafterOpen, setIsAiDrafterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [convSearchQuery, setConvSearchQuery] = useState("");
   const [contacts, setContacts] = useState<any[]>([]);
@@ -620,6 +624,32 @@ function MessagesContent() {
                       className="flex-1 bg-transparent border-none py-4 px-4 text-sm focus:ring-0 font-bold text-foreground placeholder:text-muted-foreground"
                     />
                     
+                    <div className="relative">
+                      <AnimatePresence>
+                        {isAiDrafterOpen && (
+                          <AIMessageDrafter 
+                            partnerName={getPartner(selectedConv)?.name || "Cliente"}
+                            onSelect={(draft) => {
+                              setNewMessage(draft);
+                              setIsAiDrafterOpen(false);
+                            }}
+                            onClose={() => setIsAiDrafterOpen(false)}
+                          />
+                        )}
+                      </AnimatePresence>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAiDrafterOpen(!isAiDrafterOpen)}
+                        className={cn(
+                          "p-3 rounded-full transition-all",
+                          isAiDrafterOpen ? "bg-primary text-white" : "text-muted-foreground hover:text-primary hover:bg-background"
+                        )}
+                        title="Redigir com IA"
+                      >
+                        <Wand2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
                     <button type="button" className="p-3 text-muted-foreground hover:text-primary transition-colors">
                       <Smile className="w-5 h-5" />
                     </button>

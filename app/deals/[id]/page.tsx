@@ -30,6 +30,10 @@ import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
+import { useCallback } from "react";
+
+import { AISalesAssistant } from "@/components/AISalesAssistant";
+import { PropertyMatcher } from "@/components/PropertyMatcher";
 
 export default function DealDetailPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -42,6 +46,42 @@ export default function DealDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshData = useCallback(async () => {
+    if (!id || !user || !profile) return;
+    try {
+      const dealData = await getDeal(id);
+      if (dealData) {
+        // Ownership Check for non-admins
+        if (profile.role !== 'Admin' && dealData.ownerId !== user.id) {
+          toast.error("Você não tem permissão para acessar este negócio.");
+          router.push("/pipeline");
+          return;
+        }
+
+        setDeal(dealData);
+
+        if (dealData.companyId) {
+          const companyData = await getCompany(dealData.companyId);
+          if (companyData) {
+            setCompany(companyData);
+          }
+        }
+
+        if (dealData.contactId) {
+          const contactId = dealData.contactId; // Use local variable for safety
+          const contactData = await getContact(contactId);
+          if (contactData) {
+            setContact(contactData);
+          }
+        }
+      } else {
+        router.push("/pipeline");
+      }
+    } catch (error) {
+      console.error("Error fetching deal detail:", error);
+    }
+  }, [id, user, profile, router]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login");
@@ -49,45 +89,13 @@ export default function DealDetailPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    async function fetchData() {
-      if (!id || !user || !profile) return;
+    async function init() {
       setLoading(true);
-      try {
-        const dealData = await getDeal(id);
-        if (dealData) {
-          // Ownership Check for non-admins
-          if (profile.role !== 'Admin' && dealData.ownerId !== user.id) {
-            toast.error("Você não tem permissão para acessar este negócio.");
-            router.push("/pipeline");
-            return;
-          }
-
-          setDeal(dealData);
-
-          if (dealData.companyId) {
-            const companyData = await getCompany(dealData.companyId);
-            if (companyData) {
-              setCompany(companyData);
-            }
-          }
-
-          if (dealData.contactId) {
-            const contactData = await getContact(dealData.contactId);
-            if (contactData) {
-              setContact(contactData);
-            }
-          }
-        } else {
-          router.push("/pipeline");
-        }
-      } catch (error) {
-        console.error("Error fetching deal detail:", error);
-      } finally {
-        setLoading(false);
-      }
+      await refreshData();
+      setLoading(false);
     }
-    fetchData();
-  }, [id, user, profile, router]);
+    init();
+  }, [refreshData]);
 
   if (authLoading || (loading && !user)) {
     return (
@@ -117,12 +125,13 @@ export default function DealDetailPage() {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary p-0.5 relative">
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted relative">
               <Image 
-                src={profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName || "User"}&background=0D8ABC&color=fff`} 
+                src={profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName || "User"}&background=6366f1&color=fff`} 
                 alt="Profile" 
                 fill
-                className="w-full h-full rounded-full object-cover"
+                className="object-cover"
+                referrerPolicy="no-referrer"
               />
             </div>
           </div>
@@ -181,6 +190,11 @@ export default function DealDetailPage() {
             </div>
           </section>
 
+          {/* AI Sales Assistant */}
+          <div id="ai-assistant">
+            <AISalesAssistant deal={deal} contact={contact} company={company} />
+          </div>
+
           {/* Grid Layout */}
           <div className="grid grid-cols-12 gap-8">
             
@@ -229,6 +243,9 @@ export default function DealDetailPage() {
                   )}
                 </div>
               </div>
+
+              {/* Smart Property Matching */}
+              <PropertyMatcher deal={deal} contact={contact} onUpdate={refreshData} />
 
               {/* Next Steps */}
               <div className="bg-primary rounded-[32px] p-8 text-primary-foreground shadow-xl shadow-primary/30">

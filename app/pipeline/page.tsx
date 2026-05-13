@@ -17,6 +17,7 @@ import {
   Building2,
   Trash2,
   Edit2,
+  ExternalLink,
   X,
   Loader2,
   Target
@@ -412,6 +413,9 @@ export default function PipelinePage() {
                               >
                                 <div className="flex justify-between items-start mb-3">
                                   <div className="flex gap-1">
+                                    <Link href={`/deals/${deal.id}`} className="p-1 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
+                                      <ExternalLink className="w-3 h-3" />
+                                    </Link>
                                     <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-1 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
                                     <button onClick={() => handleDelete(deal.id)} className="p-1 text-muted-foreground hover:text-red-500 transition-all" title="Excluir"><Trash2 className="w-3 h-3" /></button>
                                   </div>

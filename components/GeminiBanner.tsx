@@ -58,8 +58,11 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
         setInsights(newInsights);
         setCurrentIndex(0);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini Error:", error);
+      if (error?.message?.includes("quota") || error?.message?.includes("429") || error?.status === 429 || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+        setInsights(["A IA está descansando um pouco. Volte em breve para novos insights!"]);
+      }
     } finally {
       setLoading(false);
     }
