@@ -27,6 +27,7 @@
         "type": { "type": "string", "enum": ["cliente", "equipe"] },
         "department": { "type": "string" },
         "companyId": { "type": "string", "description": "Reference to a Company ID" },
+        "source": { "type": "string", "description": "How the contact reached the company (Instagram, etc.)" },
         "ownerId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },

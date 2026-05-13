@@ -12,6 +12,7 @@ import {
   Phone, 
   MapPin, 
   Plus, 
+  Tag, 
   Calendar, 
   CheckSquare, 
   FileText, 
@@ -175,6 +176,29 @@ export default function ContactDetail360Page() {
     }
   };
 
+  const getEngagementLevel = () => {
+    const total = activities.length;
+    if (total > 8) return { label: "Muito Alto", color: "text-emerald-500" };
+    if (total > 5) return { label: "Alto", color: "text-primary" };
+    if (total > 2) return { label: "Normal", color: "text-blue-500" };
+    return { label: "Baixo", color: "text-orange-500" };
+  };
+
+  const getLastContactDate = () => {
+    if (activities.length === 0) return "Nenhum";
+    const sorted = [...activities].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const lastDate = new Date(sorted[0].date);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Hoje";
+    if (diffDays === 1) return "Ontem";
+    if (diffDays < 7) return `Há ${diffDays} dias`;
+    if (diffDays < 30) return `Há ${Math.floor(diffDays/7)} sem.`;
+    return lastDate.toLocaleDateString('pt-BR');
+  };
+
   if (authLoading || (loading && !user)) {
     return (
       <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
@@ -253,8 +277,17 @@ export default function ContactDetail360Page() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <Building2 className="w-4 h-4" />
-                    <span>{contact.role} em {company?.name || contact.department || "Empresa Individual"}</span>
+                    {contact.type === 'cliente' ? (
+                      <>
+                        <Tag className="w-4 h-4" />
+                        <span>Origem: {contact.source || "Não informada"}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Building2 className="w-4 h-4" />
+                        <span>{contact.role} em {contact.department || "Empresa"}</span>
+                      </>
+                    )}
                   </div>
                   
                   <div className="flex flex-wrap gap-4 pt-2">
@@ -312,8 +345,8 @@ export default function ContactDetail360Page() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[ 
                   { label: "TOTAL EM NEGÓCIOS", value: `R$ ${deals.reduce((acc, deal) => acc + (deal.value || 0), 0).toLocaleString('pt-BR')}`, icon: TrendingUp },
-                  { label: "ENGAJAMENTO", value: activities.length > 5 ? "Alto" : (activities.length > 2 ? "Normal" : "Baixo"), icon: Users, color: "text-primary" },
-                  { label: "ÚLTIMO CONTATO", value: activities.length > 0 ? "Recentemente" : "Nenhum", icon: Clock },
+                  { label: "ENGAJAMENTO", value: getEngagementLevel().label, icon: Users, color: getEngagementLevel().color },
+                  { label: "ÚLTIMO CONTATO", value: getLastContactDate(), icon: Clock },
                 ].map((stat, i) => (
                   <div key={i} className="bg-card p-8 rounded-[32px] border border-border shadow-sm">
                     <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">{stat.label}</div>

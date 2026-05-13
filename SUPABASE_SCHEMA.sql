@@ -33,6 +33,7 @@ create table if not exists contacts (
   phone text,
   type text check (type in ('cliente', 'equipe')),
   department text,
+  source text,
   company_id uuid references companies on delete set null,
   owner_id uuid references auth.users on delete cascade not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

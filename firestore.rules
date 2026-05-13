@@ -29,7 +29,9 @@ service cloud.firestore {
              data.email is string && data.email.size() <= 100 &&
              data.type in ['cliente', 'equipe'] &&
              (data.ownerId == request.auth.uid || isSuperAdmin()) &&
-             (!('companyId' in data) || data.companyId is string);
+             (!('companyId' in data) || data.companyId is string || data.companyId == null) &&
+             (!('source' in data) || data.source is string || data.source == null) &&
+             (!('role' in data) || data.role is string || data.role == null);
     }
 
     function isValidCompany(data) {

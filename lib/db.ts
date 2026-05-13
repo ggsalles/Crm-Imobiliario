@@ -63,6 +63,7 @@ export interface Contact {
   type: 'cliente' | 'equipe';
   department?: string;
   companyId?: string;
+  source?: string;
   ownerId: string;
   createdAt?: string;
   updatedAt?: string;
@@ -159,6 +160,7 @@ export async function getContacts(ownerId?: string) {
     type: item.type,
     department: item.department,
     companyId: item.company_id,
+    source: item.source,
     ownerId: item.owner_id,
     createdAt: item.created_at,
     updatedAt: item.updated_at
@@ -197,6 +199,7 @@ export async function createContact(data: any) {
     type: data.type,
     department: data.department,
     company_id: data.companyId || null,
+    source: data.source || null,
     owner_id: user.id
   }]).select();
 
@@ -214,6 +217,7 @@ export async function updateContact(id: string, data: any) {
   if (data.type !== undefined) updateData.type = data.type;
   if (data.department !== undefined) updateData.department = data.department;
   if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
+  if (data.source !== undefined) updateData.source = data.source || null;
 
   const { error } = await supabase.from('contacts').update(updateData).eq('id', id);
   if (error) {
@@ -813,6 +817,7 @@ export async function getContact(id: string) {
     type: data.type,
     department: data.department,
     companyId: data.company_id,
+    source: data.source,
     ownerId: data.owner_id,
     createdAt: data.created_at,
     updatedAt: data.updated_at

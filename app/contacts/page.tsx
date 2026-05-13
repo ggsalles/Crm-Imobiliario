@@ -203,9 +203,10 @@ function ContactsContent() {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
       phone: formData.get('phone') as string,
-      role: formData.get('role') as string,
+      role: activeTab === 'cliente' ? undefined : formData.get('role') as string,
       type: activeTab,
-      companyId: activeTab === 'cliente' ? formData.get('companyId') as string : undefined,
+      companyId: activeTab === 'cliente' ? undefined : formData.get('companyId') as string,
+      source: activeTab === 'cliente' ? formData.get('source') as string : undefined,
       department: activeTab === 'equipe' ? formData.get('department') as string : undefined,
     };
 
@@ -416,55 +417,49 @@ function ContactsContent() {
                       className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Cargo / Função</label>
-                    <input 
-                      name="role"
-                      defaultValue={editingContact?.role}
-                      placeholder="Ex: Diretora Comercial"
-                      className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">
-                      {activeTab === 'cliente' ? 'Empresa' : 'Departamento'}
-                    </label>
-                    {activeTab === 'cliente' ? (
-                      <div className="flex gap-2">
-                        <select 
-                          name="companyId"
-                          defaultValue={editingContact?.companyId} 
-                          className="flex-1 px-4 py-3 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] font-medium"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
-                        >
-                          <option value="" className="bg-card text-muted-foreground italic">Nenhuma empresa</option>
-                          {companies.map(c => <option key={c.id} value={c.id} className="bg-card">{c.name}</option>)}
-                        </select>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            const name = prompt("Nome da nova empresa:");
-                            if (name) {
-                              createCompany({ name }).then(id => {
-                                if (id) toast.success("Empresa criada!");
-                              });
-                            }
-                          }}
-                          className="p-3 bg-muted/50 hover:bg-primary hover:text-white rounded-xl transition-all text-muted-foreground shadow-sm group"
-                          title="Nova Empresa"
-                        >
-                          <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                        </button>
+
+                  {activeTab === 'cliente' ? (
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Origem (Como chegou?)</label>
+                      <select 
+                        name="source"
+                        defaultValue={editingContact?.source} 
+                        className="w-full px-4 py-3 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] font-medium"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+                      >
+                        <option value="" className="bg-card">Selecione uma origem</option>
+                        <option value="Instagram" className="bg-card">Instagram</option>
+                        <option value="WhatsApp" className="bg-card">WhatsApp</option>
+                        <option value="Facebook" className="bg-card">Facebook</option>
+                        <option value="Site" className="bg-card">Site / Landing Page</option>
+                        <option value="Indicação" className="bg-card">Indicação</option>
+                        <option value="Portal Imobiliário" className="bg-card">Portal Imobiliário</option>
+                        <option value="Telefone" className="bg-card">Ligação Direta</option>
+                        <option value="Outro" className="bg-card">Outro</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Cargo / Função</label>
+                        <input 
+                          name="role"
+                          defaultValue={editingContact?.role}
+                          placeholder="Ex: Corretor Sênior"
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                        />
                       </div>
-                    ) : (
-                      <input 
-                        name="department"
-                        defaultValue={editingContact?.department}
-                        placeholder="Ex: Vendas"
-                        className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                      />
-                    )}
-                  </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Departamento</label>
+                        <input 
+                          name="department"
+                          defaultValue={editingContact?.department}
+                          placeholder="Ex: Vendas / Aluguel"
+                          className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="pt-4 flex gap-3">
@@ -546,7 +541,9 @@ function ContactCard({
             </div>
             <div className="min-w-0">
               <h3 className="font-bold text-lg truncate text-foreground" title={contact.name}>{contact.name}</h3>
-              <p className="text-xs text-muted-foreground truncate font-medium">{contact.role}</p>
+              <p className="text-xs text-muted-foreground truncate font-medium">
+                {isActiveTabEquipe ? contact.role : (contact.source ? `Origem: ${contact.source}` : 'Sem origem')}
+              </p>
             </div>
           </div>
           <div className="flex gap-1 shrink-0 items-center">
@@ -612,8 +609,8 @@ function ContactCard({
             <span>{contact.phone}</span>
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground font-medium border-t border-border pt-3">
-            {isActiveTabEquipe ? <Users className="w-4 h-4 shrink-0" /> : <Building2 className="w-4 h-4 shrink-0" />}
-            <span className="truncate">{isActiveTabEquipe ? contact.department : (companyName || 'Sem empresa')}</span>
+            <Tag className="w-4 h-4 shrink-0" />
+            <span className="truncate">{isActiveTabEquipe ? contact.department : (contact.source || 'Não informado')}</span>
           </div>
         </div>
       </div>
