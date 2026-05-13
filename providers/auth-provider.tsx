@@ -84,14 +84,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (profileData) {
+        const isHardcodedAdmin = user.email === 'ggsalles@gmail.com';
         setProfile({
           id: profileData.id,
           displayName: profileData.display_name,
           email: profileData.email,
           photoURL: profileData.photo_url,
-          role: profileData.role,
+          role: isHardcodedAdmin ? 'Admin' : profileData.role,
           userType: profileData.user_type,
-          isAdmin: profileData.is_admin
+          isAdmin: isHardcodedAdmin || profileData.is_admin
         });
         setLoading(false);
         return;
@@ -127,13 +128,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
           
         if (finalCheck) {
+          const isHardcodedAdmin = user.email === 'ggsalles@gmail.com';
           setProfile({
             id: finalCheck.id,
             displayName: finalCheck.display_name || user.email?.split('@')[0],
             email: finalCheck.email,
-            role: finalCheck.role,
+            role: isHardcodedAdmin ? 'Admin' : finalCheck.role,
             userType: finalCheck.user_type,
-            isAdmin: finalCheck.is_admin
+            isAdmin: isHardcodedAdmin || finalCheck.is_admin
           });
         }
       } else if (upsertedData) {
@@ -248,8 +250,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     
     if (error) {
-      if (error.message.includes("40 seconds")) {
-        toast.error("Aguarde alguns segundos antes de solicitar um novo link.");
+      if (error.message.includes("seconds") || error.message.includes("rate limit")) {
+        // Extraímos o tempo se houver, ou usamos uma mensagem genérica
+        const timeMatch = error.message.match(/\d+/);
+        const seconds = timeMatch ? timeMatch[0] : "";
+        toast.error(`Aguarde ${seconds ? `${seconds} segundos` : "um pouco"} antes de solicitar um novo link.`, {
+          description: "O servidor limita a frequência de envios por segurança."
+        });
       } else {
         console.error("Erro Supabase:", error.message);
         toast.error(`Erro: ${error.message}`);
