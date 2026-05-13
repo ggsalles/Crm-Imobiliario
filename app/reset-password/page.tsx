@@ -21,6 +21,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -127,25 +128,51 @@ export default function ResetPasswordPage() {
       if (error) throw error;
 
       console.log("Senha redefinida com sucesso. Redirecionando para login...");
+      setIsSuccess(true);
       toast.success("Senha redefinida com sucesso!");
       
       // Pequeno delay para garantir que o toast seja lido e o estado limpo
       setTimeout(async () => {
         try {
           await supabase.auth.signOut();
-          window.location.href = "/login";
+          router.push("/login");
         } catch (err) {
           console.error("Erro ao sair:", err);
-          window.location.href = "/login";
+          router.push("/login");
         }
       }, 2000);
     } catch (error: any) {
       console.error("Erro ao redefinir senha:", error);
       toast.error(error.message || "Erro ao redefinir senha.");
-    } finally {
       setLoading(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center"
+        >
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600">
+             <ShieldCheck className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-bold mb-2">Senha Atualizada!</h3>
+          <p className="text-muted-foreground mt-2 max-w-xs">
+            Sua nova senha foi salva. Você será redirecionado para a tela de login em instantes.
+          </p>
+          <button 
+            onClick={() => router.push("/login")}
+            className="mt-8 text-sm text-primary font-medium hover:underline flex items-center gap-2"
+          >
+            Ir para login agora <ArrowRight className="w-4 h-4" />
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!isReady) {
     return (
