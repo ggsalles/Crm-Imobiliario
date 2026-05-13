@@ -126,54 +126,51 @@ export default function ResetPasswordPage() {
       });
 
       if (error) throw error;
-
+      
       console.log("Senha redefinida com sucesso.");
+      
+      // Primeiro setamos o estado de sucesso para mudar a UI IMEDIATAMENTE
       setIsSuccess(true);
       setLoading(false);
-      toast.success("Senha redefinida com sucesso!");
-      
-      // Tentamos deslogar e redirecionar
-      try {
-        await supabase.auth.signOut();
-        console.log("Usuário deslogado.");
-      } catch (signOutError) {
-        console.error("Erro ao deslogar:", signOutError);
-      }
+      toast.success("Sua senha foi atualizada!");
 
-      // Redirecionamento automático após 3 segundos
+      // Tentamos limpar a sessão em segundo plano, mas sem bloquear a UI de sucesso
+      supabase.auth.signOut().catch(err => console.error("Erro ao deslogar:", err));
+
+      // Redirecionamento automático após 4 segundos para o usuário ver a mensagem
       setTimeout(() => {
-        console.log("Redirecionando para login...");
-        router.push("/login");
-      }, 3000);
+        console.log("Executando redirecionamento automático...");
+        window.location.href = "/login";
+      }, 4000);
 
     } catch (error: any) {
       console.error("Erro ao redefinir senha:", error);
-      toast.error(error.message || "Erro ao redefinir senha.");
+      toast.error(error.message || "Não foi possível atualizar sua senha. O link pode ter expirado.");
       setLoading(false);
     }
   };
 
   if (isSuccess) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 text-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-border"
+          className="flex flex-col items-center bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl border border-border max-w-md w-full"
         >
-          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 text-green-600">
-             <ShieldCheck className="w-8 h-8" />
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-500/10 rounded-full flex items-center justify-center mb-8 text-green-600">
+             <ShieldCheck className="w-10 h-10" />
           </div>
-          <h3 className="text-2xl font-bold mb-2">Senha Atualizada!</h3>
-          <p className="text-muted-foreground mt-2 max-w-xs">
-            Sua nova senha foi salva. Você será redirecionado para a tela de login em instantes.
+          <h3 className="text-3xl font-bold mb-4">Sucesso!</h3>
+          <p className="text-muted-foreground text-lg mb-8 leading-relaxed">
+            Sua senha foi redefinida com segurança. Você será redirecionado para o login em instantes.
           </p>
-          <button 
-            onClick={() => router.push("/login")}
-            className="mt-8 px-6 py-3 bg-primary text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center gap-2"
+          <a 
+            href="/login"
+            className="w-full py-4 bg-primary text-white rounded-2xl font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-xl shadow-primary/20"
           >
-            Ir para login agora <ArrowRight className="w-4 h-4" />
-          </button>
+            Ir para login agora <ArrowRight className="w-5 h-5" />
+          </a>
         </motion.div>
       </div>
     );
