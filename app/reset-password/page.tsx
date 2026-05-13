@@ -25,6 +25,7 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
+    let authSubscription: { unsubscribe: () => void } | null = null;
 
     const checkRecovery = async () => {
       try {
@@ -35,45 +36,63 @@ export default function ResetPasswordPage() {
         
         console.log("URL:", url);
         
-        // Verifica se existe algum indício de token na URL
-        const hasToken = hash.includes("access_token=") || search.includes("code=");
+        // Verifica se existe algum indício de token ou contexto de recuperação na URL
+        const hasToken = hash.includes("access_token=") || 
+                         hash.includes("type=recovery") || 
+                         hash.includes("error=") ||
+                         search.includes("code=");
+        
+        console.log("Contexto detectado:", { hasToken, hash: !!hash, search: !!search });
         
         // Tentativa 1 imediata
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          console.error("Erro ao pegar sessão inicial:", sessionError);
+          throw sessionError;
+        }
         
-        // Se tem token, liberamos o form. Se o token for inválido, o update falhará depois.
-        if (hasToken) {
-          console.log("Token detectado na URL, liberando formulário.");
-          setIsReady(true);
-          return;
-        }
-
         if (session) {
-          console.log("Sessão encontrada imediatamente.");
+          console.log("Sessão encontrada imediatamente. Usuário:", session.user.email);
           setIsReady(true);
           return;
         }
 
-        if (!hasToken && !session) {
-          console.log("Nenhum token detectado na URL e nenhuma sessão ativa.");
-          // Pequena espera antes de redirecionar para evitar falsos negativos
-          timeoutId = setTimeout(async () => {
-            const { data: { session: finalSession } } = await supabase.auth.getSession();
-            if (!finalSession) {
-              console.log("Sem sessão após timeout. Redirecionando...");
-              toast.error("Link de redefinição inválido ou expirado.");
+        // Se chegamos aqui, ou tem token na URL ou o Supabase pode estar processando-o.
+        // Vamos aguardar por mudanças de estado ou por um tempo limite.
+        console.log("Aguardando processamento do link de recuperação...");
+        
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          console.log("Mudança de estado detectada:", event, !!session);
+          if (session) {
+            setIsReady(true);
+            if (timeoutId) clearTimeout(timeoutId);
+          }
+        });
+        authSubscription = subscription;
+
+        // Limite de espera para o processamento automático (um pouco mais longo)
+        timeoutId = setTimeout(async () => {
+          const { data: { session: finalSession } } = await supabase.auth.getSession();
+          if (!finalSession) {
+            console.log("Sem sessão após espera prolongada.");
+            // Se NÃO tem token na URL E não tem sessão após 6 segundos, aí sim redirecionamos
+            if (!hasToken) {
+              toast.error("O link de redefinição pode ter expirado ou o acesso é inválido.");
               router.push("/login");
             } else {
-              console.log("Sessão recuperada após timeout.");
-              setIsReady(true);
+              // Se tinha token mas não logou, pode ser erro no token
+              toast.error("Não foi possível validar seu acesso. Tente solicitar um novo link.");
+              router.push("/login");
             }
-          }, 2500);
-        }
+          } else {
+            console.log("Sessão recuperada após espera.");
+            setIsReady(true);
+          }
+        }, 6000);
+
       } catch (err: any) {
         console.error("Erro no checkRecovery:", err);
-        toast.error("Erro ao processar sua solicitação. Tente novamente.");
-        setIsReady(true); // Liberamos o form mesmo assim como fallback
+        setIsReady(true); // Fallback: libera o form para o usuário tentar via session se existir
       }
     };
 
@@ -81,6 +100,7 @@ export default function ResetPasswordPage() {
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
+      if (authSubscription) authSubscription.unsubscribe();
     };
   }, [router]);
 
@@ -122,6 +142,14 @@ export default function ResetPasswordPage() {
         <p className="text-sm text-muted-foreground mt-2 max-w-xs">
           Aguarde um instante enquanto verificamos seus dados de segurança.
         </p>
+        <div className="mt-8">
+          <button 
+            onClick={() => window.location.reload()}
+            className="text-xs text-primary hover:underline font-medium"
+          >
+            O link não carregou? Clique aqui para atualizar a página.
+          </button>
+        </div>
       </div>
     );
   }
