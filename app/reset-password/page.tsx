@@ -24,21 +24,41 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if we are in a recovery flow
-    // Supabase handles the session from the URL hash automatically
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // If no session, they might have landed here without a valid token
-        // Usually Supabase sets the session if the token in hash is valid
-        toast.error("Link de redefinição inválido ou expirado.");
-        router.push("/login");
-      } else {
+    const checkRecovery = async () => {
+      console.log("--- DEBUG RECOVERY ---");
+      console.log("URL Atual:", window.location.href);
+      
+      // Tentativa 1: Pegar sessão existente
+      let { data: { session }, error } = await supabase.auth.getSession();
+      
+      // Se não houver sessão, mas houver código na URL, tentamos forçar o processamento
+      if (!session && (window.location.hash || window.location.search.includes('code='))) {
+        console.log("Detectado token na URL, aguardando processamento do Supabase...");
+      }
+
+      if (session) {
         setIsReady(true);
+      } else {
+        // Intervalo de tentativas
+        let attempts = 0;
+        const interval = setInterval(async () => {
+          attempts++;
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          console.log(`Tentativa ${attempts} de recuperar sessão...`, retrySession);
+
+          if (retrySession) {
+            setIsReady(true);
+            clearInterval(interval);
+          } else if (attempts >= 8) { // Aumentado para 8 segundos
+            console.log("Tempo esgotado. Se você continua vendo esta tela, o link pode ter expirado.");
+            clearInterval(interval);
+            // NÃO vamos redirecionar para o login automaticamente para não perder o log do console
+          }
+        }, 1000);
       }
     };
 
-    checkSession();
+    checkRecovery();
   }, [router]);
 
   const handleReset = async (e: React.FormEvent) => {
