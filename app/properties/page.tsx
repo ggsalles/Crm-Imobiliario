@@ -568,16 +568,6 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
             </span>
           )}
         </div>
-        <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 transition-opacity">
-           <div className="flex gap-1">
-             <button onClick={onEdit} className="w-8 h-8 bg-card rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary shadow-lg ring-1 ring-white/10">
-                <Edit className="w-4 h-4" />
-             </button>
-             <button onClick={onDelete} className="w-8 h-8 bg-card rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-600 shadow-lg ring-1 ring-white/10">
-                <Trash2 className="w-4 h-4" />
-             </button>
-           </div>
-        </div>
       </div>
 
       <div className="p-6 flex flex-col flex-1">
@@ -607,9 +597,31 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
             </p>
           </div>
-          <button className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm">
-            <ChevronRight className="w-6 h-6" />
-          </button>
+          <div className="flex gap-2">
+            <div className="flex gap-1">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }} 
+                className="w-10 h-10 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }} 
+                className="w-10 h-10 rounded-xl bg-muted text-muted-foreground hover:bg-red-500/10 hover:text-red-500 flex items-center justify-center transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <button className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
