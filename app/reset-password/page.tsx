@@ -13,7 +13,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -127,20 +127,25 @@ export default function ResetPasswordPage() {
 
       if (error) throw error;
 
-      console.log("Senha redefinida com sucesso. Redirecionando para login...");
+      console.log("Senha redefinida com sucesso.");
       setIsSuccess(true);
+      setLoading(false);
       toast.success("Senha redefinida com sucesso!");
       
-      // Pequeno delay para garantir que o toast seja lido e o estado limpo
-      setTimeout(async () => {
-        try {
-          await supabase.auth.signOut();
-          router.push("/login");
-        } catch (err) {
-          console.error("Erro ao sair:", err);
-          router.push("/login");
-        }
-      }, 2000);
+      // Tentamos deslogar e redirecionar
+      try {
+        await supabase.auth.signOut();
+        console.log("Usuário deslogado.");
+      } catch (signOutError) {
+        console.error("Erro ao deslogar:", signOutError);
+      }
+
+      // Redirecionamento automático após 3 segundos
+      setTimeout(() => {
+        console.log("Redirecionando para login...");
+        router.push("/login");
+      }, 3000);
+
     } catch (error: any) {
       console.error("Erro ao redefinir senha:", error);
       toast.error(error.message || "Erro ao redefinir senha.");
@@ -154,9 +159,9 @@ export default function ResetPasswordPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center"
+          className="flex flex-col items-center bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-border"
         >
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 text-green-600">
              <ShieldCheck className="w-8 h-8" />
           </div>
           <h3 className="text-2xl font-bold mb-2">Senha Atualizada!</h3>
@@ -165,7 +170,7 @@ export default function ResetPasswordPage() {
           </p>
           <button 
             onClick={() => router.push("/login")}
-            className="mt-8 text-sm text-primary font-medium hover:underline flex items-center gap-2"
+            className="mt-8 px-6 py-3 bg-primary text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center gap-2"
           >
             Ir para login agora <ArrowRight className="w-4 h-4" />
           </button>
