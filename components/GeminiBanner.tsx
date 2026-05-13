@@ -95,7 +95,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
         <Brain className="w-32 h-32" />
       </div>
       
-      <div className="relative z-10 flex items-center gap-4 h-16">
+      <div className="relative z-10 flex items-center gap-4 min-h-[4rem] py-1">
         <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
           {loading ? (
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -114,7 +114,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
             )}
           </h3>
           
-          <div className="relative h-10">
+          <div className="relative min-h-[6rem]">
             <AnimatePresence mode="wait">
               <motion.p 
                 key={currentIndex}
@@ -122,7 +122,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.8, ease: "easeInOut" }}
-                className="text-lg font-bold leading-tight max-w-2xl absolute inset-0"
+                className="text-lg font-bold leading-snug max-w-2xl absolute inset-0 flex items-center pr-12 pb-2"
               >
                 {insights[currentIndex]}
               </motion.p>

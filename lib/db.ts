@@ -316,7 +316,7 @@ export async function getDeals(ownerId?: string) {
   if (!data) return [];
   return data.map(item => ({
     id: item.id,
-    title: item.title,
+    title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
     value: item.value,
     stage: item.stage,
     companyId: item.company_id,
@@ -333,7 +333,7 @@ export async function getDealsByContact(contactId: string) {
   if (!data) return [];
   return data.map(item => ({
     id: item.id,
-    title: item.title,
+    title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
     value: item.value,
     stage: item.stage,
     companyId: item.company_id,
@@ -690,7 +690,7 @@ export async function getProperties(ownerId?: string) {
   if (!data) return [];
   return data.map(item => ({
     id: item.id,
-    title: item.title,
+    title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
     type: item.type,
     status: item.status,
     price: item.price,
@@ -840,7 +840,7 @@ export async function getDeal(id: string) {
   if (!data) return null;
   return {
     id: data.id,
-    title: data.title,
+    title: data.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : data.title,
     value: data.value,
     stage: data.stage,
     probability: data.probability,

@@ -582,7 +582,7 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
 
       <div className="p-6 flex flex-col flex-1">
         <div className="mb-4">
-          <h4 className="text-base font-black text-foreground group-hover:text-primary transition-colors line-clamp-1 uppercase tracking-tight">{property.title}</h4>
+          <h4 className="text-base font-black text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
           <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
             <MapPin className="w-3 h-3" />
             <span className="text-[9px] font-black uppercase tracking-widest truncate">{property.location}</span>

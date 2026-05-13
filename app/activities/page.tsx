@@ -457,7 +457,7 @@ export default function ActivitiesPage() {
                     className="w-full bg-background border border-border rounded-2xl px-5 py-3.5 text-foreground font-bold focus:border-primary outline-none transition-all"
                   >
                     <option value="">Nenhum</option>
-                    {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {contacts.filter(c => c.type === 'cliente').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">

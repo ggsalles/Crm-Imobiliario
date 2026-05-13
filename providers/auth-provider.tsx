@@ -84,15 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (profileData) {
-        const isHardcodedAdmin = user.email === 'ggsalles@gmail.com';
         setProfile({
           id: profileData.id,
           displayName: profileData.display_name,
           email: profileData.email,
           photoURL: profileData.photo_url,
-          role: isHardcodedAdmin ? 'Admin' : profileData.role,
+          role: profileData.role,
           userType: profileData.user_type,
-          isAdmin: isHardcodedAdmin || profileData.is_admin
+          isAdmin: profileData.is_admin
         });
         setLoading(false);
         return;
@@ -128,14 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
           
         if (finalCheck) {
-          const isHardcodedAdmin = user.email === 'ggsalles@gmail.com';
           setProfile({
             id: finalCheck.id,
             displayName: finalCheck.display_name || user.email?.split('@')[0],
             email: finalCheck.email,
-            role: isHardcodedAdmin ? 'Admin' : finalCheck.role,
+            role: finalCheck.role,
             userType: finalCheck.user_type,
-            isAdmin: isHardcodedAdmin || finalCheck.is_admin
+            isAdmin: finalCheck.is_admin
           });
         }
       } else if (upsertedData) {
@@ -228,43 +226,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    // Função para detectar a URL correta (Vercel, AI Studio ou Local)
-    const getURL = () => {
-      // Prioridade 1: Variável de ambiente (Vercel)
-      // Prioridade 2: URL manual (para garantir que funcione agora)
-      // Prioridade 3: Origin do window
-      let url = "https://crm-imobiliario-tau.vercel.app";
-      
-      console.log("URL de base definida para reset:", url);
-      return url;
-    };
+    // Determine the redirect URL. We try to use the current origin if possible.
+    // In AI Studio, window.location.origin should point to the correct ais-dev or ais-pre URL.
+    const redirectUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/reset-password`
+      : "";
 
-    const redirectUrl = `${getURL()}/reset-password`;
-    
-    console.log("--- DEBUG AUTH ---");
-    console.log("URL Base detectada:", getURL());
-    console.log("URL de redirecionamento (redirectTo):", redirectUrl);
+    console.log("Attempting password reset for", email, "with redirect to:", redirectUrl);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
     });
     
     if (error) {
-      if (error.message.includes("seconds") || error.message.includes("rate limit")) {
-        // Extraímos o tempo se houver, ou usamos uma mensagem genérica
-        const timeMatch = error.message.match(/\d+/);
-        const seconds = timeMatch ? timeMatch[0] : "";
-        toast.error(`Aguarde ${seconds ? `${seconds} segundos` : "um pouco"} antes de solicitar um novo link.`, {
-          description: "O servidor limita a frequência de envios por segurança."
-        });
-      } else {
-        console.error("Erro Supabase:", error.message);
-        toast.error(`Erro: ${error.message}`);
-      }
+      console.error("Supabase Reset Password Error:", error);
       throw error;
     }
     
-    toast.success("E-mail enviado! Verifique seu link de recuperação.");
+    toast.success("Link de recuperação enviado para o seu e-mail.");
   };
 
   const logout = async () => {

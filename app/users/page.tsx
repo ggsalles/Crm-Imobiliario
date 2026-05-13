@@ -53,7 +53,7 @@ export default function UsersPage() {
     userType: "funcionário" as "funcionário" | "cliente"
   });
 
-  const isAdmin = profile?.role === 'Admin' || user?.email === 'ggsalles@gmail.com';
+  const isAdmin = profile?.role === 'Admin';
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -131,10 +131,7 @@ export default function UsersPage() {
 
     try {
       await deleteUserProfile(id);
-      toast.success("Perfil removido do CRM!", {
-        description: "IMPORTANTE: Agora você deve ir no painel do Supabase (Authentication > Users) e excluir o e-mail deste usuário para que ele possa se cadastrar novamente.",
-        duration: 10000,
-      });
+      toast.success("Acesso removido com sucesso");
       setDeletingUid(null);
     } catch (error: any) {
       console.error("Erro ao deletar:", error);
@@ -186,24 +183,13 @@ export default function UsersPage() {
             </div>
             
             {isAdmin && (
-              <div className="flex items-center gap-2">
-                <a 
-                  href="https://supabase.com/dashboard/project/_/auth/users" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hidden lg:flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all"
-                >
-                  <Lock className="w-3 h-3" />
-                  Painel Supabase
-                </a>
-                <button 
-                  onClick={() => setShowAddModal(true)}
-                  className="px-4 py-2.5 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Novo Usuário</span>
-                </button>
-              </div>
+              <button 
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2.5 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">Novo Usuário</span>
+              </button>
             )}
           </div>
         </header>
