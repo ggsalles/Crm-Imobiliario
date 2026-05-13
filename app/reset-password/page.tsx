@@ -129,11 +129,16 @@ export default function ResetPasswordPage() {
       console.log("Senha redefinida com sucesso. Redirecionando para login...");
       toast.success("Senha redefinida com sucesso!");
       
-      // Desloga o usuário para que ele possa logar com a nova senha e cair na tela de login
-      await supabase.auth.signOut();
-      
-      // Forçamos o redirecionamento
-      router.replace("/login");
+      // Pequeno delay para garantir que o toast seja lido e o estado limpo
+      setTimeout(async () => {
+        try {
+          await supabase.auth.signOut();
+          window.location.href = "/login";
+        } catch (err) {
+          console.error("Erro ao sair:", err);
+          window.location.href = "/login";
+        }
+      }, 2000);
     } catch (error: any) {
       console.error("Erro ao redefinir senha:", error);
       toast.error(error.message || "Erro ao redefinir senha.");
