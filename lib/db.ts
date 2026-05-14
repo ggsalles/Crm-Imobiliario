@@ -380,7 +380,7 @@ export async function createDeal(data: any) {
     company_id: data.companyId || null,
     contact_id: data.contactId || null,
     property_id: data.propertyId || null,
-    owner_id: user.id
+    owner_id: data.ownerId || user.id
   }]).select();
 
   if (error) throw error;
@@ -396,6 +396,7 @@ export async function updateDeal(id: string, data: any) {
   if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
   if (data.contactId !== undefined) updateData.contact_id = data.contactId || null;
   if (data.propertyId !== undefined) updateData.property_id = data.propertyId || null;
+  if (data.ownerId !== undefined) updateData.owner_id = data.ownerId || null;
 
   const { error } = await supabase.from('deals').update(updateData).eq('id', id);
   if (error) throw error;
@@ -455,6 +456,20 @@ export async function setGoal(month: string, stageGoals: { [stageId: string]: nu
   }, { onConflict: 'owner_id, month' });
 
   if (error) throw error;
+}
+
+export async function getUserProfile(id: string) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    displayName: data.display_name,
+    email: data.email,
+    photoURL: data.photo_url,
+    role: data.role,
+    userType: data.user_type,
+    isAdmin: data.is_admin
+  } as UserProfile;
 }
 
 // User Profiles

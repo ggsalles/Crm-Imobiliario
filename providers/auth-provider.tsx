@@ -97,8 +97,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 2. If not found by ID, it might be a pre-registered profile with a temp ID
-      // We try an "upsert" approach which is more atomic in Supabase
+      // 2. If not found by ID, check if a profile exists with this email (pre-registration)
+      const { data: existingByEmail, error: emailError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', user.email?.toLowerCase())
+        .maybeSingle();
+
+      if (existingByEmail) {
+        const oldId = existingByEmail.id;
+        const newId = user.id;
+
+        // If the candidate profile has a different ID, we need to "claim" it
+        if (oldId !== newId) {
+          console.log(`Transferring data from temp profile ${oldId} to new user ${newId}`);
+          
+          // First update the profile ID
+          const { error: updateProfileError } = await supabase
+            .from('profiles')
+            .update({ id: newId, updated_at: new Date().toISOString() })
+            .eq('id', oldId);
+
+          if (!updateProfileError) {
+             // Now transfer related data - Deals, Contacts, Companies, etc.
+             // We use a series of updates. In a production app, these might be handled by a DB function/trigger
+             // but here we do it from the client for simplicity.
+             try {
+                await Promise.all([
+                  supabase.from('deals').update({ owner_id: newId }).eq('owner_id', oldId),
+                  supabase.from('contacts').update({ owner_id: newId }).eq('owner_id', oldId),
+                  supabase.from('companies').update({ owner_id: newId }).eq('owner_id', oldId),
+                  supabase.from('properties').update({ owner_id: newId }).eq('owner_id', oldId),
+                  supabase.from('activities').update({ owner_id: newId }).eq('owner_id', oldId),
+                ]);
+             } catch (transferErr) {
+                console.error("Data transfer partial failure:", transferErr);
+             }
+          }
+        }
+
+        setProfile({
+          id: newId,
+          displayName: existingByEmail.display_name,
+          email: existingByEmail.email,
+          photoURL: existingByEmail.photo_url || user.user_metadata?.avatar_url,
+          role: existingByEmail.role,
+          userType: existingByEmail.user_type,
+          isAdmin: existingByEmail.is_admin
+        });
+        setLoading(false);
+        return;
+      }
+
+      // 3. If no profile exists at all, create a new one
       const newProfileInfo = {
         id: user.id,
         display_name: user.user_metadata?.display_name || user.email?.split('@')[0],
@@ -108,16 +159,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         is_admin: user.email === 'ggsalles@gmail.com'
       };
 
-      const { data: upsertedData, error: upsertError } = await supabase
+      const { data: createdData, error: createError } = await supabase
         .from('profiles')
-        .upsert(newProfileInfo, { onConflict: 'email' })
+        .insert([newProfileInfo])
         .select()
         .single();
 
-      if (upsertError) {
-        // If upsert fails (likely RLS or PK constraint), it might be because the profile already exists
-        // but we don't have update permissions yet, or it's currently being handled by a server trigger.
-        console.log("Profile upsert notice (may be handled by server trigger):", upsertError.message);
+      if (createError) {
+        console.log("Profile create notice:", createError.message);
         
         // Final fallback: try ONE more select to see if a trigger created it
         const { data: finalCheck } = await supabase
@@ -136,14 +185,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isAdmin: finalCheck.is_admin
           });
         }
-      } else if (upsertedData) {
+      } else if (createdData) {
         setProfile({
-          id: upsertedData.id,
-          displayName: upsertedData.display_name,
-          email: upsertedData.email,
-          role: upsertedData.role,
-          userType: upsertedData.user_type,
-          isAdmin: upsertedData.is_admin
+          id: createdData.id,
+          displayName: createdData.display_name,
+          email: createdData.email,
+          role: createdData.role,
+          userType: createdData.user_type,
+          isAdmin: createdData.is_admin
         });
       }
     } catch (error: any) {

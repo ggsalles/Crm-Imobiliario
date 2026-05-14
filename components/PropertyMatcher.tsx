@@ -3,13 +3,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { Building2, Home, MapPin, DollarSign, Sparkles, MoveRight, Loader2, CheckCircle2 } from "lucide-react";
 import { Property, Deal, Contact, getProperties, updateDeal } from "@/lib/db";
+import { safeAiCall } from "@/lib/ai";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "sonner";
-
-import { GoogleGenAI } from "@google/genai";
-
 interface PropertyMatcherProps {
   deal: Deal;
   contact?: Contact | null;
@@ -91,24 +89,18 @@ export function PropertyMatcher({ deal, contact, onUpdate }: PropertyMatcherProp
   const generateExplainMatch = async (property: Property) => {
     setMatchLoadingId(property.id);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
       const prompt = `Explique em UMA frase curta e vendedora por que este imóvel (${property.title}, R$ ${property.price}, ${property.location}) é perfeito para este interesse de compra (${deal.title}, Orçamento: R$ ${deal.value}). Seja persuasivo.`;
       
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
-      });
+      const result = await safeAiCall(prompt, "Excelente custo-benefício e localização privilegiada para este perfil.");
 
-      const text = response.text || "Oportunidade única que se encaixa perfeitamente no perfil buscado.";
-      setMatchingResults(prev => ({ ...prev, [property.id]: text }));
+      if (result.isError && result.errorType === 'quota') {
+        toast.error("Limite de uso da IA atingido.");
+      }
+
+      setMatchingResults(prev => ({ ...prev, [property.id]: result.text }));
     } catch (error: any) {
       console.error("Gemini Match Error:", error);
-      if (error?.message?.includes("quota") || error?.message?.includes("429") || error?.status === 429 || error?.message?.includes("RESOURCE_EXHAUSTED")) {
-        toast.error("Limite de uso da IA atingido. Tente novamente mais tarde.");
-        setMatchingResults(prev => ({ ...prev, [property.id]: "Limite de processamento atingido." }));
-      } else {
-        setMatchingResults(prev => ({ ...prev, [property.id]: "Excelente custo-benefício e localização privilegiada para este perfil." }));
-      }
+      setMatchingResults(prev => ({ ...prev, [property.id]: "Excelente oportunidade de investimento." }));
     } finally {
       setMatchLoadingId(null);
     }

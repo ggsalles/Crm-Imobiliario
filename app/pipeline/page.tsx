@@ -33,6 +33,7 @@ import {
   subscribeToContacts,
   subscribeToGoals,
   subscribeToProperties,
+  subscribeToUsers,
   createDeal,
   updateDeal,
   deleteDeal,
@@ -42,6 +43,7 @@ import {
   Property,
   getDeals,
   getGoals,
+  UserProfile,
 } from "@/lib/db";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -63,6 +65,7 @@ export default function PipelinePage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -124,6 +127,7 @@ export default function PipelinePage() {
     const unsubContacts = subscribeToContacts(setContacts, ownerId);
     const unsubProperties = subscribeToProperties(setProperties, ownerId);
     const unsubGoals = subscribeToGoals(setGoals, ownerId);
+    const unsubUsers = subscribeToUsers(setUsers);
 
     return () => {
       unsubDeals();
@@ -131,6 +135,7 @@ export default function PipelinePage() {
       unsubContacts();
       unsubProperties();
       unsubGoals();
+      unsubUsers();
     };
   }, [user, profile]);
 
@@ -194,6 +199,7 @@ export default function PipelinePage() {
       companyId: formData.get('companyId') as string || undefined,
       contactId: formData.get('contactId') as string || undefined,
       propertyId: formData.get('propertyId') as string || undefined,
+      ownerId: formData.get('ownerId') as string || undefined,
     };
 
     try {
@@ -553,6 +559,25 @@ export default function PipelinePage() {
                     {properties.map(p => (
                       <option key={p.id} value={p.id} className="bg-card">{p.title} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.price)}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Corretor Responsável</label>
+                  <select 
+                    name="ownerId" 
+                    defaultValue={editingDeal?.ownerId || user?.id} 
+                    disabled={profile?.role !== 'Admin'}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] disabled:opacity-70"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+                  >
+                    <option value="" className="bg-card">Nenhum</option>
+                    {users
+                      .filter(u => u.userType !== 'cliente')
+                      .map(u => (
+                        <option key={u.id} value={u.id} className="bg-card font-medium">
+                          {u.displayName} ({u.role})
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>

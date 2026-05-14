@@ -315,7 +315,11 @@ export default function ActivitiesPage() {
                                       activity.type === 'email' ? "bg-orange-500/10 text-orange-500" :
                                       "bg-muted text-muted-foreground"
                                     )}>
-                                      {activity.type}
+                                      {activity.type === 'meeting' ? 'Reunião' : 
+                                       activity.type === 'task' ? 'Tarefa' : 
+                                       activity.type === 'call' ? 'Chamada' : 
+                                       activity.type === 'email' ? 'E-mail' : 
+                                       activity.type}
                                     </span>
                                     {isPriority && (
                                       <span className="px-2.5 py-0.5 bg-primary text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm shadow-primary/20 animate-pulse">

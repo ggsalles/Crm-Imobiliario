@@ -25,7 +25,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
-import { Deal, Company, Contact, getDeal, getCompany, getContact } from "@/lib/db";
+import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, getUserProfile, UserProfile } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
 import Image from "next/image";
@@ -44,6 +44,7 @@ export default function DealDetailPage() {
   const [deal, setDeal] = useState<Deal | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [contact, setContact] = useState<Contact | null>(null);
+  const [owner, setOwner] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
@@ -73,6 +74,11 @@ export default function DealDetailPage() {
           if (contactData) {
             setContact(contactData);
           }
+        }
+
+        if (dealData.ownerId) {
+          const ownerData = await getUserProfile(dealData.ownerId);
+          setOwner(ownerData);
         }
       } else {
         router.push("/pipeline");
@@ -152,7 +158,13 @@ export default function DealDetailPage() {
                   <div className="flex items-center gap-3">
                     <h2 className="text-3xl font-black text-foreground tracking-tight">{deal.title}</h2>
                     <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-500/20">
-                      {deal.stage}
+                      {
+                        deal.stage === 'lead' ? 'Novo Lead' :
+                        deal.stage === 'qualification' ? 'Qualificação' :
+                        deal.stage === 'proposal' ? 'Proposta' :
+                        deal.stage === 'negotiation' ? 'Análise Jurídica' :
+                        deal.stage === 'closed' ? 'Vendido/Alugado' : deal.stage
+                      }
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-muted-foreground text-sm font-medium">
@@ -164,6 +176,19 @@ export default function DealDetailPage() {
                       <div className="flex items-center gap-1.5">
                         <User className="w-4 h-4" />
                         <span>{contact.name}</span>
+                      </div>
+                    )}
+                    {owner && (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted rounded-md text-[10px] font-black uppercase tracking-widest border border-border/50">
+                        <div className="w-4 h-4 rounded-full overflow-hidden relative">
+                           <Image 
+                             src={owner.photoURL || `https://ui-avatars.com/api/?name=${owner.displayName}&background=6366f1&color=fff`}
+                             alt={owner.displayName}
+                             fill
+                             className="object-cover"
+                           />
+                        </div>
+                        <span className="text-muted-foreground">{owner.displayName}</span>
                       </div>
                     )}
                   </div>
@@ -182,7 +207,31 @@ export default function DealDetailPage() {
                   <MessageSquare className="w-4 h-4" />
                   Mensagem
                 </button>
-                <button className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/30">
+                <button 
+                  onClick={async () => {
+                    const STAGES = [
+                      { id: 'lead', title: 'Novo Lead' },
+                      { id: 'qualification', title: 'Qualificação / Visita' },
+                      { id: 'proposal', title: 'Proposta' },
+                      { id: 'negotiation', title: 'Análise Jurídica' },
+                      { id: 'closed', title: 'Vendido / Alugado' }
+                    ];
+                    const currentIndex = STAGES.findIndex(s => s.id === deal.stage);
+                    if (currentIndex < STAGES.length - 1) {
+                      const nextStage = STAGES[currentIndex + 1];
+                      try {
+                        await updateDeal(deal.id, { stage: nextStage.id });
+                        toast.success(`Estágio avançado para: ${nextStage.title}`);
+                        refreshData();
+                      } catch (err) {
+                        toast.error("Erro ao avançar estágio.");
+                      }
+                    } else {
+                      toast.info("Este negócio já está no último estágio.");
+                    }
+                  }}
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/30"
+                >
                   <Zap className="w-4 h-4" />
                   Avançar Estágio
                 </button>

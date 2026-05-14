@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { GoogleGenAI } from "@google/genai";
-import { Sparkles, Loader2, Send, Wand2, X } from "lucide-react";
+import { Sparkles, Loader2, Wand2, X } from "lucide-react";
+import { safeAiCall } from "@/lib/ai";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +22,6 @@ export function AIMessageDrafter({ partnerName, onSelect, onClose }: AIMessageDr
   const generateDraft = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
-      
       const prompt = `
         Aja como um corretor imobiliário de luxo. 
         Escreva uma mensagem de WhatsApp para o cliente ${partnerName}.
@@ -35,24 +33,20 @@ export function AIMessageDrafter({ partnerName, onSelect, onClose }: AIMessageDr
         Mantenha em português brasileiro.
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
-      });
+      const result = await safeAiCall(prompt, "");
 
-      const text = response.text || "";
-      if (text) {
-        onSelect(text);
+      if (result.isError && result.errorType === 'quota') {
+        toast.error("Limite de uso da IA atingido. Tente novamente mais tarde.");
+      }
+
+      if (result.text) {
+        onSelect(result.text);
       } else {
         toast.error("Não foi possível gerar a mensagem. Tente novamente.");
       }
     } catch (error: any) {
-      console.error("Gemini Error:", error);
-      if (error?.message?.includes("quota") || error?.message?.includes("429") || error?.status === 429 || error?.message?.includes("RESOURCE_EXHAUSTED")) {
-        toast.error("Limite de uso da IA atingido para hoje. Tente novamente mais tarde.");
-      } else {
-        toast.error("Erro na inteligência artificial. Tente novamente em instantes.");
-      }
+      console.error("Gemini Drafter Error:", error);
+      toast.error("Erro na inteligência artificial. Tente novamente em instantes.");
     } finally {
       setLoading(false);
     }

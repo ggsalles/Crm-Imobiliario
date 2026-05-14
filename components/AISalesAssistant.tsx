@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { GoogleGenAI } from "@google/genai";
 import { Sparkles, Brain, Loader2, Target, TrendingUp, Lightbulb } from "lucide-react";
 import { Deal, Contact, Company } from "@/lib/db";
+import { safeAiCall } from "@/lib/ai";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -23,13 +23,15 @@ export function AISalesAssistant({ deal, contact, company }: AISalesAssistantPro
     setLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
-      
       const context = {
         deal: {
           title: deal.title,
           value: deal.value,
-          stage: deal.stage,
+          stage: deal.stage === 'lead' ? 'Novo Lead' :
+                 deal.stage === 'qualification' ? 'Qualificação' :
+                 deal.stage === 'proposal' ? 'Proposta' :
+                 deal.stage === 'negotiation' ? 'Análise Jurídica' :
+                 deal.stage === 'closed' ? 'Vendido/Alugado' : deal.stage,
           probability: deal.probability
         },
         contact: contact ? { name: contact.name, role: contact.role } : "N/A",
@@ -50,20 +52,16 @@ export function AISalesAssistant({ deal, contact, company }: AISalesAssistantPro
         Formate a resposta em Markdown curto.
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
-      });
-
-      setStrategy(response.text || "Não foi possível gerar a estratégia no momento.");
-    } catch (error: any) {
-      console.error("Gemini Error:", error);
-      if (error?.message?.includes("quota") || error?.message?.includes("429") || error?.status === 429 || error?.message?.includes("RESOURCE_EXHAUSTED")) {
-        toast.error("Limite de uso da IA atingido. Tente novamente mais tarde.");
-        setStrategy("Limite de cota da IA atingido. Por favor, tente novamente mais tarde.");
-      } else {
-        setStrategy("Foque na construção de valor e no agendamento de uma visita presencial para acelerar o fechamento.");
+      const result = await safeAiCall(prompt, "Foque na construção de valor e no agendamento de uma visita presencial para acelerar o fechamento.");
+      
+      if (result.isError && result.errorType === 'quota') {
+        toast.error("Capacidade da IA temporariamente excedida.");
       }
+      
+      setStrategy(result.text);
+    } catch (error: any) {
+      console.error("Gemini Assistant Error:", error);
+      setStrategy("Foque no relacionamento e na demonstração técnica do imóvel.");
     } finally {
       setLoading(false);
     }

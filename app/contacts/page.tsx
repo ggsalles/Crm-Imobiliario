@@ -36,7 +36,9 @@ import {
   deleteContact,
   createCompany,
   createTimelineEvent,
-  findOrCreateConversation
+  findOrCreateConversation,
+  createUserProfile,
+  isEmailRegistered
 } from "@/lib/db";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -215,6 +217,24 @@ function ContactsContent() {
         await updateContact(editingContact.id, data);
         toast.success("Contato atualizado!");
       } else {
+        // If creating a team member, also create a profile entry
+        if (activeTab === 'equipe') {
+          const emailExists = await isEmailRegistered(data.email);
+          if (emailExists) {
+            toast.error("Este e-mail já está vinculado a um usuário cadastrado.");
+            return;
+          }
+
+          await createUserProfile({
+            displayName: data.name,
+            email: data.email,
+            role: (data.role?.toLowerCase().includes('admin') ? 'Admin' : 'Membro') as 'Admin' | 'Membro',
+            userType: 'funcionário'
+          });
+          
+          toast.success("Membro da equipe convidado e perfil criado!");
+        }
+
         const contactId = await createContact(data);
         if (contactId) {
           await createTimelineEvent({
@@ -226,7 +246,7 @@ function ContactsContent() {
             metadata: { type: 'creation' }
           });
         }
-        toast.success("Contato criado!");
+        if (activeTab !== 'equipe') toast.success("Contato criado!");
       }
       await fetchData();
       setIsModalOpen(false);
@@ -260,7 +280,10 @@ function ContactsContent() {
                 setEditingContact(null);
                 setIsModalOpen(true);
               }}
-              className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2"
+              className={cn(
+                "bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2",
+                activeTab === 'equipe' && profile?.role !== 'Admin' && "hidden"
+              )}
             >
               <Plus className="w-5 h-5" />
               {activeTab === 'cliente' ? 'Novo Cliente' : 'Novo Membro'}

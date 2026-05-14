@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { GoogleGenAI } from "@google/genai";
 import { Sparkles, Brain, Loader2, Info } from "lucide-react";
 import { Activity, Deal } from "@/lib/db";
+import { safeAiCall } from "@/lib/ai";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -29,14 +29,20 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
     setLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
-      
       const pendingActivities = activities.filter(a => a.status === 'pending');
       const criticalDeals = deals.filter(d => d.value > 100000 && d.stage !== 'closed');
       
       const context = {
-        pendingTasks: pendingActivities.map(a => ({ title: a.title, type: a.type, date: a.date })),
-        highValueDeals: criticalDeals.map(d => ({ title: d.title, value: d.value, stage: d.stage })),
+        pendingTasks: pendingActivities.map(a => ({ 
+          title: a.title, 
+          type: a.type === 'meeting' ? 'Reunião' : a.type === 'task' ? 'Tarefa' : a.type === 'call' ? 'Ligação' : 'Outro', 
+          date: a.date 
+        })),
+        highValueDeals: criticalDeals.map(d => ({ 
+          title: d.title, 
+          value: d.value, 
+          stage: d.stage === 'lead' ? 'Novo Lead' : d.stage === 'qualification' ? 'Qualificação' : d.stage === 'proposal' ? 'Proposta' : d.stage === 'negotiation' ? 'Análise Jurídica' : d.stage === 'closed' ? 'Vendido/Alugado' : d.stage 
+        })),
       };
 
       const prompt = `
@@ -46,23 +52,17 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
         Contexto: ${JSON.stringify(context)}
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
-      });
+      const result = await safeAiCall(prompt, DEFAULT_INSIGHTS.join('; '));
 
-      const text = response.text || "";
-      const newInsights = text.split(';').map(s => s.trim()).filter(s => s.length > 10);
-      
-      if (newInsights.length > 0) {
-        setInsights(newInsights);
-        setCurrentIndex(0);
+      if (result.text) {
+        const newInsights = result.text.split(';').map(s => s.trim()).filter(s => s.length > 5);
+        if (newInsights.length > 0) {
+          setInsights(newInsights);
+          setCurrentIndex(0);
+        }
       }
     } catch (error: any) {
-      console.error("Gemini Error:", error);
-      if (error?.message?.includes("quota") || error?.message?.includes("429") || error?.status === 429 || error?.message?.includes("RESOURCE_EXHAUSTED")) {
-        setInsights(["A IA está descansando um pouco. Volte em breve para novos insights!"]);
-      }
+      console.error("Gemini UI Error:", error);
     } finally {
       setLoading(false);
     }

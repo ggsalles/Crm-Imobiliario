@@ -22,9 +22,10 @@ import { useAuth } from "@/providers/auth-provider";
 interface TimelineProps {
   category: 'contact' | 'deal' | 'company';
   relatedId: string;
+  searchQuery?: string;
 }
 
-export function Timeline({ category, relatedId }: TimelineProps) {
+export function Timeline({ category, relatedId, searchQuery }: TimelineProps) {
   const { user, profile } = useAuth();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,9 +115,15 @@ export function Timeline({ category, relatedId }: TimelineProps) {
               <p className="text-muted-foreground text-sm mt-1">Interações e notas automáticas aparecerão aqui.</p>
             </motion.div>
           ) : (
-            events.map((event, index) => (
-              <TimelineItem key={event.id} event={event} index={index} />
-            ))
+            events
+              .filter(e => 
+                !searchQuery || 
+                e.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (e.title && e.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              )
+              .map((event, index) => (
+                <TimelineItem key={event.id} event={event} index={index} />
+              ))
           )}
         </AnimatePresence>
       </div>

@@ -61,6 +61,7 @@ export default function ContactDetail360Page() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -228,6 +229,8 @@ export default function ContactDetail360Page() {
               <input 
                 type="text" 
                 placeholder="Pesquisar negócios, registros ou interações..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-muted border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm text-foreground"
               />
             </div>
@@ -366,7 +369,7 @@ export default function ContactDetail360Page() {
                   </div>
                 </div>
                 <div className="p-8 pb-12">
-                  <Timeline category="contact" relatedId={id} />
+                  <Timeline category="contact" relatedId={id} searchQuery={searchQuery} />
                 </div>
               </div>
 
@@ -386,7 +389,13 @@ export default function ContactDetail360Page() {
                           </div>
                           <div>
                             <h4 className="font-bold text-foreground">{deal.title}</h4>
-                            <div className="text-sm text-muted-foreground font-medium">Estágio: <span className="text-primary uppercase text-[10px] bg-primary/10 px-2 py-0.5 rounded-md font-bold">{deal.stage}</span></div>
+                            <div className="text-sm text-muted-foreground font-medium">Estágio: <span className="text-primary uppercase text-[10px] bg-primary/10 px-2 py-0.5 rounded-md font-bold">{
+                              deal.stage === 'lead' ? 'Novo Lead' :
+                              deal.stage === 'qualification' ? 'Qualificação' :
+                              deal.stage === 'proposal' ? 'Proposta' :
+                              deal.stage === 'negotiation' ? 'Análise Jurídica' :
+                              deal.stage === 'closed' ? 'Vendido/Alugado' : deal.stage
+                            }</span></div>
                           </div>
                         </div>
                         <div className="text-right">
