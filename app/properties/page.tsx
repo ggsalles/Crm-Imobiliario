@@ -22,7 +22,9 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  X
+  X,
+  Upload,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/providers/auth-provider";
@@ -33,6 +35,7 @@ import {
   createProperty, 
   updateProperty, 
   deleteProperty, 
+  uploadFile,
   Property 
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
@@ -50,6 +53,7 @@ export default function PropertiesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
 
@@ -138,6 +142,29 @@ export default function PropertiesPage() {
     if (window.confirm("Deseja realmente excluir este imóvel?")) {
       await deleteProperty(id);
       await fetchData();
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande. Máximo 5MB.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const result = await uploadFile(file);
+      setImageUrls(prev => [...prev, result.url]);
+      toast.success("Imagem enviada com sucesso!");
+    } catch (error: any) {
+      console.error("Erro no upload:", error);
+      toast.error("Erro ao enviar imagem. Verifique se os 'buckets' do Supabase estão configurados.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -505,14 +532,31 @@ export default function PropertiesPage() {
                   <div className="md:col-span-2 space-y-4">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Imagens do Imóvel</label>
-                      <button 
-                        type="button" 
-                        onClick={() => setImageUrls([...imageUrls, ""])}
-                        className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:underline"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Adicionar Foto
-                      </button>
+                      <div className="flex gap-4">
+                        <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:underline cursor-pointer">
+                          {isUploading ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Upload className="w-3 h-3" />
+                          )}
+                          Carregar Foto
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={handleImageUpload}
+                            disabled={isUploading}
+                          />
+                        </label>
+                        <button 
+                          type="button" 
+                          onClick={() => setImageUrls([...imageUrls, ""])}
+                          className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:underline"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Link de Foto
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="space-y-3">

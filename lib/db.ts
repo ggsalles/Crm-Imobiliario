@@ -1086,7 +1086,7 @@ export async function createConversation(participants: string[], category: 'clie
   return result[0].id;
 }
 
-export async function uploadChatFile(file: File) {
+export async function uploadFile(file: File, bucketName: string = 'property-images') {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
@@ -1094,14 +1094,16 @@ export async function uploadChatFile(file: File) {
   const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
   const filePath = `${user.id}/${fileName}`;
 
-  const bucketName = 'chat-attachments';
-
-  const { error: uploadError, data } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from(bucketName)
     .upload(filePath, file);
 
   if (uploadError) {
     console.error(`[Storage] Error uploading to "${bucketName}":`, uploadError);
+    // If bucket doesn't exist, try 'images' bucket as fallback
+    if (uploadError.message.includes('bucket not found') && bucketName !== 'images') {
+      return uploadFile(file, 'images');
+    }
     throw uploadError;
   }
 
@@ -1110,6 +1112,10 @@ export async function uploadChatFile(file: File) {
     .getPublicUrl(filePath);
 
   return { name: file.name, url: publicUrl };
+}
+
+export async function uploadChatFile(file: File) {
+  return uploadFile(file, 'chat-attachments');
 }
 
 export async function downloadFile(url: string, fileName: string) {
