@@ -787,10 +787,25 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 }
 
 export async function createProperty(data: any) {
+  console.log("[lib/db] createProperty: Obtendo usuário...");
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) {
+    console.warn("[lib/db] createProperty: Usuário não autenticado");
+    throw new Error("Sessão expirada. Por favor, faça login novamente.");
+  }
 
-  const { data: result, error } = await supabase.from('properties').insert([{
+  console.log("[lib/db] createProperty: Preparando payload para insert...");
+  const validUrls = (data.imageUrls || []).filter((url: string) => 
+    url.trim() !== "" && !url.startsWith('data:image')
+  );
+  
+  // Limitar tamanho das URLs para evitar estouro de coluna text
+  const safeUrls = validUrls.map((url: string) => url.length > 2000 ? url.substring(0, 2000) : url);
+  const imageUrlString = safeUrls.length > 0 ? JSON.stringify(safeUrls) : null;
+
+  console.log("[lib/db] createProperty: Iniciando insert no Supabase...");
+  // Timeout manual de 30s para a chamada do Supabase
+  const insertPromise = supabase.from('properties').insert([{
     title: data.title,
     type: data.type,
     status: data.status,
@@ -810,15 +825,30 @@ export async function createProperty(data: any) {
     accepts_financing: data.acceptsFinancing,
     notes: data.notes,
     description: data.description,
-    image_url: data.imageUrls && data.imageUrls.length > 0 ? JSON.stringify(data.imageUrls.filter((url: string) => url.trim() !== "")) : null,
+    image_url: imageUrlString,
     owner_id: user.id
   }]).select();
 
-  if (error) throw error;
-  return result[0].id;
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("Timeout ao comunicar com o banco de dados (30s)")), 30000)
+  );
+
+  const { data: result, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+
+  if (error) {
+    console.error("[lib/db] createProperty error:", error);
+    throw error;
+  }
+  console.log("[lib/db] createProperty success. ID:", result?.[0]?.id);
+  return result && result[0] ? result[0].id : null;
 }
 
 export async function updateProperty(id: string, data: any) {
+  console.log("[lib/db] updateProperty: Iniciando para id:", id);
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Sessão expirada. Faça login novamente.");
+
   const updateData: any = { updated_at: new Date().toISOString() };
   if (data.title !== undefined) updateData.title = data.title;
   if (data.type !== undefined) updateData.type = data.type;
@@ -839,12 +869,30 @@ export async function updateProperty(id: string, data: any) {
   if (data.acceptsFinancing !== undefined) updateData.accepts_financing = data.acceptsFinancing;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.description !== undefined) updateData.description = data.description;
+  
   if (data.imageUrls !== undefined) {
-    updateData.image_url = data.imageUrls.length > 0 ? JSON.stringify(data.imageUrls.filter((url: string) => url.trim() !== "")) : null;
+    const validUrls = data.imageUrls.filter((url: string) => 
+      url.trim() !== "" && !url.startsWith('data:image')
+    );
+    // Limitar tamanho das URLs
+    const safeUrls = validUrls.map((url: string) => url.length > 2000 ? url.substring(0, 2000) : url);
+    updateData.image_url = safeUrls.length > 0 ? JSON.stringify(safeUrls) : null;
   }
 
-  const { error } = await supabase.from('properties').update(updateData).eq('id', id);
-  if (error) throw error;
+  console.log("[lib/db] updateProperty: Enviando update para o Supabase...", Object.keys(updateData));
+  
+  const updatePromise = supabase.from('properties').update(updateData).eq('id', id).select();
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("Timeout ao atualizar no banco de dados (30s)")), 30000)
+  );
+
+  const { error } = await Promise.race([updatePromise, timeoutPromise]) as any;
+
+  if (error) {
+    console.error("[lib/db] updateProperty error:", error);
+    throw error;
+  }
+  console.log("[lib/db] updateProperty success");
 }
 
 export async function deleteProperty(id: string) {

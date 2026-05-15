@@ -229,14 +229,25 @@ export default function PropertiesPage() {
       }
 
       console.log("[Properties] Enviando para o Supabase...", data);
+      
+      // Aumentado para 45s para maior tolerância
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("O servidor demorou mais de 45 segundos para responder. Verifique os logs do console (F12) para detalhes ou se o projeto no Vercel tem as variáveis de ambiente NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY configuradas.")), 45000)
+      );
 
-      if (editingProperty) {
-        await updateProperty(editingProperty.id, data as any);
-        toast.success("Imóvel atualizado com sucesso!");
-      } else {
-        await createProperty(data as any);
-        toast.success("Imóvel cadastrado com sucesso!");
-      }
+      const savePromise = (async () => {
+        if (editingProperty) {
+          console.log("[Properties] Chamando updateProperty...");
+          await updateProperty(editingProperty.id, data as any);
+          toast.success("Imóvel atualizado com sucesso!");
+        } else {
+          console.log("[Properties] Chamando createProperty...");
+          await createProperty(data as any);
+          toast.success("Imóvel cadastrado com sucesso!");
+        }
+      })();
+      
+      await Promise.race([savePromise, timeoutPromise]);
       
       console.log("[Properties] Salvo com sucesso. Fechando modal...");
       setIsModalOpen(false);
@@ -547,7 +558,18 @@ export default function PropertiesPage() {
                     </label>
                   </div>
 
-                  <div className="md:col-span-2 space-y-2">
+                  <div className="md:col-span-2 space-y-2 text-start">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Descrição Pública (Exibida no Card)</label>
+                    <textarea 
+                      name="description"
+                      defaultValue={editingProperty?.description}
+                      placeholder="Descreva as principais características do imóvel..."
+                      rows={3}
+                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none font-bold text-foreground"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2 text-start">
                     <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Observações Internas (Não visível ao cliente)</label>
                     <textarea 
                       name="notes"
