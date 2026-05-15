@@ -448,14 +448,31 @@ export async function setGoal(month: string, stageGoals: { [stageId: string]: nu
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { error } = await supabase.from('goals').upsert({
+  // First, check if a goal for this month and user already exists to get its ID
+  const { data: existingGoal } = await supabase
+    .from('goals')
+    .select('id')
+    .eq('month', month)
+    .eq('owner_id', user.id)
+    .maybeSingle();
+
+  const goalData: any = {
     month,
     stage_goals: stageGoals,
     owner_id: user.id,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'owner_id, month' });
+  };
 
-  if (error) throw error;
+  if (existingGoal) {
+    goalData.id = existingGoal.id;
+  }
+
+  const { error } = await supabase.from('goals').upsert(goalData);
+
+  if (error) {
+    console.error("Error in setGoal:", error);
+    throw error;
+  }
 }
 
 export async function getUserProfile(id: string) {

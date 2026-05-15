@@ -76,7 +76,11 @@ export default function PipelinePage() {
   const [displayGoals, setDisplayGoals] = useState<{ [key: string]: string }>({});
 
   const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
-  const currentGoal = useMemo(() => goals.find(g => g.month === currentMonth), [goals, currentMonth]);
+  const currentGoal = useMemo(() => {
+    const monthGoals = goals.filter(g => g.month === currentMonth);
+    // Prioritize the user's specific goal if multiple exist
+    return monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
+  }, [goals, currentMonth, user]);
   const stageGoals = useMemo(() => currentGoal?.stageGoals || {}, [currentGoal]);
   const goalValue = useMemo(() => stageGoals['closed'] || 0, [stageGoals]);
 
@@ -255,8 +259,9 @@ export default function PipelinePage() {
       toast.success("Metas atualizadas!");
       await fetchDealsData();
       setIsGoalModalOpen(false);
-    } catch (err) {
-      toast.error("Erro ao salvar metas.");
+    } catch (err: any) {
+      console.error("Erro detalhado ao salvar metas:", err);
+      toast.error(`Erro ao salvar metas: ${err.message || 'Erro desconhecido'}`);
     }
   };
 
