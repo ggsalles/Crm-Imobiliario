@@ -60,9 +60,14 @@ export default function PropertiesPage() {
 
   const fetchData = async () => {
     if (!user || !profile) return;
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
-    const data = await getProperties(ownerId);
-    setProperties(data);
+    try {
+      const ownerId = profile.role === 'Admin' ? undefined : user.id;
+      const data = await getProperties(ownerId);
+      setProperties(data);
+    } catch (error) {
+      console.error("Erro ao buscar imóveis:", error);
+      toast.error("Não foi possível atualizar a lista de imóveis.");
+    }
   };
   
   useEffect(() => {
@@ -177,6 +182,7 @@ export default function PropertiesPage() {
     setIsSaving(true);
     
     try {
+      console.log("[Properties] Iniciando processo de salvamento...", imageUrls);
       // Auto-generate location summary if not provided
       const neighborhood = formData.get("neighborhood") as string;
       const city = formData.get("city") as string;
@@ -184,11 +190,13 @@ export default function PropertiesPage() {
       const location = formData.get("location") as string || `${neighborhood}, ${city} - ${state}`;
 
       const filteredUrls = imageUrls.filter(url => url.trim() !== "");
+      console.log("[Properties] URLs filtradas:", filteredUrls);
       
       // Check for extremely long URLs (like base64) that might break DB columns
-      const tooLongUrl = filteredUrls.find(url => url.length > 2000);
+      const tooLongUrl = filteredUrls.find(url => url.length > 2000 || url.startsWith('data:image'));
       if (tooLongUrl) {
-        toast.error("Uma das imagens é muito grande (provavelmente link base64). Use o botão 'Carregar Foto' para enviar o arquivo.");
+        console.warn("[Properties] URL muito longa ou base64 detectada");
+        toast.error("Uma das imagens é um link inválido ou muito grande (base64). Por favor, use o botão 'Carregar Foto' para arquivos do seu computador.");
         setIsSaving(false);
         return;
       }
@@ -206,10 +214,10 @@ export default function PropertiesPage() {
         state,
         number: formData.get("number") as string,
         complement: formData.get("complement") as string,
-        area: Number(formData.get("area")),
-        bedrooms: Number(formData.get("bedrooms")),
-        bathrooms: Number(formData.get("bathrooms")),
-        parkingSpots: Number(formData.get("parkingSpots")),
+        area: Number(formData.get("area") || 0),
+        bedrooms: Number(formData.get("bedrooms") || 0),
+        bathrooms: Number(formData.get("bathrooms") || 0),
+        parkingSpots: Number(formData.get("parkingSpots") || 0),
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
         notes: formData.get("notes") as string,
         description: formData.get("description") as string,
@@ -220,6 +228,8 @@ export default function PropertiesPage() {
         data.imageUrls = [`https://picsum.photos/seed/${Math.random()}/800/600`];
       }
 
+      console.log("[Properties] Enviando para o Supabase...", data);
+
       if (editingProperty) {
         await updateProperty(editingProperty.id, data as any);
         toast.success("Imóvel atualizado com sucesso!");
@@ -228,12 +238,14 @@ export default function PropertiesPage() {
         toast.success("Imóvel cadastrado com sucesso!");
       }
       
-      await fetchData();
+      console.log("[Properties] Salvo com sucesso. Fechando modal...");
       setIsModalOpen(false);
       setEditingProperty(null);
+      await fetchData();
     } catch (err: any) {
-      console.error("Erro ao salvar imóvel:", err);
-      toast.error(`Erro ao salvar imóvel: ${err.message || 'Verifique sua conexão'}`);
+      console.error("Erro completo ao salvar imóvel:", err);
+      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      toast.error(`Falha ao salvar: ${errorMessage.substring(0, 150)}`);
     } finally {
       setIsSaving(false);
     }

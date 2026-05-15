@@ -722,7 +722,11 @@ export async function createTimelineEvent(data: any) {
 export async function getProperties(ownerId?: string) {
   let query = supabase.from('properties').select('*').order('created_at', { ascending: false });
   if (ownerId) query = query.eq('owner_id', ownerId);
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("Error fetching properties:", error);
+    throw error;
+  }
   if (!data) return [];
   return data.map(item => ({
     id: item.id,
