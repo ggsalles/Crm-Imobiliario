@@ -31,7 +31,7 @@ export interface Property {
   acceptsFinancing?: boolean;
   notes?: string;
   description?: string;
-  imageUrl?: string;
+  imageUrls?: string[];
   ownerId: string;
   createdAt?: string;
   updatedAt?: string;
@@ -745,7 +745,17 @@ export async function getProperties(ownerId?: string) {
     acceptsFinancing: item.accepts_financing,
     notes: item.notes,
     description: item.description,
-    imageUrl: item.image_url,
+    imageUrls: (() => {
+      if (!item.image_url) return [];
+      try {
+        // Try to parse if it's a JSON array string
+        const parsed = JSON.parse(item.image_url);
+        return Array.isArray(parsed) ? parsed : [item.image_url];
+      } catch (e) {
+        // Not JSON, return as single element array
+        return [item.image_url];
+      }
+    })(),
     ownerId: item.owner_id,
     createdAt: item.created_at,
     updatedAt: item.updated_at
@@ -796,7 +806,7 @@ export async function createProperty(data: any) {
     accepts_financing: data.acceptsFinancing,
     notes: data.notes,
     description: data.description,
-    image_url: data.imageUrl,
+    image_url: data.imageUrls && data.imageUrls.length > 0 ? JSON.stringify(data.imageUrls.filter((url: string) => url.trim() !== "")) : null,
     owner_id: user.id
   }]).select();
 
@@ -825,7 +835,9 @@ export async function updateProperty(id: string, data: any) {
   if (data.acceptsFinancing !== undefined) updateData.accepts_financing = data.acceptsFinancing;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.description !== undefined) updateData.description = data.description;
-  if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
+  if (data.imageUrls !== undefined) {
+    updateData.image_url = data.imageUrls.length > 0 ? JSON.stringify(data.imageUrls.filter((url: string) => url.trim() !== "")) : null;
+  }
 
   const { error } = await supabase.from('properties').update(updateData).eq('id', id);
   if (error) throw error;

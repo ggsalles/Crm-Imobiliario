@@ -19,6 +19,7 @@ import {
   Edit,
   Trash2,
   ExternalLink,
+  ChevronLeft,
   ChevronRight,
   TrendingUp,
   X
@@ -36,6 +37,7 @@ import {
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import Image from "next/image";
+import { toast } from "sonner";
 
 export default function PropertiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -47,6 +49,7 @@ export default function PropertiesPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
 
@@ -60,6 +63,7 @@ export default function PropertiesPage() {
   useEffect(() => {
     if (isModalOpen) {
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
+      setImageUrls(editingProperty?.imageUrls || []);
     }
   }, [isModalOpen, editingProperty]);
 
@@ -141,43 +145,54 @@ export default function PropertiesPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    // Auto-generate location summary if not provided
-    const neighborhood = formData.get("neighborhood") as string;
-    const city = formData.get("city") as string;
-    const state = formData.get("state") as string;
-    const location = formData.get("location") as string || `${neighborhood}, ${city} - ${state}`;
+    try {
+      // Auto-generate location summary if not provided
+      const neighborhood = formData.get("neighborhood") as string;
+      const city = formData.get("city") as string;
+      const state = formData.get("state") as string;
+      const location = formData.get("location") as string || `${neighborhood}, ${city} - ${state}`;
 
-    const data: Partial<Property> = {
-      title: formData.get("title") as string,
-      type: formData.get("type") as any,
-      status: formData.get("status") as any,
-      price: parseCurrencyBRLToNumber(formData.get("price") as string),
-      location,
-      cep: formData.get("cep") as string,
-      street: formData.get("street") as string,
-      neighborhood,
-      city,
-      state,
-      number: formData.get("number") as string,
-      complement: formData.get("complement") as string,
-      area: Number(formData.get("area")),
-      bedrooms: Number(formData.get("bedrooms")),
-      bathrooms: Number(formData.get("bathrooms")),
-      parkingSpots: Number(formData.get("parkingSpots")),
-      acceptsFinancing: formData.get("acceptsFinancing") === "on",
-      notes: formData.get("notes") as string,
-      description: formData.get("description") as string,
-      imageUrl: (formData.get("imageUrl") as string) || `https://picsum.photos/seed/${Math.random()}/800/600`,
-    };
+      const data: Partial<Property> = {
+        title: formData.get("title") as string,
+        type: formData.get("type") as any,
+        status: formData.get("status") as any,
+        price: parseCurrencyBRLToNumber(formData.get("price") as string),
+        location,
+        cep: formData.get("cep") as string,
+        street: formData.get("street") as string,
+        neighborhood,
+        city,
+        state,
+        number: formData.get("number") as string,
+        complement: formData.get("complement") as string,
+        area: Number(formData.get("area")),
+        bedrooms: Number(formData.get("bedrooms")),
+        bathrooms: Number(formData.get("bathrooms")),
+        parkingSpots: Number(formData.get("parkingSpots")),
+        acceptsFinancing: formData.get("acceptsFinancing") === "on",
+        notes: formData.get("notes") as string,
+        description: formData.get("description") as string,
+        imageUrls: imageUrls.filter(url => url.trim() !== ""),
+      };
 
-    if (editingProperty) {
-      await updateProperty(editingProperty.id, data as any);
-    } else {
-      await createProperty(data as any);
+      if (!data.imageUrls || data.imageUrls.length === 0) {
+        data.imageUrls = [`https://picsum.photos/seed/${Math.random()}/800/600`];
+      }
+
+      if (editingProperty) {
+        await updateProperty(editingProperty.id, data as any);
+        toast.success("Imóvel atualizado com sucesso!");
+      } else {
+        await createProperty(data as any);
+        toast.success("Imóvel cadastrado com sucesso!");
+      }
+      await fetchData();
+      setIsModalOpen(false);
+      setEditingProperty(null);
+    } catch (err: any) {
+      console.error("Erro ao salvar imóvel:", err);
+      toast.error(`Erro ao salvar imóvel: ${err.message || 'Verifique sua conexão'}`);
     }
-    await fetchData();
-    setIsModalOpen(false);
-    setEditingProperty(null);
   };
 
   if (authLoading || (loading && !user)) {
@@ -487,14 +502,55 @@ export default function PropertiesPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">URL da Imagem</label>
-                    <input 
-                      name="imageUrl"
-                      defaultValue={editingProperty?.imageUrl}
-                      placeholder="https://exemplo.com/foto.jpg"
-                      className="w-full px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
-                    />
+                  <div className="md:col-span-2 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Imagens do Imóvel</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setImageUrls([...imageUrls, ""])}
+                        className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:underline"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Adicionar Foto
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {imageUrls.map((url, index) => (
+                        <div key={index} className="flex gap-2">
+                          <input 
+                            value={url}
+                            onChange={(e) => {
+                              const newUrls = [...imageUrls];
+                              newUrls[index] = e.target.value;
+                              setImageUrls(newUrls);
+                            }}
+                            placeholder="https://exemplo.com/foto.jpg"
+                            className="flex-1 px-5 py-3.5 bg-muted/30 border border-border rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all font-bold text-foreground"
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => setImageUrls(imageUrls.filter((_, i) => i !== index))}
+                            className="w-12 h-12 flex items-center justify-center rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      
+                      {imageUrls.length === 0 && (
+                        <div 
+                          onClick={() => setImageUrls([""])}
+                          className="w-full py-10 border-2 border-dashed border-border rounded-[32px] flex flex-col items-center justify-center cursor-pointer hover:bg-muted/30 transition-all group"
+                        >
+                          <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <Plus className="w-6 h-6 text-muted-foreground" />
+                          </div>
+                          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Nenhuma imagem adicionada</p>
+                          <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest mt-1">Clique para inserir links de fotos</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -533,6 +589,21 @@ export default function PropertiesPage() {
 }
 
 function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEdit: () => void; onDelete: () => void }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = property.imageUrls && property.imageUrls.length > 0 
+    ? property.imageUrls 
+    : ["https://picsum.photos/seed/realestate/800/600"];
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
   return (
     <motion.div 
       layout
@@ -541,15 +612,60 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
       exit={{ opacity: 0, scale: 0.9 }}
       className="bg-card rounded-[32px] border border-border overflow-hidden group hover:shadow-2xl hover:shadow-primary/10 transition-all flex flex-col"
     >
-      <div className="h-48 relative overflow-hidden shrink-0">
-        <Image 
-          src={property.imageUrl || "https://picsum.photos/seed/realestate/800/600"} 
-          alt={property.title} 
-          fill
-          className="object-cover group-hover:scale-110 transition-transform duration-700"
-          referrerPolicy="no-referrer"
-        />
-        <div className="absolute top-4 left-4 flex gap-2">
+      <div className="h-48 relative overflow-hidden shrink-0 group/img">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentImageIndex}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0"
+          >
+            <Image 
+              src={images[currentImageIndex]} 
+              alt={property.title} 
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover group-hover:scale-110 transition-transform duration-700"
+              referrerPolicy="no-referrer"
+            />
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Carousel Controls */}
+        {images.length > 1 && (
+          <>
+            <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5 z-10">
+              {images.map((_, idx) => (
+                <div 
+                  key={idx} 
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full transition-all duration-300",
+                    idx === currentImageIndex ? "bg-white w-4" : "bg-white/40"
+                  )}
+                />
+              ))}
+            </div>
+
+            <div className="absolute inset-0 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-between px-3 pointer-events-none">
+              <button 
+                onClick={prevImage}
+                className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={nextImage}
+                className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10 pointer-events-none">
           <span className={cn(
             "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border",
             property.status === 'disponível' ? "bg-emerald-500/80 text-white border-emerald-400" :
@@ -558,7 +674,7 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
           )}>
             {property.status}
           </span>
-          <span className="px-3 py-1.5 bg-card/80 backdrop-blur-md text-foreground border border-border/40 rounded-xl text-[10px] font-black uppercase tracking-widest">
+          <span className="px-3 py-1.5 bg-background/80 backdrop-blur-md text-foreground border border-border/40 rounded-xl text-[10px] font-black uppercase tracking-widest">
             {property.type}
           </span>
           {property.acceptsFinancing && (
