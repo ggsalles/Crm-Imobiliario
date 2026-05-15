@@ -54,6 +54,7 @@ export default function PropertiesPage() {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
 
@@ -170,7 +171,10 @@ export default function PropertiesPage() {
 
   const handleCreateOrUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSaving) return;
+
     const formData = new FormData(e.currentTarget);
+    setIsSaving(true);
     
     try {
       // Auto-generate location summary if not provided
@@ -178,6 +182,16 @@ export default function PropertiesPage() {
       const city = formData.get("city") as string;
       const state = formData.get("state") as string;
       const location = formData.get("location") as string || `${neighborhood}, ${city} - ${state}`;
+
+      const filteredUrls = imageUrls.filter(url => url.trim() !== "");
+      
+      // Check for extremely long URLs (like base64) that might break DB columns
+      const tooLongUrl = filteredUrls.find(url => url.length > 2000);
+      if (tooLongUrl) {
+        toast.error("Uma das imagens é muito grande (provavelmente link base64). Use o botão 'Carregar Foto' para enviar o arquivo.");
+        setIsSaving(false);
+        return;
+      }
 
       const data: Partial<Property> = {
         title: formData.get("title") as string,
@@ -199,7 +213,7 @@ export default function PropertiesPage() {
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
         notes: formData.get("notes") as string,
         description: formData.get("description") as string,
-        imageUrls: imageUrls.filter(url => url.trim() !== ""),
+        imageUrls: filteredUrls,
       };
 
       if (!data.imageUrls || data.imageUrls.length === 0) {
@@ -213,12 +227,15 @@ export default function PropertiesPage() {
         await createProperty(data as any);
         toast.success("Imóvel cadastrado com sucesso!");
       }
+      
       await fetchData();
       setIsModalOpen(false);
       setEditingProperty(null);
     } catch (err: any) {
       console.error("Erro ao salvar imóvel:", err);
       toast.error(`Erro ao salvar imóvel: ${err.message || 'Verifique sua conexão'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -618,9 +635,11 @@ export default function PropertiesPage() {
                   </button>
                   <button 
                     type="submit" 
-                    className="flex-1 py-4 bg-primary text-primary-foreground rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
+                    disabled={isSaving}
+                    className="flex-1 py-4 bg-primary text-primary-foreground rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {editingProperty ? "Salvar Alterações" : "Criar Imóvel"}
+                    {isSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {editingProperty ? (isSaving ? "Salvando..." : "Salvar Alterações") : (isSaving ? "Criando..." : "Criar Imóvel")}
                   </button>
                 </div>
               </form>
