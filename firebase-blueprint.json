@@ -91,7 +91,7 @@
         "acceptsFinancing": { "type": "boolean" },
         "notes": { "type": "string" },
         "description": { "type": "string" },
-        "imageUrl": { "type": "string" },
+        "imageUrls": { "type": "array", "items": { "type": "string" } },
         "ownerId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

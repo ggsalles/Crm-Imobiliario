@@ -131,10 +131,11 @@ export function PropertyMatcher({ deal, contact, onUpdate }: PropertyMatcherProp
             <div className="flex gap-4">
               <div className="w-20 h-20 rounded-xl overflow-hidden relative shrink-0">
                 <Image 
-                  src={property.imageUrl || "https://picsum.photos/seed/prop/400/400"} 
+                  src={property.imageUrls?.[0] || "https://picsum.photos/seed/prop/400/400"} 
                   alt={property.title}
                   fill
                   className="object-cover group-hover:scale-110 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
                 />
               </div>
               <div className="flex-1 min-w-0">
