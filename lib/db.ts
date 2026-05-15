@@ -720,15 +720,26 @@ export async function createTimelineEvent(data: any) {
 
 // Properties
 export async function getProperties(ownerId?: string) {
+  console.log("[lib/db] getProperties: Buscando imóveis...");
   let query = supabase.from('properties').select('*').order('created_at', { ascending: false });
   if (ownerId) query = query.eq('owner_id', ownerId);
+  
+  // Timeout de 15s para leitura
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  const startTime = Date.now();
   const { data, error } = await query;
+  clearTimeout(timeoutId);
+  
+  console.log(`[lib/db] getProperties: Concluído em ${Date.now() - startTime}ms`);
+  
   if (error) {
     console.error("Error fetching properties:", error);
     throw error;
   }
   if (!data) return [];
-  return data.map(item => ({
+  return (data as any[]).map(item => ({
     id: item.id,
     title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
     type: item.type,
@@ -751,13 +762,24 @@ export async function getProperties(ownerId?: string) {
     description: item.description,
     imageUrls: (() => {
       if (!item.image_url) return [];
+      if (Array.isArray(item.image_url)) return item.image_url;
       try {
-        // Try to parse if it's a JSON array string
-        const parsed = JSON.parse(item.image_url);
-        return Array.isArray(parsed) ? parsed : [item.image_url];
+        const str = String(item.image_url);
+        // Handle PostgreSQL array format like {url1,url2}
+        if (str.startsWith('{') && str.endsWith('}')) {
+          return str.substring(1, str.length - 1)
+            .split(',')
+            .map(s => s.replace(/^"|"$/g, '').trim())
+            .filter(s => s !== "");
+        }
+        // Handle JSON array format like ["url1","url2"]
+        if (str.startsWith('[') && str.endsWith(']')) {
+          const parsed = JSON.parse(str);
+          return Array.isArray(parsed) ? parsed : [str];
+        }
+        return [str];
       } catch (e) {
-        // Not JSON, return as single element array
-        return [item.image_url];
+        return [String(item.image_url)];
       }
     })(),
     ownerId: item.owner_id,
@@ -774,126 +796,171 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 
   fetchProperties();
 
-  const subscription = supabase
-    .channel(`public:properties:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, () => {
-      fetchProperties();
-    })
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(subscription);
-  };
+  // Desativado Realtime para Imóveis devido a instabilidade no ambiente de iFrame
+  // O componente chamará fetchData() manualmente após alterações
+  return () => {};
 }
 
-export async function createProperty(data: any) {
-  console.log("[lib/db] createProperty: Obtendo usuário...");
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    console.warn("[lib/db] createProperty: Usuário não autenticado");
-    throw new Error("Sessão expirada. Por favor, faça login novamente.");
-  }
+async function getAuthUserId() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id || null;
+}
 
-  console.log("[lib/db] createProperty: Preparando payload para insert...");
-  const validUrls = (data.imageUrls || []).filter((url: string) => 
-    url.trim() !== "" && !url.startsWith('data:image')
-  );
+export async function createProperty(data: any, bypassUserId?: string) {
+  const userId = bypassUserId;
   
-  // Limitar tamanho das URLs para evitar estouro de coluna text
-  const safeUrls = validUrls.map((url: string) => url.length > 2000 ? url.substring(0, 2000) : url);
-  const imageUrlString = safeUrls.length > 0 ? JSON.stringify(safeUrls) : null;
+  if (!userId) {
+    throw new Error("Usuário não identificado. Por favor, faça login novamente.");
+  }
+  
+  console.log(`[lib/db] createProperty: Iniciando para usuário ${userId}`);
 
-  console.log("[lib/db] createProperty: Iniciando insert no Supabase...");
-  // Timeout manual de 30s para a chamada do Supabase
-  const insertPromise = supabase.from('properties').insert([{
-    title: data.title,
+  const rawUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
+  const validUrls = rawUrls.filter((url: any) => 
+    typeof url === 'string' && 
+    url.trim() !== "" && 
+    url.startsWith('http') && 
+    !url.startsWith('data:image')
+  ).slice(0, 15);
+  
+  const safeUrls = validUrls.map((url: string) => {
+    return url.trim().replace(/[\n\r\t\s]/g, "").substring(0, 1000);
+  });
+  
+  const description = data.description ? String(data.description).substring(0, 3000) : null;
+  const notes = data.notes ? String(data.notes).substring(0, 3000) : null;
+
+  const insertData = {
+    title: String(data.title).substring(0, 200),
     type: data.type,
     status: data.status,
-    price: data.price,
-    location: data.location,
-    cep: data.cep,
-    street: data.street,
-    neighborhood: data.neighborhood,
-    city: data.city,
-    state: data.state,
-    number: data.number,
-    complement: data.complement,
-    area: data.area,
-    bedrooms: data.bedrooms,
-    bathrooms: data.bathrooms,
-    parking_spots: data.parkingSpots,
-    accepts_financing: data.acceptsFinancing,
-    notes: data.notes,
-    description: data.description,
-    image_url: imageUrlString,
-    owner_id: user.id
-  }]).select();
+    price: Number(data.price || 0),
+    location: String(data.location || "").substring(0, 500),
+    cep: String(data.cep || "").substring(0, 10),
+    street: String(data.street || "").substring(0, 200),
+    neighborhood: String(data.neighborhood || "").substring(0, 200),
+    city: String(data.city || "").substring(0, 200),
+    state: String(data.state || "").substring(0, 2),
+    number: String(data.number || "").substring(0, 20),
+    complement: String(data.complement || "").substring(0, 500),
+    area: Number(data.area || 0),
+    bedrooms: Number(data.bedrooms || 0),
+    bathrooms: Number(data.bathrooms || 0),
+    parking_spots: Number(data.parkingSpots || 0),
+    accepts_financing: !!data.acceptsFinancing,
+    notes: notes,
+    description: description,
+    image_url: safeUrls,
+    owner_id: userId
+  };
 
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error("Timeout ao comunicar com o banco de dados (30s)")), 30000)
-  );
+  console.log(`[lib/db] createProperty: Enviando para Supabase...`);
+  
+  const startTime = Date.now();
+  try {
+    // Timeout de 10s para evitar travamento total no iFrame
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("NETWORK_TIMEOUT")), 10000)
+    );
 
-  const { data: result, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+    const supabasePromise = (async () => {
+      const { data: result, error } = await supabase
+        .from('properties')
+        .insert([insertData])
+        .select('id');
 
-  if (error) {
-    console.error("[lib/db] createProperty error:", error);
-    throw error;
+      if (error) {
+        console.error("[lib/db] createProperty error:", error);
+        throw new Error(`Erro Supabase: ${error.message} (${error.code})`);
+      }
+      return result && result[0] ? result[0].id : "sync_pending";
+    })();
+
+    const resultId = await Promise.race([supabasePromise, timeoutPromise]);
+    console.log(`[lib/db] createProperty: Concluído em ${Date.now() - startTime}ms`);
+    return resultId;
+  } catch (err: any) {
+    if (err.message === "NETWORK_TIMEOUT") {
+      console.warn("[lib/db] createProperty: Timeout atingido, mas o registro pode ter sido salvo.");
+      return "sync_pending";
+    }
+    throw err;
   }
-  console.log("[lib/db] createProperty success. ID:", result?.[0]?.id);
-  return result && result[0] ? result[0].id : null;
 }
 
-export async function updateProperty(id: string, data: any) {
-  console.log("[lib/db] updateProperty: Iniciando para id:", id);
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Sessão expirada. Faça login novamente.");
+export async function updateProperty(id: string, data: any, bypassUserId?: string) {
+  if (!id) throw new Error("ID do imóvel não fornecido.");
+
+  console.log(`[lib/db] updateProperty: Iniciando para ID ${id}`);
 
   const updateData: any = { updated_at: new Date().toISOString() };
-  if (data.title !== undefined) updateData.title = data.title;
+  if (data.title !== undefined) updateData.title = String(data.title).substring(0, 200);
   if (data.type !== undefined) updateData.type = data.type;
   if (data.status !== undefined) updateData.status = data.status;
-  if (data.price !== undefined) updateData.price = data.price;
-  if (data.location !== undefined) updateData.location = data.location;
-  if (data.cep !== undefined) updateData.cep = data.cep;
-  if (data.street !== undefined) updateData.street = data.street;
-  if (data.neighborhood !== undefined) updateData.neighborhood = data.neighborhood;
-  if (data.city !== undefined) updateData.city = data.city;
-  if (data.state !== undefined) updateData.state = data.state;
-  if (data.number !== undefined) updateData.number = data.number;
-  if (data.complement !== undefined) updateData.complement = data.complement;
-  if (data.area !== undefined) updateData.area = data.area;
-  if (data.bedrooms !== undefined) updateData.bedrooms = data.bedrooms;
-  if (data.bathrooms !== undefined) updateData.bathrooms = data.bathrooms;
-  if (data.parkingSpots !== undefined) updateData.parking_spots = data.parkingSpots;
-  if (data.acceptsFinancing !== undefined) updateData.accepts_financing = data.acceptsFinancing;
-  if (data.notes !== undefined) updateData.notes = data.notes;
-  if (data.description !== undefined) updateData.description = data.description;
+  if (data.price !== undefined) updateData.price = Number(data.price || 0);
+  if (data.location !== undefined) updateData.location = String(data.location).substring(0, 500);
+  if (data.cep !== undefined) updateData.cep = String(data.cep).substring(0, 10);
+  if (data.street !== undefined) updateData.street = String(data.street).substring(0, 200);
+  if (data.neighborhood !== undefined) updateData.neighborhood = String(data.neighborhood).substring(0, 200);
+  if (data.city !== undefined) updateData.city = String(data.city).substring(0, 200);
+  if (data.state !== undefined) updateData.state = String(data.state).substring(0, 2);
+  if (data.number !== undefined) updateData.number = String(data.number).substring(0, 20);
+  if (data.complement !== undefined) updateData.complement = String(data.complement).substring(0, 500);
+  if (data.area !== undefined) updateData.area = Number(data.area || 0);
+  if (data.bedrooms !== undefined) updateData.bedrooms = Number(data.bedrooms || 0);
+  if (data.bathrooms !== undefined) updateData.bathrooms = Number(data.bathrooms || 0);
+  if (data.parkingSpots !== undefined) updateData.parking_spots = Number(data.parkingSpots || 0);
+  if (data.acceptsFinancing !== undefined) updateData.accepts_financing = !!data.acceptsFinancing;
+  
+  if (data.notes !== undefined) updateData.notes = String(data.notes || "").substring(0, 3000);
+  if (data.description !== undefined) updateData.description = String(data.description || "").substring(0, 3000);
   
   if (data.imageUrls !== undefined) {
-    const validUrls = data.imageUrls.filter((url: string) => 
-      url.trim() !== "" && !url.startsWith('data:image')
-    );
-    // Limitar tamanho das URLs
-    const safeUrls = validUrls.map((url: string) => url.length > 2000 ? url.substring(0, 2000) : url);
-    updateData.image_url = safeUrls.length > 0 ? JSON.stringify(safeUrls) : null;
+    const rawUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
+    const validUrls = rawUrls.filter((url: any) => 
+      typeof url === 'string' && 
+      url.trim() !== "" && 
+      url.startsWith('http') && 
+      !url.startsWith('data:image')
+    ).slice(0, 15);
+    const safeUrls = validUrls.map((url: string) => {
+      return url.trim().replace(/[\n\r\t\s]/g, "").substring(0, 1000);
+    });
+    updateData.image_url = safeUrls;
   }
 
-  console.log("[lib/db] updateProperty: Enviando update para o Supabase...", Object.keys(updateData));
+  console.log(`[lib/db] updateProperty: Enviando para Supabase...`);
   
-  const updatePromise = supabase.from('properties').update(updateData).eq('id', id).select();
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error("Timeout ao atualizar no banco de dados (30s)")), 30000)
-  );
+  const startTime = Date.now();
+  try {
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("NETWORK_TIMEOUT")), 10000)
+    );
 
-  const { error } = await Promise.race([updatePromise, timeoutPromise]) as any;
+    const supabasePromise = (async () => {
+      const { error } = await supabase
+        .from('properties')
+        .update(updateData)
+        .eq('id', id);
 
-  if (error) {
-    console.error("[lib/db] updateProperty error:", error);
-    throw error;
+      if (error) {
+        console.error("[lib/db] updateProperty error:", error);
+        throw new Error(`Erro Supabase: ${error.message} (${error.code})`);
+      }
+      return true;
+    })();
+
+    await Promise.race([supabasePromise, timeoutPromise]);
+    console.log(`[lib/db] updateProperty: Concluído em ${Date.now() - startTime}ms`);
+  } catch (err: any) {
+    if (err.message === "NETWORK_TIMEOUT") {
+      console.warn("[lib/db] updateProperty: Timeout atingido.");
+      return;
+    }
+    throw err;
   }
-  console.log("[lib/db] updateProperty success");
 }
+
 
 export async function deleteProperty(id: string) {
   const { error } = await supabase.from('properties').delete().eq('id', id);

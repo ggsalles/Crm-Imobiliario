@@ -26,6 +26,12 @@ const nextConfig: NextConfig = {
         hostname: 'images.remote.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'hocxxcpdpmlgcssxforn.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
       }
     ],
   },

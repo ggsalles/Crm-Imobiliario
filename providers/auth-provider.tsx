@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { UserProfile } from "@/lib/db";
@@ -204,7 +204,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email?: string, password?: string) => {
     if (!email || !password) {
-      // Supabase Google Login
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -216,7 +215,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-
     const { error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
@@ -224,12 +222,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       if (error.message.includes('rate limit')) {
-        throw new Error("Limite de tentativas excedido. Por favor, aguarde alguns minutos ou verifique as configurações de segurança do seu painel Supabase.");
+        throw new Error("Limite de tentativas excedido. Por favor, aguarde alguns minutos.");
       }
-      if (error.message === 'Invalid login credentials') {
-        throw new Error("E-mail ou senha incorretos. Se você acabou de se cadastrar, verifique se confirmou seu e-mail no link enviado.");
-      }
-      console.error("Login unexpected error:", error);
       throw error;
     }
   };
@@ -238,69 +232,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (password.length < 6) {
       throw new Error("A senha deve ter pelo menos 6 caracteres.");
     }
-
     const cleanEmail = email.trim().toLowerCase();
-    console.log(`Attempting registration for: "${cleanEmail}"`);
-
     const { error, data } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
-      options: {
-        data: {
-          display_name: name,
-        }
-      }
+      options: { data: { display_name: name } }
     });
-
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('rate limit')) {
-        throw new Error("Limite de e-mails/cadastros excedido pelo servidor. Aguarde 1 hora ou desative 'Confirm Email' no painel do Supabase para testes.");
-      }
-      if (msg.includes('already registered')) {
-        throw new Error("Este e-mail já está em uso.");
-      }
-      console.error("Registration unexpected error:", error);
-      throw error;
-    }
-    
-    // Check if session exists (auto-login) or if verification is required
+    if (error) throw error;
     if (data.user && !data.session) {
-      toast.info("Cadastro realizado! Por favor, verifique seu e-mail para confirmar a conta e poder fazer login.", {
-        duration: 10000,
-      });
-    } else if (data.session) {
-      toast.success("Conta criada com sucesso!");
+      toast.info("Verifique seu e-mail para confirmar a conta.");
     }
   };
 
   const resetPassword = async (email: string) => {
-    // Determine the redirect URL. We try to use the current origin if possible.
-    // In AI Studio, window.location.origin should point to the correct ais-dev or ais-pre URL.
-    const redirectUrl = typeof window !== 'undefined' 
-      ? `${window.location.origin}/reset-password`
-      : "";
-
-    console.log("Attempting password reset for", email, "with redirect to:", redirectUrl);
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectUrl,
-    });
-    
-    if (error) {
-      console.error("Supabase Reset Password Error:", error);
-      throw error;
-    }
-    
-    toast.success("Link de recuperação enviado para o seu e-mail.");
+    const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : "";
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
+    if (error) throw error;
+    toast.success("Link de recuperação enviado.");
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
   };
 
+  const contextValue = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    login,
+    register,
+    resetPassword,
+    logout
+  }), [user, profile, loading]);
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, register, resetPassword, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
