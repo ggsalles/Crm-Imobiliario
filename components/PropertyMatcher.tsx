@@ -93,8 +93,12 @@ export function PropertyMatcher({ deal, contact, onUpdate }: PropertyMatcherProp
       
       const result = await safeAiCall(prompt, "Excelente custo-benefício e localização privilegiada para este perfil.");
 
-      if (result.isError && result.errorType === 'quota') {
-        toast.error("Limite de uso da IA atingido.");
+      if (result.isError) {
+        if (result.errorType === 'quota') {
+          toast.error("Limite de uso da IA atingido.");
+        } else if (result.errorType === 'missing_key') {
+          toast.error("IA não configurada.");
+        }
       }
 
       setMatchingResults(prev => ({ ...prev, [property.id]: result.text }));

@@ -35,12 +35,18 @@ export function AIMessageDrafter({ partnerName, onSelect, onClose }: AIMessageDr
 
       const result = await safeAiCall(prompt, "");
 
-      if (result.isError && result.errorType === 'quota') {
-        toast.error("Limite de uso da IA atingido. Tente novamente mais tarde.");
+      if (result.isError) {
+        if (result.errorType === 'quota') {
+          toast.error("Limite de uso da IA atingido. Tente novamente mais tarde.");
+        } else if (result.errorType === 'missing_key') {
+          toast.error("IA não configurada. Defina a chave de API no servidor.");
+        }
       }
 
-      if (result.text) {
+      if (result.text && !result.isError) {
         onSelect(result.text);
+      } else if (!result.text && result.isError) {
+        // Handled by toast above
       } else {
         toast.error("Não foi possível gerar a mensagem. Tente novamente.");
       }

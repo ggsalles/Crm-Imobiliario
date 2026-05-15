@@ -54,8 +54,12 @@ export function AISalesAssistant({ deal, contact, company }: AISalesAssistantPro
 
       const result = await safeAiCall(prompt, "Foque na construção de valor e no agendamento de uma visita presencial para acelerar o fechamento.");
       
-      if (result.isError && result.errorType === 'quota') {
-        toast.error("Capacidade da IA temporariamente excedida.");
+      if (result.isError) {
+        if (result.errorType === 'quota') {
+          toast.error("Capacidade da IA temporariamente excedida.");
+        } else if (result.errorType === 'missing_key') {
+          toast.error("IA não configurada no servidor.");
+        }
       }
       
       setStrategy(result.text);
