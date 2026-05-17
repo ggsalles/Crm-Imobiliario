@@ -1,5 +1,6 @@
 {
   "name": "SalesScore",
-  "description": "CRM Inteligente com branding personalizável para o mercado imobiliário elite.",
-  "requestFramePermissions": []
+  "description": "CRM mobiliário de elite para gestão de contatos e inventário.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

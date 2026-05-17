@@ -62,11 +62,16 @@ create table if not exists properties (
   accepts_financing boolean default false,
   notes text,
   description text,
-  image_url text,
+  image_url text, -- Store as JSON array or text
   owner_id uuid references auth.users on delete cascade not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Indices for performance
+create index if not exists idx_properties_owner_id on properties(owner_id);
+create index if not exists idx_properties_created_at on properties(created_at desc);
+create index if not exists idx_properties_status on properties(status);
 
 -- 5. Deals
 create table if not exists deals (
@@ -151,6 +156,14 @@ create table if not exists messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- 11. Property Images (Sub-table for multiple images per property)
+create table if not exists property_images (
+  id uuid default gen_random_uuid() primary key,
+  property_id uuid references properties(id) on delete cascade not null,
+  url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Enable RLS (Row Level Security) on all tables (idempotent)
 do $$ 
 begin
@@ -164,6 +177,7 @@ begin
   alter table timeline enable row level security;
   alter table conversations enable row level security;
   alter table messages enable row level security;
+  alter table property_images enable row level security;
 exception when others then
   null;
 end $$;
@@ -215,7 +229,7 @@ begin
   begin
     for t in select table_name from information_schema.tables 
              where table_schema = 'public' 
-             and table_name not in ('profiles', 'conversations', 'messages')
+             and table_name not in ('profiles', 'conversations', 'messages', 'property_images')
     loop
       execute format('drop policy if exists "Owners and Admins can manage everything" on %I', t);
       execute format('create policy "Owners and Admins can manage everything" on %I for all using (
@@ -223,6 +237,17 @@ begin
       )', t);
     end loop;
   end;
+
+  -- specific for property_images
+  drop policy if exists "Users can manage images of their properties" on property_images;
+  create policy "Users can manage images of their properties" on property_images
+  for all using (
+    exists (
+      select 1 from properties p
+      where p.id = property_id
+      and (p.owner_id = auth.uid() OR public.is_admin())
+    )
+  );
 
   -- 3. Specific policies for Conversations and Messages (Participant-based)
   -- Explicitly drop the broad policy if it was applied before exclusion
@@ -246,7 +271,57 @@ begin
     );
 end $$;
 
--- 3. Enable Realtime for all tables
+-- 5. Storage Buckets and Policies
+-- Ensure the buckets exist
+insert into storage.buckets (id, name, public)
+values ('property-images', 'property-images', true)
+on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('chat-attachments', 'chat-attachments', true)
+on conflict (id) do nothing;
+
+-- Grant permissions (sometimes needed if not default)
+grant usage on schema storage to authenticated;
+grant all on table storage.objects to authenticated;
+grant all on table storage.buckets to authenticated;
+
+-- Storage Policies for property-images
+drop policy if exists "Allow authenticated uploads to property-images" on storage.objects;
+drop policy if exists "Allow owners to manage property images" on storage.objects;
+drop policy if exists "Allow public selection of property images" on storage.objects;
+drop policy if exists "Permissive property-images" on storage.objects;
+
+create policy "Manage property-images for all"
+on storage.objects for all
+using ( bucket_id = 'property-images' )
+with check ( bucket_id = 'property-images' );
+
+create policy "Public view for property-images"
+on storage.objects for select
+using ( bucket_id = 'property-images' );
+
+-- Broad insert policy for all buckets
+drop policy if exists "Authenticated upload all buckets" on storage.objects;
+create policy "Global insert for authenticated"
+on storage.objects for insert
+with check ( auth.role() = 'authenticated' );
+
+-- Storage Policies for chat-attachments
+drop policy if exists "Allow authenticated uploads to chat-attachments" on storage.objects;
+drop policy if exists "Allow users to manage their chat attachments" on storage.objects;
+drop policy if exists "Allow public selection of chat attachments" on storage.objects;
+
+create policy "Manage chat-attachments for authenticated"
+on storage.objects for all
+using ( bucket_id = 'chat-attachments' and auth.role() = 'authenticated' )
+with check ( bucket_id = 'chat-attachments' and auth.role() = 'authenticated' );
+
+create policy "Public view for chat-attachments"
+on storage.objects for select
+using ( bucket_id = 'chat-attachments' );
+
+-- 6. Enable Realtime for all tables
 -- This is often done by adding tables to the supabase_realtime publication
 do $$
 begin

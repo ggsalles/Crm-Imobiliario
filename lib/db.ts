@@ -147,24 +147,33 @@ export interface UserProfile {
 
 // Contacts
 export async function getContacts(ownerId?: string) {
-  let query = supabase.from('contacts').select('*').order('name', { ascending: true });
-  if (ownerId) query = query.eq('owner_id', ownerId);
-  const { data } = await query;
-  if (!data) return [];
-  return data.map(item => ({
-    id: item.id,
-    name: item.name,
-    role: item.role,
-    email: item.email,
-    phone: item.phone,
-    type: item.type,
-    department: item.department,
-    companyId: item.company_id,
-    source: item.source,
-    ownerId: item.owner_id,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at
-  })) as Contact[];
+  try {
+    let query = supabase.from('contacts').select('*').order('name', { ascending: true });
+    if (ownerId) query = query.eq('owner_id', ownerId);
+    const { data, error } = (await winTimeout(query as any, 30000, "fetch contacts")) as any;
+    if (error) {
+      console.error("[lib/db] Error in getContacts:", error);
+      throw error;
+    }
+    if (!data) return [];
+    return data.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      role: item.role,
+      email: item.email,
+      phone: item.phone,
+      type: item.type,
+      department: item.department,
+      companyId: item.company_id,
+      source: item.source,
+      ownerId: item.owner_id,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    })) as Contact[];
+  } catch (err) {
+    console.error("[lib/db] getContacts FATAL:", err);
+    return [];
+  }
 }
 
 export function subscribeToContacts(callback: (contacts: Contact[]) => void, ownerId?: string) {
@@ -247,19 +256,25 @@ export async function deleteContact(id: string) {
 
 // Companies
 export async function getCompanies(ownerId?: string) {
-  let query = supabase.from('companies').select('*').order('name', { ascending: true });
-  if (ownerId) query = query.eq('owner_id', ownerId);
-  const { data } = await query;
-  if (!data) return [];
-  return data.map(item => ({
-    id: item.id,
-    name: item.name,
-    industry: item.industry,
-    website: item.website,
-    ownerId: item.owner_id,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at
-  })) as Company[];
+  try {
+    let query = supabase.from('companies').select('*').order('name', { ascending: true });
+    if (ownerId) query = query.eq('owner_id', ownerId);
+    const { data, error } = (await winTimeout(query as any, 30000, "fetch companies")) as any;
+    if (error) throw error;
+    if (!data) return [];
+    return data.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      industry: item.industry,
+      website: item.website,
+      ownerId: item.owner_id,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    })) as Company[];
+  } catch (err) {
+    console.error("[lib/db] getCompanies FATAL:", err);
+    return [];
+  }
 }
 
 export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
@@ -314,22 +329,28 @@ export async function deleteCompany(id: string) {
 
 // Deals
 export async function getDeals(ownerId?: string) {
-  let query = supabase.from('deals').select('*').order('created_at', { ascending: false });
-  if (ownerId) query = query.eq('owner_id', ownerId);
-  const { data } = await query;
-  if (!data) return [];
-  return data.map(item => ({
-    id: item.id,
-    title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
-    value: item.value,
-    stage: item.stage,
-    companyId: item.company_id,
-    contactId: item.contact_id,
-    propertyId: item.property_id,
-    ownerId: item.owner_id,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at
-  })) as Deal[];
+  try {
+    let query = supabase.from('deals').select('*').order('created_at', { ascending: false });
+    if (ownerId) query = query.eq('owner_id', ownerId);
+    const { data, error } = (await winTimeout(query as any, 30000, "fetch deals")) as any;
+    if (error) throw error;
+    if (!data) return [];
+    return data.map((item: any) => ({
+      id: item.id,
+      title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
+      value: item.value,
+      stage: item.stage,
+      companyId: item.company_id,
+      contactId: item.contact_id,
+      propertyId: item.property_id,
+      ownerId: item.owner_id,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    })) as Deal[];
+  } catch (err) {
+    console.error("[lib/db] getDeals FATAL:", err);
+    return [];
+  }
 }
 
 export async function getDealsByContact(contactId: string) {
@@ -719,73 +740,179 @@ export async function createTimelineEvent(data: any) {
 }
 
 // Properties
-export async function getProperties(ownerId?: string) {
-  console.log("[lib/db] getProperties: Buscando imóveis...");
-  let query = supabase.from('properties').select('*').order('created_at', { ascending: false });
-  if (ownerId) query = query.eq('owner_id', ownerId);
-  
-  // Timeout de 15s para leitura
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  const startTime = Date.now();
-  const { data, error } = await query;
-  clearTimeout(timeoutId);
-  
-  console.log(`[lib/db] getProperties: Concluído em ${Date.now() - startTime}ms`);
-  
-  if (error) {
-    console.error("Error fetching properties:", error);
-    throw error;
+/**
+ * Utilitário de timeout para operações do Supabase com log de conectividade
+ */
+async function winTimeout<T>(promise: Promise<T>, ms: number = 90000, label: string = "Operação"): Promise<T> {
+  let timeoutId: any;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const status = typeof navigator !== 'undefined' ? (navigator.onLine ? 'Conectado (Online)' : 'Desconectado (Offline)') : 'N/A';
+      console.error(`[TIMEOUT_CRÍTICO] ${label} excedeu ${ms}ms. Status do Navegador: ${status}.`);
+      reject(new Error(`TIMEOUT_DB: A operação no banco (${label}) excedeu ${ms}ms.`));
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (!data) return [];
-  return (data as any[]).map(item => ({
-    id: item.id,
-    title: item.title === 'EM CONSTRUÇÃO' ? 'Em Construção' : item.title,
-    type: item.type,
-    status: item.status,
-    price: item.price,
-    location: item.location,
-    cep: item.cep,
-    street: item.street,
-    neighborhood: item.neighborhood,
-    city: item.city,
-    state: item.state,
-    number: item.number,
-    complement: item.complement,
-    area: item.area,
-    bedrooms: item.bedrooms,
-    bathrooms: item.bathrooms,
-    parkingSpots: item.parking_spots,
-    acceptsFinancing: item.accepts_financing,
-    notes: item.notes,
-    description: item.description,
-    imageUrls: (() => {
-      if (!item.image_url) return [];
-      if (Array.isArray(item.image_url)) return item.image_url;
-      try {
-        const str = String(item.image_url);
-        // Handle PostgreSQL array format like {url1,url2}
-        if (str.startsWith('{') && str.endsWith('}')) {
-          return str.substring(1, str.length - 1)
-            .split(',')
-            .map(s => s.replace(/^"|"$/g, '').trim())
-            .filter(s => s !== "");
-        }
-        // Handle JSON array format like ["url1","url2"]
-        if (str.startsWith('[') && str.endsWith(']')) {
-          const parsed = JSON.parse(str);
-          return Array.isArray(parsed) ? parsed : [str];
-        }
-        return [str];
-      } catch (e) {
-        return [String(item.image_url)];
+}
+
+/**
+ * Utilitário de retry para operações instáveis
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries: number = 3, delay: number = 2000, label: string = "Operação"): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < retries + 1; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const isTimeout = err.message?.includes('TIMEOUT_DB') || err.message?.includes('timeout');
+      const isNetwork = err.message?.includes('fetch') || err.message?.includes('Network');
+      
+      if (i < retries && (isTimeout || isNetwork)) {
+        console.warn(`[lib/db] ${label} falhou (tentativa ${i + 1}/${retries + 1}). Retentando em ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 1.5; // Backoff suave
+      } else {
+        break;
       }
-    })(),
-    ownerId: item.owner_id,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at
-  })) as any[];
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Helper para chamadas REST nativas ao Supabase (mais estável em iframes)
+ */
+async function supabaseNativeFetch(path: string, options: any = {}) {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${path}`;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Tenta obter o token da sessão atual para respeitar RLS
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token || key;
+  
+  if (!sessionData.session) {
+    console.warn(`[NativeFetch] Nenhuma sessão ativa encontrada para ${path}. Usando anon key.`);
+  } else {
+    // Log do início do token para debug sem expor segredos
+    console.log(`[NativeFetch] Token encontrado (${sessionData.session.access_token.substring(0, 10)}...) para ${path}`);
+  }
+  
+  const headers = {
+    "apikey": key || "",
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+    ...options.headers
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`[NativeFetch] Erro em ${path}:`, response.status, errorBody);
+      throw new Error(`DB_ERROR: ${response.status} - ${errorBody}`);
+    }
+
+    if (response.status === 204) return null;
+    
+    // Tenta ler o corpo como texto primeiro para verificar se está vazio
+    const text = await response.text();
+    if (!text || text.trim().length === 0) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.warn(`[NativeFetch] Resposta não é um JSON válido em ${path}:`, text.substring(0, 100));
+      return text;
+    }
+  } catch (err: any) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      console.error(`[NativeFetch] Erro de rede/CORS em ${path}:`, err);
+      throw new Error("Erro de conexão com o banco de dados. Verifique sua internet.");
+    }
+    throw err;
+  }
+}
+
+export async function getProperties(ownerId?: string) {
+  const startTime = Date.now();
+  console.log("[lib/db] getProperties: Buscando imóveis via Fetch...");
+  
+  try {
+    let path = `properties?select=*&order=created_at.desc&limit=60`;
+    if (ownerId) path += `&owner_id=eq.${ownerId}`;
+    
+    const properties = await supabaseNativeFetch(path);
+    if (!properties || properties.length === 0) return [];
+
+    // Busca imagens
+    const propertyIds = properties.map((p: any) => p.id);
+    let images: any[] = [];
+    try {
+      images = await supabaseNativeFetch(`property_images?select=property_id,url&property_id=in.(${propertyIds.join(',')})`) || [];
+    } catch (e) {
+      console.warn("[lib/db] Erro ao carregar fotos (não fatal):", e);
+    }
+
+    console.log(`[lib/db] getProperties concluído em ${Date.now() - startTime}ms`);
+
+    return properties.map((item: any) => {
+      let urls: string[] = images
+        .filter((img: any) => img.property_id === item.id)
+        .map((img: any) => String(img.url));
+      
+      if (urls.length === 0 && item.image_url) {
+        try {
+          const parsed = typeof item.image_url === 'string' ? JSON.parse(item.image_url) : item.image_url;
+          urls = Array.isArray(parsed) ? parsed : [String(item.image_url)];
+        } catch {
+          urls = [String(item.image_url)];
+        }
+      }
+
+      return {
+        id: item.id,
+        title: String(item.title || "Sem título"),
+        type: item.type,
+        status: item.status,
+        price: Number(item.price || 0),
+        location: String(item.location || ""),
+        cep: String(item.cep || ""),
+        street: String(item.street || ""),
+        neighborhood: String(item.neighborhood || ""),
+        city: String(item.city || ""),
+        state: String(item.state || ""),
+        number: String(item.number || ""),
+        complement: item.complement ? String(item.complement) : null,
+        area: Number(item.area || 0),
+        bedrooms: Number(item.bedrooms || 0),
+        bathrooms: Number(item.bathrooms || 0),
+        parkingSpots: Number(item.parking_spots || 0),
+        acceptsFinancing: Boolean(item.accepts_financing),
+        notes: item.notes ? String(item.notes) : null,
+        description: item.description ? String(item.description) : null,
+        imageUrls: urls,
+        ownerId: item.owner_id,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at
+      } as Property;
+    });
+  } catch (err: any) {
+    console.error("[lib/db] getProperties FATAL:", err);
+    throw err;
+  }
 }
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
@@ -795,177 +922,162 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
   };
 
   fetchProperties();
-
-  // Desativado Realtime para Imóveis devido a instabilidade no ambiente de iFrame
-  // O componente chamará fetchData() manualmente após alterações
   return () => {};
 }
 
-async function getAuthUserId() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id || null;
-}
-
-export async function createProperty(data: any, bypassUserId?: string) {
-  const userId = bypassUserId;
-  
-  if (!userId) {
-    throw new Error("Usuário não identificado. Por favor, faça login novamente.");
-  }
-  
-  console.log(`[lib/db] createProperty: Iniciando para usuário ${userId}`);
-
-  const rawUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
-  const validUrls = rawUrls.filter((url: any) => 
-    typeof url === 'string' && 
-    url.trim() !== "" && 
-    url.startsWith('http') && 
-    !url.startsWith('data:image')
-  ).slice(0, 15);
-  
-  const safeUrls = validUrls.map((url: string) => {
-    return url.trim().replace(/[\n\r\t\s]/g, "").substring(0, 1000);
-  });
-  
-  const description = data.description ? String(data.description).substring(0, 3000) : null;
-  const notes = data.notes ? String(data.notes).substring(0, 3000) : null;
-
-  const insertData = {
-    title: String(data.title).substring(0, 200),
-    type: data.type,
-    status: data.status,
+/**
+ * Higieniza dados para evitar problemas com Proxies do React ou tipos complexos
+ */
+function sanitizePropertyData(data: any, userId: string) {
+  const sanitized = {
+    title: String(data.title || "").substring(0, 500),
+    type: String(data.type || "apartamento"),
+    status: String(data.status || "disponível"),
     price: Number(data.price || 0),
-    location: String(data.location || "").substring(0, 500),
-    cep: String(data.cep || "").substring(0, 10),
-    street: String(data.street || "").substring(0, 200),
-    neighborhood: String(data.neighborhood || "").substring(0, 200),
-    city: String(data.city || "").substring(0, 200),
-    state: String(data.state || "").substring(0, 2),
-    number: String(data.number || "").substring(0, 20),
-    complement: String(data.complement || "").substring(0, 500),
+    location: String(data.location || "").substring(0, 1000),
+    cep: String(data.cep || "").substring(0, 20),
+    street: String(data.street || "").substring(0, 500),
+    neighborhood: String(data.neighborhood || "").substring(0, 500),
+    city: String(data.city || "").substring(0, 500),
+    state: String(data.state || "").substring(0, 10),
+    number: String(data.number || "").substring(0, 50),
+    complement: data.complement ? String(data.complement).substring(0, 1000) : null,
     area: Number(data.area || 0),
     bedrooms: Number(data.bedrooms || 0),
     bathrooms: Number(data.bathrooms || 0),
     parking_spots: Number(data.parkingSpots || 0),
-    accepts_financing: !!data.acceptsFinancing,
-    notes: notes,
-    description: description,
-    image_url: safeUrls,
+    accepts_financing: Boolean(data.acceptsFinancing),
+    notes: data.notes ? String(data.notes).substring(0, 5000) : null,
+    description: data.description ? String(data.description).substring(0, 5000) : null,
     owner_id: userId
   };
 
-  console.log(`[lib/db] createProperty: Enviando para Supabase...`);
+  // Coluna legado por segurança
+  let legacyImages = "[]";
+  if (data.imageUrls && Array.isArray(data.imageUrls)) {
+    legacyImages = JSON.stringify(data.imageUrls.filter((u: any) => typeof u === 'string'));
+  }
+
+  return { sanitized, legacyImages };
+}
+
+export async function createProperty(data: any, bypassUserId?: string) {
+  const userId = bypassUserId;
+  if (!userId) throw new Error("Usuário não identificado.");
   
-  const startTime = Date.now();
+  const { sanitized } = sanitizePropertyData(data, userId);
+  
+  let cleanImageUrls: string[] = [];
+  if (Array.isArray(data.imageUrls)) {
+    cleanImageUrls = data.imageUrls.map((u: any) => String(u || '').trim()).filter((u: string) => u.length > 0);
+  }
+
+  const insertData = JSON.parse(JSON.stringify({ 
+    ...sanitized, 
+    image_url: JSON.stringify(cleanImageUrls) 
+  }));
+
   try {
-    // Timeout de 10s para evitar travamento total no iFrame
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("NETWORK_TIMEOUT")), 10000)
-    );
+    console.log("[lib/db] createProperty: Inserindo via Fetch...");
+    const result = await supabaseNativeFetch('properties', {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify(insertData)
+    });
 
-    const supabasePromise = (async () => {
-      const { data: result, error } = await supabase
-        .from('properties')
-        .insert([insertData])
-        .select('id');
+    let propertyId: string;
 
-      if (error) {
-        console.error("[lib/db] createProperty error:", error);
-        throw new Error(`Erro Supabase: ${error.message} (${error.code})`);
-      }
-      return result && result[0] ? result[0].id : "sync_pending";
-    })();
-
-    const resultId = await Promise.race([supabasePromise, timeoutPromise]);
-    console.log(`[lib/db] createProperty: Concluído em ${Date.now() - startTime}ms`);
-    return resultId;
-  } catch (err: any) {
-    if (err.message === "NETWORK_TIMEOUT") {
-      console.warn("[lib/db] createProperty: Timeout atingido, mas o registro pode ter sido salvo.");
-      return "sync_pending";
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      console.warn("[lib/db] createProperty: Inserção retornou vácuo, tentando buscar ID preventivamente...");
+      // Fallback: busca o imóvel mais recente do usuário se o result for vácuo mas não deu erro
+      const latest = await supabaseNativeFetch(`properties?owner_id=eq.${userId}&order=created_at.desc&limit=1`);
+      if (!latest || latest.length === 0) throw new Error("Erro ao criar imóvel: Nenhum dado retornado.");
+      propertyId = latest[0].id;
+    } else {
+      propertyId = result[0].id;
     }
+
+    if (cleanImageUrls.length > 0) {
+      console.log(`[lib/db] createProperty: Inserindo ${cleanImageUrls.length} fotos...`);
+      for (const url of cleanImageUrls) {
+        try {
+          await supabaseNativeFetch('property_images', {
+            method: "POST",
+            body: JSON.stringify({ property_id: propertyId, url })
+          });
+        } catch (e) {
+          console.warn("[lib/db] Erro ao inserir imagem individual:", url, e);
+        }
+      }
+    }
+
+    return propertyId;
+  } catch (err) {
+    console.error("[lib/db] createProperty FATAL:", err);
     throw err;
   }
 }
 
 export async function updateProperty(id: string, data: any, bypassUserId?: string) {
-  if (!id) throw new Error("ID do imóvel não fornecido.");
+  if (!id) throw new Error("ID do imóvel é obrigatório.");
+  const userId = bypassUserId;
+  if (!userId) throw new Error("Usuário não identificado.");
 
-  console.log(`[lib/db] updateProperty: Iniciando para ID ${id}`);
+  const { sanitized } = sanitizePropertyData(data, userId);
 
-  const updateData: any = { updated_at: new Date().toISOString() };
-  if (data.title !== undefined) updateData.title = String(data.title).substring(0, 200);
-  if (data.type !== undefined) updateData.type = data.type;
-  if (data.status !== undefined) updateData.status = data.status;
-  if (data.price !== undefined) updateData.price = Number(data.price || 0);
-  if (data.location !== undefined) updateData.location = String(data.location).substring(0, 500);
-  if (data.cep !== undefined) updateData.cep = String(data.cep).substring(0, 10);
-  if (data.street !== undefined) updateData.street = String(data.street).substring(0, 200);
-  if (data.neighborhood !== undefined) updateData.neighborhood = String(data.neighborhood).substring(0, 200);
-  if (data.city !== undefined) updateData.city = String(data.city).substring(0, 200);
-  if (data.state !== undefined) updateData.state = String(data.state).substring(0, 2);
-  if (data.number !== undefined) updateData.number = String(data.number).substring(0, 20);
-  if (data.complement !== undefined) updateData.complement = String(data.complement).substring(0, 500);
-  if (data.area !== undefined) updateData.area = Number(data.area || 0);
-  if (data.bedrooms !== undefined) updateData.bedrooms = Number(data.bedrooms || 0);
-  if (data.bathrooms !== undefined) updateData.bathrooms = Number(data.bathrooms || 0);
-  if (data.parkingSpots !== undefined) updateData.parking_spots = Number(data.parkingSpots || 0);
-  if (data.acceptsFinancing !== undefined) updateData.accepts_financing = !!data.acceptsFinancing;
-  
-  if (data.notes !== undefined) updateData.notes = String(data.notes || "").substring(0, 3000);
-  if (data.description !== undefined) updateData.description = String(data.description || "").substring(0, 3000);
-  
-  if (data.imageUrls !== undefined) {
-    const rawUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
-    const validUrls = rawUrls.filter((url: any) => 
-      typeof url === 'string' && 
-      url.trim() !== "" && 
-      url.startsWith('http') && 
-      !url.startsWith('data:image')
-    ).slice(0, 15);
-    const safeUrls = validUrls.map((url: string) => {
-      return url.trim().replace(/[\n\r\t\s]/g, "").substring(0, 1000);
-    });
-    updateData.image_url = safeUrls;
+  let cleanImageUrls: string[] = [];
+  if (Array.isArray(data.imageUrls)) {
+    cleanImageUrls = data.imageUrls.map((u: any) => String(u || '').trim()).filter((u: string) => u.length > 0);
   }
 
-  console.log(`[lib/db] updateProperty: Enviando para Supabase...`);
-  
-  const startTime = Date.now();
+  const updateData = JSON.parse(JSON.stringify({
+    ...sanitized,
+    image_url: JSON.stringify(cleanImageUrls),
+    updated_at: new Date().toISOString(),
+  }));
+
   try {
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("NETWORK_TIMEOUT")), 10000)
-    );
+    console.log("[lib/db] updateProperty: Atualizando via Fetch...");
+    await supabaseNativeFetch(`properties?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify(updateData)
+    });
 
-    const supabasePromise = (async () => {
-      const { error } = await supabase
-        .from('properties')
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) {
-        console.error("[lib/db] updateProperty error:", error);
-        throw new Error(`Erro Supabase: ${error.message} (${error.code})`);
-      }
-      return true;
-    })();
-
-    await Promise.race([supabasePromise, timeoutPromise]);
-    console.log(`[lib/db] updateProperty: Concluído em ${Date.now() - startTime}ms`);
-  } catch (err: any) {
-    if (err.message === "NETWORK_TIMEOUT") {
-      console.warn("[lib/db] updateProperty: Timeout atingido.");
-      return;
+    // Sincroniza property_images
+    try {
+      await supabaseNativeFetch(`property_images?property_id=eq.${id}`, {
+        method: "DELETE"
+      });
+    } catch (e) {
+       console.warn("[lib/db] Erro ao deletar imagens antigas:", e);
     }
+
+    for (const url of cleanImageUrls) {
+      try {
+        await supabaseNativeFetch('property_images', {
+          method: "POST",
+          headers: { "Prefer": "return=minimal" },
+          body: JSON.stringify({ property_id: id, url })
+        });
+      } catch (e) {
+        console.error("[lib/db] Erro ao inserir imagem individual:", url, e);
+      }
+    }
+
+    console.log("[lib/db] updateProperty: FIM ok.");
+    return id;
+  } catch (err) {
+    console.error("[lib/db] updateProperty FATAL:", err);
     throw err;
   }
 }
-
 
 export async function deleteProperty(id: string) {
   const { error } = await supabase.from('properties').delete().eq('id', id);
   if (error) throw error;
 }
+
 
 export async function getContact(id: string) {
   const { data, error } = await supabase.from('contacts').select('*').eq('id', id).maybeSingle();
@@ -1215,7 +1327,10 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
 
   const { error: uploadError } = await supabase.storage
     .from(bucketName)
-    .upload(filePath, file);
+    .upload(filePath, file, {
+      upsert: true,
+      cacheControl: '3600'
+    });
 
   if (uploadError) {
     console.error(`[Storage] Error uploading to "${bucketName}":`, uploadError);

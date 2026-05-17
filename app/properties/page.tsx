@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Plus, 
@@ -36,7 +36,7 @@ import {
   updateProperty, 
   deleteProperty, 
   uploadFile,
-  Property 
+  Property
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import Image from "next/image";
@@ -57,11 +57,13 @@ export default function PropertiesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
+  const isSubmittingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     if (!user || !profile) return;
     setLoading(true);
     try {
+      console.log("[Properties] Sincronizando inventário para usuário:", user.id);
       const ownerId = profile.role === 'Admin' ? undefined : user.id;
       const data = await getProperties(ownerId);
       setProperties(data);
@@ -126,12 +128,28 @@ export default function PropertiesPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) router.push("/login");
-  }, [user, authLoading, router]);
+    // Safety timeout: force loading to false if it takes too long
+    const timer = setTimeout(() => {
+      if (loading && properties.length === 0) {
+        console.warn("[Properties] Safety timeout (3.5s) triggered. Forcing loading false.");
+        setLoading(false);
+      }
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [loading, properties.length]);
+
+  useEffect(() => {
+    console.log("[Properties] Auth State:", { authLoading, hasUser: !!user, hasProfile: !!profile });
+    if (!authLoading && !user) {
+      console.log("[Properties] Roteando para login...");
+      router.push("/login");
+    }
+  }, [user, authLoading, profile, router]);
 
   useEffect(() => {
     if (!user || !profile) return;
     
+    console.log("[Properties] Usuário autenticado, iniciando busca de dados...");
     fetchData();
   }, [user, profile, fetchData]);
 
@@ -158,117 +176,182 @@ export default function PropertiesPage() {
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [isDragging, setIsDragging] = useState(false);
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande. Máximo 5MB.");
-      return;
-    }
+  const processFiles = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
 
+    const totalFiles = files.length;
+    let uploadedCount = 0;
+    
     setIsUploading(true);
+    const toastId = toast.loading(`Enviando ${totalFiles} ${totalFiles === 1 ? 'imagem' : 'imagens'}...`);
+
     try {
-      const result = await uploadFile(file);
-      setImageUrls(prev => [...prev, result.url]);
-      toast.success("Imagem enviada!");
+      const uploadPromises = Array.from(files).map(async (file) => {
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error(`Arquivo "${file.name}" é muito grande (Máx 10MB).`);
+        }
+        
+        try {
+          const result = await uploadFile(file);
+          uploadedCount++;
+          return result.url;
+        } catch (err: any) {
+          console.error(`Erro ao subir ${file.name}:`, err);
+          throw err;
+        }
+      });
+
+      const urls = await Promise.all(uploadPromises);
+      setImageUrls(prev => [...prev, ...urls]);
+      toast.success(`${uploadedCount} ${uploadedCount === 1 ? 'imagem enviada' : 'imagens enviadas'} com sucesso!`, { id: toastId });
     } catch (error: any) {
-      console.error("Erro no upload:", error);
-      toast.error("Erro no envio.");
+      console.error("Erro no upload múltiplo:", error);
+      toast.error(error.message || "Erro no envio de uma ou mais imagens.", { id: toastId });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      await processFiles(files);
+      e.target.value = ''; // Limpa o input
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processFiles(files);
+    }
+  };
+
   const handleCreateOrUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || isSubmittingRef.current) {
+      console.warn("[Properties] Já existe uma operação de salvamento em curso.");
+      return;
+    }
 
+    console.log("[Properties] 1. Iniciado handleCreateOrUpdate");
     const formData = new FormData(e.currentTarget);
     setIsSaving(true);
-    
-    // Timeout de segurança para a UI (15s)
-    const uiTimeout = setTimeout(() => {
-      setIsSaving(prev => {
-        if (prev) {
-          toast.error("Processamento demorado. Verificando inventário...");
-          setView('list');
-          setEditingProperty(null);
-          // Pequeno delay para garantir que o Supabase terminou
-          setTimeout(fetchData, 1000);
-        }
-        return false;
-      });
-    }, 20000); // 20s para conexões lentas
+    isSubmittingRef.current = true;
+
+    // Trava de segurança: Reset automático após 100 segundos se o banco travar
+    const uiTimeoutId = setTimeout(() => {
+      if (isSubmittingRef.current) {
+        console.error("[Properties] CRITICAL: UI Timeout (100s) - Destravando manual.");
+        setIsSaving(false);
+        isSubmittingRef.current = false;
+        toast.error("O banco de dados demorou muito a responder. Tente novamente.");
+      }
+    }, 100000);
     
     try {
-      if (!user) throw new Error("Sessão inválida.");
+      if (!user) {
+        console.error("[Properties] 1.1 Usuário OFF");
+        throw new Error("Sessão inválida.");
+      }
       
-      const neighborhood = formData.get("neighborhood") as string;
-      const city = formData.get("city") as string;
-      const state = formData.get("state") as string;
-      const location = formData.get("location") as string || `${neighborhood}, ${city} - ${state}`;
+      const neighborhood = String(formData.get("neighborhood") || "");
+      const city = String(formData.get("city") || "");
+      const state = String(formData.get("state") || "");
+      const location = String(formData.get("location") || "") || `${neighborhood}, ${city} - ${state}`;
+
+      const isEditing = !!editingProperty;
+      const currentPropertyId = editingProperty?.id;
+
+      console.log("[Properties] 2. Preparando dados...", { isEditing });
 
       const cleanUrls = imageUrls.filter(url => 
+        typeof url === 'string' &&
         url.trim() !== "" && 
-        !url.startsWith('data:image') && 
-        url.length < 2000
-      );
+        !url.startsWith('data:image')
+      ).map(u => String(u).trim());
 
       const data: Partial<Property> = {
-        title: formData.get("title") as string,
-        type: formData.get("type") as any,
-        status: formData.get("status") as any,
-        price: parseCurrencyBRLToNumber(formData.get("price") as string),
-        location,
-        cep: formData.get("cep") as string,
-        street: formData.get("street") as string,
-        neighborhood,
-        city,
-        state,
-        number: formData.get("number") as string,
-        complement: formData.get("complement") as string,
+        title: String(formData.get("title") || "").substring(0, 200),
+        type: (formData.get("type") as any) || "apartamento",
+        status: (formData.get("status") as any) || "disponível",
+        price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
+        location: location.substring(0, 500),
+        cep: String(formData.get("cep") || "").substring(0, 20),
+        street: String(formData.get("street") || "").substring(0, 200),
+        neighborhood: neighborhood.substring(0, 100),
+        city: city.substring(0, 100),
+        state: state.substring(0, 2),
+        number: String(formData.get("number") || "").substring(0, 20),
+        complement: String(formData.get("complement") || "").substring(0, 200),
         area: Number(formData.get("area") || 0),
         bedrooms: Number(formData.get("bedrooms") || 0),
         bathrooms: Number(formData.get("bathrooms") || 0),
         parkingSpots: Number(formData.get("parkingSpots") || 0),
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
-        notes: (formData.get("notes") as string || "").trim(),
-        description: (formData.get("description") as string || "").trim(),
+        notes: String(formData.get("notes") || "").substring(0, 2000),
+        description: String(formData.get("description") || "").substring(0, 5000),
         imageUrls: cleanUrls,
       };
 
-      // Limpar UI imediatamente para evitar travamento visual
-      clearTimeout(uiTimeout);
-      setIsSaving(false);
-      setView('list');
-      setImageUrls([]);
-      
-      // Mostrar toast inicial
-      const toastId = toast.loading(editingProperty ? "Atualizando..." : "Cadastrando...");
+      // Deep clone rigoroso
+      const dataToSave = JSON.parse(JSON.stringify(data));
 
-      // Executar salvamento em "background" (não bloqueia a UI principal)
-      const executeSave = async () => {
-        try {
-          if (editingProperty) {
-            await updateProperty(editingProperty.id, data as any, user.id);
-          } else {
-            await createProperty(data as any, user.id);
-          }
-          toast.success(editingProperty ? "Atualizado!" : "Cadastrado!", { id: toastId });
-          setEditingProperty(null);
-          fetchData();
-        } catch (err: any) {
-          console.error("Salvar background erro:", err);
-          toast.error(`Falha ao salvar: ${err.message}`, { id: toastId });
+      console.log("[Properties] 3. Chamando lib/db...");
+      const toastId = toast.loading(isEditing ? "Atualizando..." : "Cadastrando...");
+
+      try {
+        if (isEditing && currentPropertyId) {
+          console.log("[Properties] 4. updateProperty...");
+          await updateProperty(currentPropertyId, dataToSave, user.id);
+        } else {
+          console.log("[Properties] 4. createProperty...");
+          await createProperty(dataToSave, user.id);
         }
-      };
+        
+        console.log("[Properties] 5. Sucesso DB");
+        clearTimeout(uiTimeoutId);
+        toast.success(isEditing ? "Imóvel atualizado!" : "Imóvel cadastrado!", { id: toastId });
+        
+        setEditingProperty(null);
+        setImageUrls([]);
+        setView('list');
+        
+        setTimeout(() => fetchData(), 800);
 
-      executeSave();
+      } catch (err: any) {
+        console.error("[Properties] 6. Erro DB:", err);
+        clearTimeout(uiTimeoutId);
+        const errorMessage = err.message || "Erro ao gravar dados.";
+        toast.error(`Falha: ${errorMessage}`, { id: toastId });
+      } finally {
+        setIsSaving(false);
+        isSubmittingRef.current = false;
+      }
     } catch (saveErr: any) {
-      clearTimeout(uiTimeout);
+      console.error("[Properties] 7. Erro Fatal:", saveErr);
+      clearTimeout(uiTimeoutId);
       setIsSaving(false);
-      toast.error(`Erro: ${saveErr.message || "Falha técnica"}`);
+      isSubmittingRef.current = false;
+      toast.error(`Erro técnico: ${saveErr.message || "Falha técnica"}`);
     }
   };
 
@@ -555,6 +638,19 @@ export default function PropertiesPage() {
                       </div>
                     </div>
 
+                    <div className="md:col-span-2 flex items-center gap-3 p-6 bg-muted/20 border border-border rounded-3xl">
+                      <input 
+                        type="checkbox" 
+                        name="acceptsFinancing" 
+                        id="acceptsFinancing"
+                        defaultChecked={editingProperty?.acceptsFinancing}
+                        className="w-5 h-5 accent-primary cursor-pointer"
+                      />
+                      <label htmlFor="acceptsFinancing" className="text-sm font-bold cursor-pointer select-none">
+                        Aceita Financiamento Bancário
+                      </label>
+                    </div>
+
                     <div className="md:col-span-2 space-y-3">
                       <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Descritivo Comercial</label>
                       <textarea 
@@ -568,67 +664,67 @@ export default function PropertiesPage() {
 
                     <div className="md:col-span-2 space-y-6">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Galeria de Imagens</label>
-                        <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:underline">
-                          {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                          Enviar Foto Local
-                          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploading} />
-                        </label>
+                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Galeria de Imagens (Anexos)</label>
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {imageUrls.map((url, idx) => (
-                          <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border border-border group bg-muted/50">
-                            {url ? (
-                              <>
-                                <Image src={url} alt="Ref" fill className="object-cover" referrerPolicy="no-referrer" />
+                      <div 
+                        className={cn(
+                          "relative p-8 border-2 border-dashed rounded-3xl bg-muted/10 group transition-all cursor-pointer flex flex-col items-center justify-center text-center",
+                          isDragging ? "border-primary bg-primary/5 scale-[1.01] shadow-xl shadow-primary/5" : "border-border hover:bg-muted/20 hover:border-primary/50",
+                          isUploading && "opacity-50 pointer-events-none"
+                        )}
+                        onClick={() => document.getElementById('file-upload')?.click()}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                      >
+                        <input 
+                          id="file-upload"
+                          type="file" 
+                          multiple 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handleImageUpload} 
+                        />
+                        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                          {isUploading ? <Loader2 className="w-8 h-8 animate-spin" /> : <Upload className="w-8 h-8" />}
+                        </div>
+                        <h4 className="text-sm font-black uppercase tracking-tight">Clique ou arraste fotos aqui</h4>
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-2">
+                          Suporta múltiplos arquivos • Máximo 10MB por foto
+                        </p>
+                      </div>
+
+                      {imageUrls.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {imageUrls.map((url, idx) => (
+                            <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border border-border group bg-muted/50">
+                              <img 
+                                src={url} 
+                                alt={`Property ${idx}`} 
+                                className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "https://picsum.photos/seed/error/800/600";
+                                }} 
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button 
                                   type="button"
-                                  onClick={() => setImageUrls(imageUrls.filter((_, i) => i !== idx))}
-                                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setImageUrls(imageUrls.filter((_, i) => i !== idx));
+                                  }}
+                                  className="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                                  title="Remover imagem"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <X className="w-5 h-5" />
                                 </button>
-                              </>
-                            ) : (
-                              <div className="absolute inset-0 p-3 flex flex-col items-center justify-center gap-2">
-                                <input 
-                                  autoFocus
-                                  placeholder="Cole o link aqui..."
-                                  className="w-full text-[10px] p-2 bg-background border border-border rounded-lg outline-none font-bold text-center"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      const newUrls = [...imageUrls];
-                                      newUrls[idx] = (e.target as HTMLInputElement).value;
-                                      setImageUrls(newUrls);
-                                    }
-                                  }}
-                                  onBlur={(e) => {
-                                    const val = e.target.value.trim();
-                                    if (val) {
-                                      const newUrls = [...imageUrls];
-                                      newUrls[idx] = val;
-                                      setImageUrls(newUrls);
-                                    } else {
-                                      setImageUrls(imageUrls.filter((_, i) => i !== idx));
-                                    }
-                                  }}
-                                />
-                                <span className="text-[8px] font-black uppercase text-muted-foreground animate-pulse">Pressione Enter</span>
                               </div>
-                            )}
-                          </div>
-                        ))}
-                        <button 
-                          type="button" 
-                          onClick={() => setImageUrls([...imageUrls, ""])}
-                          className="aspect-video rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center hover:bg-muted/30 transition-all group"
-                        >
-                          <Plus className="w-6 h-6 text-muted-foreground group-hover:scale-110 transition-transform" />
-                          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mt-2">Add URL</span>
-                        </button>
-                      </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -640,7 +736,7 @@ export default function PropertiesPage() {
                     className="flex-1 bg-primary text-primary-foreground py-5 rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                   >
                     {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {editingProperty ? 'Confirmar Atualização' : 'Publicar no Inventário'}
+                    {editingProperty ? 'Salvar Alterações' : 'Publicar no Inventário'}
                   </button>
                   <button 
                     type="button" 
@@ -685,23 +781,24 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
     >
       <div className="h-48 relative overflow-hidden shrink-0 group/img">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={currentImageIndex}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            className="absolute inset-0"
-          >
-            <Image 
-              src={images[currentImageIndex]} 
-              alt={property.title} 
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover group-hover:scale-110 transition-transform duration-700"
-              referrerPolicy="no-referrer"
-            />
-          </motion.div>
+            <motion.div
+              key={currentImageIndex}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="absolute inset-0"
+            >
+              <img 
+                src={images[currentImageIndex]} 
+                alt={property.title} 
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://picsum.photos/seed/error/800/600";
+                }}
+              />
+            </motion.div>
         </AnimatePresence>
 
         {/* Carousel Controls */}

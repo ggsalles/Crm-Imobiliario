@@ -137,11 +137,24 @@ function DashboardContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    // Trava de segurança: força o carregamento do painel após 2 segundos
+    // para evitar que o usuário fique preso no "Carregando" caso o perfil demore a sincronizar
+    const timer = setTimeout(() => {
+      console.log("[Dashboard] Safety timeout (2s) triggered");
+      setLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    console.log("[Dashboard] Auth State:", { authLoading, hasUser: !!user });
     if (!authLoading) {
       if (!user) {
+        console.log("[Dashboard] Roteando para login...");
         router.push("/login");
       } else {
         // Stop showing generic loader if auth is done and user is here
+        console.log("[Dashboard] Auth concluído, liberando interface.");
         setLoading(false);
       }
     }

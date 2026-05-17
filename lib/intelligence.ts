@@ -48,11 +48,13 @@ export function groupActivities(activities: Activity[]): GroupedActivities {
 }
 
 export function calculateActivityScore(activity: Activity, deals: Deal[]): number {
-  const deal = deals.find(d => d.id === activity.dealId);
+  if (!activity || !activity.date) return 0;
+  
+  const deal = activity.dealId ? deals.find(d => d.id === activity.dealId) : null;
   if (!deal) return 0;
 
   // Base score from deal value (normalized, e.g., 100k = 1 point)
-  const valueScore = deal.value / 100000;
+  const valueScore = (deal.value || 0) / 100000;
   
   // Probability score (0.2 to 1.0)
   const probabilityScore = (deal.probability || 20) / 100;
@@ -60,6 +62,8 @@ export function calculateActivityScore(activity: Activity, deals: Deal[]): numbe
   // Proximity score: things closer to now get higher score
   const now = new Date();
   const activityDate = new Date(activity.date);
+  if (isNaN(activityDate.getTime())) return 0;
+
   const diffDays = Math.max(0, (activityDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   const proximityScore = 1 / (diffDays + 1);
 
@@ -67,13 +71,17 @@ export function calculateActivityScore(activity: Activity, deals: Deal[]): numbe
 }
 
 export function isPriorityActivity(activity: Activity, deals: Deal[]): boolean {
-  const deal = deals.find(d => d.id === activity.dealId);
+  if (!activity || !activity.date) return false;
+  
+  const deal = activity.dealId ? deals.find(d => d.id === activity.dealId) : null;
   if (!deal) return false;
 
-  const isHighValue = deal.value >= 500000;
+  const isHighValue = (deal.value || 0) >= 500000;
   
   const now = new Date();
   const activityDate = new Date(activity.date);
+  if (isNaN(activityDate.getTime())) return false;
+
   const diffDays = (activityDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
   const isSoon = diffDays >= 0 && diffDays <= 2;
 

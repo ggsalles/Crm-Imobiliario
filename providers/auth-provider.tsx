@@ -32,36 +32,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Safety timeout to prevent stuck loading state
+    // Safety timeout to prevent stuck loading state - reduced to 3s for better UX
     const timeout = setTimeout(() => {
+      console.warn("AuthProvider: Safety timeout reached. Forcing loading to false.");
       setLoading(false);
-    }, 5000);
+    }, 3500);
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log("AuthProvider: Initial session obtained", !!session);
+      if (error) {
+        console.error("Initial auth session error:", error.message);
+        if (error.message.includes("Refresh Token Not Found") || error.message.includes("Invalid Refresh Token")) {
+          console.warn("Corrupted session detected, clearing...");
+          supabase.auth.signOut().finally(() => {
+            setLoading(false);
+          });
+          return;
+        }
+      }
+      
       if (session) {
         setUser(session.user);
-        syncProfile(session.user);
+        syncProfile(session.user).finally(() => {
+          clearTimeout(timeout);
+        });
       } else {
         setLoading(false);
+        clearTimeout(timeout);
       }
-      clearTimeout(timeout);
     }).catch(err => {
-      console.error("Auth session error:", err);
+      console.error("Auth session exception:", err);
       setLoading(false);
       clearTimeout(timeout);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("AuthProvider: Event", event);
+      
+      if (event === 'SIGNED_OUT' || (event === 'USER_UPDATED' && !session)) {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
       if (session) {
         setUser(session.user);
         await syncProfile(session.user);
-      } else {
-        setUser(null);
-        setProfile(null);
+        setLoading(false); // Ensure loading is false after sync
+      } else if (event === 'INITIAL_SESSION') {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

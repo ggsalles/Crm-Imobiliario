@@ -82,7 +82,15 @@ export function IntelligenceWidget({ activities, deals, onToggle }: Intelligence
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 uppercase">
                   <Calendar className="w-3 h-3" />
-                  {format(new Date(activity.date), "dd/MM", { locale: ptBR })} • {format(new Date(activity.date), "HH:mm")}
+                  {(() => {
+                    try {
+                      const d = new Date(activity.date);
+                      if (isNaN(d.getTime())) return "Data inválida";
+                      return `${format(d, "dd/MM", { locale: ptBR })} • ${format(d, "HH:mm")}`;
+                    } catch (e) {
+                      return "Erro na data";
+                    }
+                  })()}
                 </span>
                 {activity.dealId && (
                    <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1 uppercase">

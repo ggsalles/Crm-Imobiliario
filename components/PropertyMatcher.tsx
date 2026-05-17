@@ -25,7 +25,7 @@ export function PropertyMatcher({ deal, contact, onUpdate }: PropertyMatcherProp
     async function fetchProps() {
       try {
         const data = await getProperties();
-        setProperties(data.filter(p => p.status === 'disponível'));
+        setProperties(data.filter((p: Property) => p.status === 'disponível'));
       } catch (error) {
         console.error("Error fetching properties:", error);
       } finally {

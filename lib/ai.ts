@@ -1,19 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
-
-let aiInstance: GoogleGenAI | null = null;
-const MODEL_NAME = "gemini-3-flash-preview";
-
-function getAi() {
-  if (!aiInstance) {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("NEXT_PUBLIC_GEMINI_API_KEY is missing. Please set it in your environment variables.");
-    }
-    aiInstance = new GoogleGenAI({ apiKey });
-  }
-  return aiInstance;
-}
-
 export interface AISafeResponse {
   text: string;
   isError: boolean;
@@ -21,40 +5,40 @@ export interface AISafeResponse {
 }
 
 /**
- * Safely calls Gemini API with quota awareness and friendly fallbacks
- * Follows modern @google/genai patterns
+ * Safely calls Gemini API via server-side route
  */
 export async function safeAiCall(prompt: string, fallbackText: string): Promise<AISafeResponse> {
   try {
-    const ai = getAi();
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
+    const response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-    // .text is a getter property in modern SDK
-    const text = response.text;
-    
-    if (!text) {
+    if (!data.text) {
       throw new Error("No text generated");
     }
 
     return {
-      text,
+      text: data.text,
       isError: false
     };
   } catch (error: any) {
     console.error("Gemini Safe Call Error:", error);
     
-    const errorMessage = (error?.message || error?.error?.message || "").toLowerCase();
-    const errorStatus = error?.status || error?.error?.code || 0;
+    const errorMessage = (error?.message || "").toLowerCase();
     
     const isQuotaError = 
       errorMessage.includes("quota") || 
       errorMessage.includes("429") || 
-      errorMessage.includes("resource_exhausted") ||
-      errorStatus === 429 ||
-      (error?.error?.status === "RESOURCE_EXHAUSTED");
+      errorMessage.includes("resource_exhausted");
 
     if (isQuotaError) {
       return {
