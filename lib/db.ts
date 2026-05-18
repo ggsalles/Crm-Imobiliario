@@ -188,8 +188,13 @@ export async function getContacts(ownerId?: string) {
 
 export function subscribeToContacts(callback: (contacts: Contact[]) => void, ownerId?: string) {
   const fetchContacts = async () => {
-    const data = await getContacts(ownerId);
-    callback(data);
+    try {
+      const data = await getContacts(ownerId);
+      callback(data);
+    } catch (err) {
+      console.error("[lib/db] subscribeToContacts error:", err);
+      callback([]);
+    }
   };
 
   fetchContacts();
@@ -277,8 +282,13 @@ export async function getCompanies(ownerId?: string) {
 
 export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
   const fetchCompanies = async () => {
-    const data = await getCompanies(ownerId);
-    callback(data);
+    try {
+      const data = await getCompanies(ownerId);
+      callback(data);
+    } catch (err) {
+      console.error("[lib/db] subscribeToCompanies error:", err);
+      callback([]);
+    }
   };
 
   fetchCompanies();
@@ -365,8 +375,13 @@ export async function getDealsByContact(contactId: string) {
 
 export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: string) {
   const fetchDeals = async () => {
-    const data = await getDeals(ownerId);
-    callback(data);
+    try {
+      const data = await getDeals(ownerId);
+      callback(data);
+    } catch (err) {
+      console.error("[lib/db] subscribeToDeals error:", err);
+      callback([]);
+    }
   };
 
   fetchDeals();
@@ -450,8 +465,13 @@ export async function getGoals(ownerId?: string) {
 
 export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: string) {
   const fetchGoals = async () => {
-    const data = await getGoals(ownerId);
-    callback(data);
+    try {
+      const data = await getGoals(ownerId);
+      callback(data);
+    } catch (err) {
+      console.error("[lib/db] subscribeToGoals error:", err);
+      callback([]);
+    }
   };
 
   fetchGoals();
@@ -607,6 +627,7 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
       callback(data as Activity[]);
     } catch (err) {
       console.error("[lib/db] subscribeToActivities error:", err);
+      callback([]);
     }
   };
 
@@ -750,16 +771,25 @@ async function apiFetch(url: string, options: any = {}) {
   
   let token: string | undefined;
   try {
-    // Forward Supabase session token with timeout
-    const sessionPromise = supabase.auth.getSession();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Timeout getting session")), 2000)
-    );
-    
-    const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+    // Forward Supabase session token with a more generous timeout
+    // and a retry for the session itself if it fails
+    const getSessionWithRetry = async (retries = 2): Promise<any> => {
+      try {
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout getting session")), 5000)
+        );
+        return await Promise.race([sessionPromise, timeoutPromise]);
+      } catch (err) {
+        if (retries > 0) return getSessionWithRetry(retries - 1);
+        throw err;
+      }
+    };
+
+    const { data: sessionData } = await getSessionWithRetry();
     token = sessionData?.session?.access_token;
   } catch (err) {
-    console.warn("[apiFetch] Could not get session token quickly, proceeding without it:", err);
+    console.warn("[apiFetch] Could not get session token, proceeding without it (check RLS):", err);
   }
   
   const headers: Record<string, string> = {
@@ -844,6 +874,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
       callback(data);
     } catch (e) {
       console.warn("[lib/db] Erro na subscrição de imóveis:", e);
+      callback([]);
     }
   };
 
@@ -1020,6 +1051,7 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
       }
     } catch (err) {
       console.error("[lib/db] subscribeToConversations error:", err);
+      callback([]);
     }
   };
 
@@ -1050,6 +1082,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
       }
     } catch (err) {
       console.error("[lib/db] subscribeToMessages error:", err);
+      callback([]);
     }
   };
 
@@ -1150,6 +1183,7 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
       }
     } catch (err) {
       console.error("[lib/db] subscribeToTotalUnreadMessages error:", err);
+      callback(0);
     }
   };
 

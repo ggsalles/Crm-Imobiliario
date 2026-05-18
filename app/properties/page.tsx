@@ -131,10 +131,10 @@ export default function PropertiesPage() {
     // Safety timeout: force loading to false if it takes too long
     const timer = setTimeout(() => {
       if (loading && properties.length === 0) {
-        console.warn("[Properties] Safety timeout (3.5s) triggered. Forcing loading false.");
+        console.warn("[Properties] Safety timeout (7s) triggered. Forcing loading false.");
         setLoading(false);
       }
-    }, 3500);
+    }, 7000);
     return () => clearTimeout(timer);
   }, [loading, properties.length]);
 

@@ -111,14 +111,14 @@ function DashboardContent() {
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (showLoading = true) => {
     if (!user || !profile) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setErrorStatus(null);
     try {
       const ownerId = profile.role === 'Admin' ? undefined : user.id;
       // Force initial fetch
-      const { getDeals, getContacts, getGoals, getActivitiesByContact, getProperties } = await import("@/lib/db");
+      const { getDeals, getContacts, getGoals, subscribeToActivities, getProperties } = await import("@/lib/db");
       
       const [dealsData, contactsData, propertiesData, goalsData] = await Promise.all([
         getDeals(ownerId),
@@ -131,19 +131,24 @@ function DashboardContent() {
       setContacts(contactsData);
       setProperties(propertiesData);
       setGoals(goalsData);
+      
+      // Also fetch activities manually for the first time if needed, 
+      // but the subscription will also do it.
     } catch (err: any) {
       console.error("[Dashboard] Refresh error:", err);
       setErrorStatus(err.message || "Erro ao carregar dados.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [user, profile]);
 
   useEffect(() => {
-    if (user && profile) {
-      refreshData();
+    // Only call refreshData if we don't have data yet to avoid redundant loads
+    // since the subscriptions will also fetch data initially.
+    if (user && profile && deals.length === 0 && contacts.length === 0) {
+      refreshData(true);
     }
-  }, [user, profile, refreshData]);
+  }, [user, profile, refreshData, deals.length, contacts.length]);
 
   const generateAIInsights = useCallback(async () => {
     const { safeAiCall } = await import("@/lib/ai");
@@ -231,14 +236,16 @@ function DashboardContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Trava de segurança: força o carregamento do painel após 2 segundos
+    // Trava de segurança: força o carregamento do painel após 5 segundos
     // para evitar que o usuário fique preso no "Carregando" caso o perfil demore a sincronizar
     const timer = setTimeout(() => {
-      console.log("[Dashboard] Safety timeout (2s) triggered");
-      setLoading(false);
-    }, 2000);
+      if (loading) {
+        console.log("[Dashboard] Safety timeout (5s) triggered, forcing loading false");
+        setLoading(false);
+      }
+    }, 5000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     console.log("[Dashboard] Auth State:", { authLoading, hasUser: !!user });

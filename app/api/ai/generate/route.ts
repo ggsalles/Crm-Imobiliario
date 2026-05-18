@@ -1,6 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = 'force-dynamic';
+
 const ai = new GoogleGenAI({ 
   apiKey: process.env.GEMINI_API_KEY || "",
   httpOptions: {
@@ -11,11 +13,10 @@ const ai = new GoogleGenAI({
 });
 
 const MODELS_PRIORITY = [
-  "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
-  "gemini-1.5-flash-latest", // Unified alias for stabilized 1.5 flash
-  "gemini-1.5-flash-8b-latest"
+  "gemini-3-flash-preview",
+  "gemini-3.1-pro-preview",
 ];
 
 async function generateWithModel(modelName: string, prompt: string, attempt = 1): Promise<string> {
@@ -26,15 +27,23 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
     });
     return response.text || "";
   } catch (err: any) {
-    const errorMsg = err.message || "";
+    const errorMsg = JSON.stringify(err);
     const isServiceUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
+    const isQuotaExceeded = errorMsg.includes("429") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("limit") || errorMsg.includes("Quota");
 
-    // Somente repetimos o MESMO modelo se for erro temporário de serviço (503)
+    // Retrying ONLY on 503 (Unavailable)
+    // For 429 (Quota), we throw immediately to move to the next model in MODELS_PRIORITY
     if (attempt < 2 && isServiceUnavailable) {
-      console.log(`[API/AI] Retrying ${modelName} after service unavailable (Attempt ${attempt})...`);
+      console.log(`[API/AI] Retrying ${modelName} (Attempt ${attempt}) due to Service Unavailable`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       return generateWithModel(modelName, prompt, attempt + 1);
     }
+    
+    // If it's a quota error and we have more models to try, throw a specific flag
+    if (isQuotaExceeded) {
+      (err as any).isQuotaError = true;
+    }
+    
     throw err;
   }
 }
@@ -58,26 +67,36 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ text });
       } catch (error: any) {
         lastError = error;
-        const errorMsg = error.message || "";
+        const errorMsg = error.message || JSON.stringify(error);
         console.warn(`[API/AI] Erro no modelo ${modelName}:`, errorMsg);
         
-        const shouldFallback = errorMsg.includes("429") || 
-                             errorMsg.includes("limit") || 
-                             errorMsg.includes("Quota") ||
-                             errorMsg.includes("503") ||
-                             errorMsg.includes("UNAVAILABLE") ||
-                             errorMsg.includes("not found");
+        const isQuota = error.isQuotaError || errorMsg.includes("429") || errorMsg.includes("limit") || errorMsg.includes("Quota");
+        const isUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
+        const isNotFound = errorMsg.includes("not found");
+
+        const shouldFallback = isQuota || isUnavailable || isNotFound;
 
         if (!shouldFallback) {
-          // Se for um erro de segurança (safety) ou algo não relacionado a cota/serviço, não adianta trocar de modelo
+          // If it's a safety error or client error, don't fallback
+          console.warn("[API/AI] Non-recoverable error, stopping fallback chain.");
           break;
         }
         
-        console.log(`[API/AI] Modelo ${modelName} falhou, tentando próximo da lista...`);
+        console.log(`[API/AI] Modelo ${modelName} falhou por Cota/Indisponibilidade. Tentando próximo...`);
+        // Optional jitter/delay between models to avoid hitting generic rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
-    // Se chegou aqui, todos os modelos falharam ou o último erro não era recuperável
+    // If we reached here, interpret the last error
+    const finalErrorMsg = lastError?.message || JSON.stringify(lastError);
+    if (finalErrorMsg.includes("429") || finalErrorMsg.includes("RESOURCE_EXHAUSTED")) {
+      return NextResponse.json(
+        { error: "Limite de cota da IA atingido em todos os modelos disponíveis. Por favor, tente novamente em alguns minutos." },
+        { status: 429 }
+      );
+    }
+    
     throw lastError;
   } catch (error: any) {
     console.error("[API/AI] Final Error:", error);
