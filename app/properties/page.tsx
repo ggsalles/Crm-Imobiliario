@@ -714,14 +714,12 @@ export default function PropertiesPage() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           {imageUrls.map((url, idx) => (
                             <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border border-border group bg-muted/50">
-                              <img 
+                              <Image 
                                 src={url} 
                                 alt={`Property ${idx}`} 
-                                className="w-full h-full object-cover" 
+                                fill
+                                className="object-cover" 
                                 referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = "https://picsum.photos/seed/error/800/600";
-                                }} 
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button 
@@ -805,24 +803,22 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
     >
       <div className="h-48 relative overflow-hidden shrink-0 group/img">
         <AnimatePresence mode="wait">
-            <motion.div
-              key={currentImageIndex}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              className="absolute inset-0"
-            >
-              <img 
-                src={images[currentImageIndex]} 
-                alt={property.title} 
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://picsum.photos/seed/error/800/600";
-                }}
-              />
-            </motion.div>
+              <motion.div
+                key={currentImageIndex}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+                className="absolute inset-0"
+              >
+                <Image 
+                  src={images[currentImageIndex]} 
+                  alt={property.title} 
+                  fill
+                  className="object-cover group-hover:scale-110 transition-transform duration-700"
+                  referrerPolicy="no-referrer"
+                />
+              </motion.div>
         </AnimatePresence>
 
         {/* Carousel Controls */}
