@@ -112,7 +112,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const heartbeatInterval = setInterval(() => {
+    const heartbeatInterval = setInterval(async () => {
+      // Proactive session validation to keep connection "warm"
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log("AuthProvider: Session validated via heartbeat.");
+        }
+      } catch (err) {
+        console.warn("AuthProvider: Heartbeat session validation error:", err);
+      }
+
       if (heartbeatChannel.state === 'joined') {
         heartbeatChannel.send({
           type: 'broadcast',
@@ -121,13 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       } else if (heartbeatChannel.state === 'errored' || heartbeatChannel.state === 'closed') {
         console.log("AuthProvider: Heartbeat channel in bad state, retrying subscription...");
-        // Safety check to avoid "tried to join multiple times" error
         const state = heartbeatChannel.state as string;
         if (state !== 'joining' && state !== 'joined') {
           heartbeatChannel.subscribe();
         }
       }
-    }, 15000); // Reduce to 15 seconds for more aggressive keep-alive
+    }, 15000); 
 
     return () => {
       window.removeEventListener('online', handleOnline);

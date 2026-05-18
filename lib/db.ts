@@ -187,13 +187,17 @@ export async function getContacts(ownerId?: string) {
 }
 
 export function subscribeToContacts(callback: (contacts: Contact[]) => void, ownerId?: string) {
+  let lastValidData: Contact[] | null = null;
   const fetchContacts = async () => {
     try {
       const data = await getContacts(ownerId);
-      callback(data);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data;
+        callback(data);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToContacts error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToContacts error, maintaining stale data:", err);
+      // Não limpa o estado em caso de erro temporário
     }
   };
 
@@ -281,13 +285,16 @@ export async function getCompanies(ownerId?: string) {
 }
 
 export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
+  let lastValidData: Company[] | null = null;
   const fetchCompanies = async () => {
     try {
       const data = await getCompanies(ownerId);
-      callback(data);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data;
+        callback(data);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToCompanies error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToCompanies error, maintaining stale data:", err);
     }
   };
 
@@ -374,13 +381,16 @@ export async function getDealsByContact(contactId: string) {
 }
 
 export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: string) {
+  let lastValidData: Deal[] | null = null;
   const fetchDeals = async () => {
     try {
       const data = await getDeals(ownerId);
-      callback(data);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data;
+        callback(data);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToDeals error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToDeals error, maintaining stale data:", err);
     }
   };
 
@@ -464,13 +474,16 @@ export async function getGoals(ownerId?: string) {
 }
 
 export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: string) {
+  let lastValidData: Goal[] | null = null;
   const fetchGoals = async () => {
     try {
       const data = await getGoals(ownerId);
-      callback(data);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data;
+        callback(data);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToGoals error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToGoals error, maintaining stale data:", err);
     }
   };
 
@@ -619,15 +632,18 @@ export async function getActivitiesByContact(contactId: string) {
 }
 
 export function subscribeToActivities(callback: (activities: Activity[]) => void, ownerId?: string) {
+  let lastValidData: Activity[] | null = null;
   const fetchActivities = async () => {
     try {
       let url = `/api/activities`;
       if (ownerId) url += `?ownerId=${ownerId}`;
       const data = await apiFetch(url);
-      callback(data as Activity[]);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data as Activity[];
+        callback(lastValidData);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToActivities error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToActivities error, maintaining stale data:", err);
     }
   };
 
@@ -806,8 +822,33 @@ async function apiFetch(url: string, options: any = {}) {
   let lastError: any;
   for (let i = 0; i < 3; i++) {
     try {
+      // Renovação proativa da sessão no loop de tentativa
+      let token: string | undefined;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        // Se estivermos em uma tentativa de erro, forçamos um refresh
+        if (i > 0 || !sessionData?.session) {
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          token = refreshData?.session?.access_token;
+        } else {
+          token = sessionData?.session?.access_token;
+        }
+      } catch (sessionErr) {
+        console.warn("[apiFetch] Erro ao obter sessão, tentando prosseguir:", sessionErr);
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for the fetch itself
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout as requested
 
       const response = await fetch(fullUrl, {
         ...options,
@@ -816,6 +857,13 @@ async function apiFetch(url: string, options: any = {}) {
       });
       
       clearTimeout(timeoutId);
+
+      // Detecção de erro de autorização (401/403)
+      if (response.status === 401 || response.status === 403) {
+        console.warn(`[apiFetch] Erro de autorização (${response.status}) em ${url}. Forçando refresh e tentando novamente...`);
+        await supabase.auth.refreshSession();
+        throw new Error("AUTH_RETRY"); // Força a próxima iteração do loop i
+      }
 
       if (!response.ok) {
         let errData: any;
@@ -829,22 +877,18 @@ async function apiFetch(url: string, options: any = {}) {
       }
 
       const result = await response.json();
-      if (Array.isArray(result)) {
-        console.log(`[apiFetch] SUCESSO ${url}: ${result.length} items retornados`);
-      } else {
-        console.log(`[apiFetch] SUCESSO ${url}:`, result);
-      }
       return result;
     } catch (err: any) {
       lastError = err;
       const isTimeout = err.name === 'AbortError';
-      if (err.name === 'TypeError' || err.message.includes('fetch') || isTimeout) {
+      const isAuthRetry = err.message === 'AUTH_RETRY';
+      
+      if (err.name === 'TypeError' || err.message.includes('fetch') || isTimeout || isAuthRetry) {
         console.warn(`[apiFetch] Tentativa ${i + 1} falhou para ${url}:`, err.message);
-        // Exponential backoff
         await new Promise(r => setTimeout(r, Math.min(1000 * (i + 1), 3000)));
         continue;
       }
-      throw err; // Don't retry on other errors
+      throw err;
     }
   }
   throw lastError;
@@ -868,13 +912,16 @@ export async function getProperties(ownerId?: string) {
 }
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
+  let lastValidData: Property[] | null = null;
   const fetchProperties = async () => {
     try {
       const data = await getProperties(ownerId);
-      callback(data);
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        lastValidData = data;
+        callback(data);
+      }
     } catch (e) {
-      console.warn("[lib/db] Erro na subscrição de imóveis:", e);
-      callback([]);
+      console.warn("[lib/db] subscribeToProperties error, maintaining stale data:", e);
     }
   };
 
@@ -1031,13 +1078,14 @@ export async function getDeal(id: string) {
   }
 }
 export function subscribeToConversations(category: 'client' | 'team', callback: (conversations: Conversation[]) => void, ownerId?: string) {
+  let lastValidData: Conversation[] | null = null;
   const fetchConversations = async () => {
     try {
       let url = `/api/conversations?category=${category}`;
       if (ownerId) url += `&ownerId=${ownerId}`;
       const data = await apiFetch(url);
-      if (data) {
-        callback(data.map((item: any) => ({
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        const mapped = data.map((item: any) => ({
           id: item.id,
           participants: item.participants,
           participantDetails: item.participant_details,
@@ -1047,11 +1095,12 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
           category: item.category,
           ownerId: item.owner_id,
           unreadCount: item.unread_count
-        })) as Conversation[]);
+        })) as Conversation[];
+        lastValidData = mapped;
+        callback(mapped);
       }
     } catch (err) {
-      console.error("[lib/db] subscribeToConversations error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToConversations error, maintaining stale data:", err);
     }
   };
 
@@ -1064,11 +1113,12 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 }
 
 export function subscribeToMessages(conversationId: string, callback: (messages: ChatMessage[]) => void) {
+  let lastValidData: ChatMessage[] | null = null;
   const fetchMessages = async () => {
     try {
       const data = await apiFetch(`/api/messages?conversationId=${conversationId}`);
-      if (data) {
-        callback(data.map((item: any) => ({
+      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
+        const mapped = data.map((item: any) => ({
           id: item.id,
           conversationId: item.conversation_id,
           senderId: item.sender_id,
@@ -1078,11 +1128,12 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
           fileUrl: item.file_url,
           createdAt: item.created_at,
           ownerId: item.owner_id
-        })) as ChatMessage[]);
+        })) as ChatMessage[];
+        lastValidData = mapped;
+        callback(mapped);
       }
     } catch (err) {
-      console.error("[lib/db] subscribeToMessages error:", err);
-      callback([]);
+      console.warn("[lib/db] subscribeToMessages error, maintaining stale data:", err);
     }
   };
 

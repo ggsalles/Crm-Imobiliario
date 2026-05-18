@@ -35,34 +35,37 @@ export function PropertyMatcher({ deal, contact, onUpdate }: PropertyMatcherProp
     fetchProps();
   }, []);
 
-  const normalize = (str: string) => 
-    str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalize = (str: string | undefined | null) => 
+    (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   const topMatches = useMemo(() => {
-    const dealTitle = normalize(deal.title);
+    const dealTitle = normalize(deal?.title);
+    const dealValue = deal?.value || 0;
     
     return properties
       .map(p => {
         let score = 0;
         
         // Price proximity (within 30%)
-        const priceDiff = Math.abs(p.price - deal.value) / deal.value;
-        if (priceDiff < 0.1) score += 50;
-        else if (priceDiff < 0.2) score += 30;
-        else if (priceDiff < 0.3) score += 10;
+        if (dealValue > 0) {
+          const priceDiff = Math.abs((p.price || 0) - dealValue) / dealValue;
+          if (priceDiff < 0.1) score += 50;
+          else if (priceDiff < 0.2) score += 30;
+          else if (priceDiff < 0.3) score += 10;
+        }
 
         // Type match
         const pType = normalize(p.type);
-        if (dealTitle.includes(pType)) score += 20;
+        if (pType && dealTitle.includes(pType)) score += 20;
 
         // Location match (Check city and neighborhood)
         const pLoc = normalize(p.location);
-        const pCity = normalize(p.city || "");
-        const pNeighborhood = normalize(p.neighborhood || "");
+        const pCity = normalize(p.city);
+        const pNeighborhood = normalize(p.neighborhood);
 
-        if (dealTitle.includes(pCity) && pCity.length > 2) score += 30;
-        if (dealTitle.includes(pNeighborhood) && pNeighborhood.length > 2) score += 40;
-        if (dealTitle.includes(pLoc) && pLoc.length > 2) score += 20;
+        if (pCity && dealTitle.includes(pCity) && pCity.length > 2) score += 30;
+        if (pNeighborhood && dealTitle.includes(pNeighborhood) && pNeighborhood.length > 2) score += 40;
+        if (pLoc && dealTitle.includes(pLoc) && pLoc.length > 2) score += 20;
 
         // Cap score at 100
         return { property: p, score: Math.min(score, 99) };
