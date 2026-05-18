@@ -117,8 +117,8 @@ function DashboardContent() {
     setErrorStatus(null);
     try {
       const ownerId = profile.role === 'Admin' ? undefined : user.id;
-      // Force initial fetch
-      const { getDeals, getContacts, getGoals, subscribeToActivities, getProperties } = await import("@/lib/db");
+      
+      const { getDeals, getContacts, getGoals, getProperties } = await import("@/lib/db");
       
       const [dealsData, contactsData, propertiesData, goalsData] = await Promise.all([
         getDeals(ownerId),
@@ -131,9 +131,6 @@ function DashboardContent() {
       setContacts(contactsData);
       setProperties(propertiesData);
       setGoals(goalsData);
-      
-      // Also fetch activities manually for the first time if needed, 
-      // but the subscription will also do it.
     } catch (err: any) {
       console.error("[Dashboard] Refresh error:", err);
       setErrorStatus(err.message || "Erro ao carregar dados.");
@@ -259,7 +256,7 @@ function DashboardContent() {
         setLoading(false);
       }
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, loading]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -300,7 +297,20 @@ function DashboardContent() {
     };
   }, [user, profile]);
 
-  if (authLoading || (loading && !user)) {
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest animate-pulse">Autenticando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  if (loading && deals.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -310,8 +320,6 @@ function DashboardContent() {
       </div>
     );
   }
-
-  if (!user) return null;
 
   // --- Calculations ---
   const now = new Date();

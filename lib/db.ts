@@ -145,6 +145,9 @@ export interface UserProfile {
   isAdmin?: boolean;
 }
 
+// Constants
+const POLL_INTERVAL = 300000; // 5 minutes - balance between fresh data and rate limits
+
 // Helper para subscrições resilientes
 function createRealtimeChannel(tableName: string, callback: () => void, filter?: string, channelPrefix = 'public') {
   const channelName = `${channelPrefix}:${tableName}:${Math.random().toString(36).substring(7)}`;
@@ -159,8 +162,8 @@ function createRealtimeChannel(tableName: string, callback: () => void, filter?:
         console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}), tentando reconectar...`);
-        // Only retry if not already trying to join
-        if (channel.state !== 'joining' && channel.state !== 'joined') {
+        // Only retry if online and not already trying to join
+        if (typeof window !== 'undefined' && navigator.onLine && channel.state !== 'joining' && channel.state !== 'joined') {
           setTimeout(() => {
             if (channel.state !== 'joining' && channel.state !== 'joined') {
               channel.subscribe();
@@ -191,21 +194,26 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
   const fetchContacts = async () => {
     try {
       const data = await getContacts(ownerId);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data;
-        callback(data);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data;
+          callback(data);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToContacts error, maintaining stale data:", err);
-      // Não limpa o estado em caso de erro temporário
+      // Invoca callback com dados antigos se existirem
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchContacts();
   const subscription = createRealtimeChannel('contacts', fetchContacts);
+  const poll = setInterval(fetchContacts, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -289,20 +297,25 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
   const fetchCompanies = async () => {
     try {
       const data = await getCompanies(ownerId);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data;
-        callback(data);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data;
+          callback(data);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToCompanies error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchCompanies();
   const subscription = createRealtimeChannel('companies', fetchCompanies);
+  const poll = setInterval(fetchCompanies, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -385,20 +398,25 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
   const fetchDeals = async () => {
     try {
       const data = await getDeals(ownerId);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data;
-        callback(data);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data;
+          callback(data);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToDeals error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchDeals();
   const subscription = createRealtimeChannel('deals', fetchDeals);
+  const poll = setInterval(fetchDeals, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -478,20 +496,25 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
   const fetchGoals = async () => {
     try {
       const data = await getGoals(ownerId);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data;
-        callback(data);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data;
+          callback(data);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToGoals error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchGoals();
   const subscription = createRealtimeChannel('goals', fetchGoals);
+  const poll = setInterval(fetchGoals, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -638,20 +661,25 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
       let url = `/api/activities`;
       if (ownerId) url += `?ownerId=${ownerId}`;
       const data = await apiFetch(url);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data as Activity[];
-        callback(lastValidData);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data as Activity[];
+          callback(lastValidData);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToActivities error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchActivities();
   const subscription = createRealtimeChannel('activities', fetchActivities);
+  const poll = setInterval(fetchActivities, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -782,60 +810,28 @@ async function winTimeout<T>(promise: Promise<T>, ms: number = 60000, label: str
 }
 
 async function apiFetch(url: string, options: any = {}) {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
-  
-  let token: string | undefined;
-  try {
-    // Forward Supabase session token with a more generous timeout
-    // and a retry for the session itself if it fails
-    const getSessionWithRetry = async (retries = 2): Promise<any> => {
-      try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout getting session")), 5000)
-        );
-        return await Promise.race([sessionPromise, timeoutPromise]);
-      } catch (err) {
-        if (retries > 0) return getSessionWithRetry(retries - 1);
-        throw err;
-      }
-    };
-
-    const { data: sessionData } = await getSessionWithRetry();
-    token = sessionData?.session?.access_token;
-  } catch (err) {
-    console.warn("[apiFetch] Could not get session token, proceeding without it (check RLS):", err);
-  }
-  
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const isServer = typeof window === 'undefined';
+  const baseUrl = isServer ? '' : window.location.origin;
+  const fullUrl = (url.startsWith('http') || isServer) ? url : `${baseUrl}${url}`;
   
   console.log(`[apiFetch] INICIANDO: ${options.method || 'GET'} ${url}`);
   
   let lastError: any;
   for (let i = 0; i < 3; i++) {
     try {
+      // Offline check (client-side only)
+      if (!isServer && typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error("OFFLINE_ERROR");
+      }
+
       // Renovação proativa da sessão no loop de tentativa
-      let token: string | undefined;
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        // Se estivermos em uma tentativa de erro, forçamos um refresh
-        if (i > 0 || !sessionData?.session) {
-          const { data: refreshData } = await supabase.auth.refreshSession();
-          token = refreshData?.session?.access_token;
-        } else {
-          token = sessionData?.session?.access_token;
-        }
-      } catch (sessionErr) {
-        console.warn("[apiFetch] Erro ao obter sessão, tentando prosseguir:", sessionErr);
+      const { data: { session } } = await supabase.auth.getSession();
+      let token = session?.access_token;
+      
+      // Se estivermos em uma tentativa de erro, forçamos um refresh
+      if (i > 0 && !isServer) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        token = refreshData?.session?.access_token || token;
       }
 
       const headers: Record<string, string> = {
@@ -848,7 +844,7 @@ async function apiFetch(url: string, options: any = {}) {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout as requested
+      const timeoutId = setTimeout(() => controller.abort(), 12000); 
 
       const response = await fetch(fullUrl, {
         ...options,
@@ -858,11 +854,10 @@ async function apiFetch(url: string, options: any = {}) {
       
       clearTimeout(timeoutId);
 
-      // Detecção de erro de autorização (401/403)
       if (response.status === 401 || response.status === 403) {
-        console.warn(`[apiFetch] Erro de autorização (${response.status}) em ${url}. Forçando refresh e tentando novamente...`);
-        await supabase.auth.refreshSession();
-        throw new Error("AUTH_RETRY"); // Força a próxima iteração do loop i
+        console.warn(`[apiFetch] Erro de autorização (${response.status}) em ${url}. Forçando refresh...`);
+        if (!isServer) await supabase.auth.refreshSession();
+        throw new Error("AUTH_RETRY");
       }
 
       if (!response.ok) {
@@ -872,20 +867,25 @@ async function apiFetch(url: string, options: any = {}) {
         } catch {
           errData = { error: `HTTP ${response.status}` };
         }
-        console.error(`[apiFetch] ERROR ${url}:`, errData);
         throw new Error(errData.error || `Erro na API: ${response.status}`);
       }
 
-      const result = await response.json();
-      return result;
+      return await response.json();
     } catch (err: any) {
       lastError = err;
       const isTimeout = err.name === 'AbortError';
       const isAuthRetry = err.message === 'AUTH_RETRY';
+      const isOffline = err.message === 'OFFLINE_ERROR';
       
+      if (isOffline) {
+        console.warn(`[apiFetch] App offline, aguardando conexão para ${url}`);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
       if (err.name === 'TypeError' || err.message.includes('fetch') || isTimeout || isAuthRetry) {
         console.warn(`[apiFetch] Tentativa ${i + 1} falhou para ${url}:`, err.message);
-        await new Promise(r => setTimeout(r, Math.min(1000 * (i + 1), 3000)));
+        await new Promise(r => setTimeout(r, Math.min(500 * (i + 1), 2000)));
         continue;
       }
       throw err;
@@ -916,20 +916,25 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
   const fetchProperties = async () => {
     try {
       const data = await getProperties(ownerId);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        lastValidData = data;
-        callback(data);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          lastValidData = data;
+          callback(data);
+        }
       }
     } catch (e) {
       console.warn("[lib/db] subscribeToProperties error, maintaining stale data:", e);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchProperties();
   const subscription = createRealtimeChannel('properties', fetchProperties);
+  const poll = setInterval(fetchProperties, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -1084,31 +1089,36 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
       let url = `/api/conversations?category=${category}`;
       if (ownerId) url += `&ownerId=${ownerId}`;
       const data = await apiFetch(url);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        const mapped = data.map((item: any) => ({
-          id: item.id,
-          participants: item.participants,
-          participantDetails: item.participant_details,
-          lastMessage: item.last_message,
-          lastMessageAt: item.last_message_at,
-          type: item.type,
-          category: item.category,
-          ownerId: item.owner_id,
-          unreadCount: item.unread_count
-        })) as Conversation[];
-        lastValidData = mapped;
-        callback(mapped);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          const mapped = data.map((item: any) => ({
+            id: item.id,
+            participants: item.participants,
+            participantDetails: item.participant_details,
+            lastMessage: item.last_message,
+            lastMessageAt: item.last_message_at,
+            type: item.type,
+            category: item.category,
+            ownerId: item.owner_id,
+            unreadCount: item.unread_count
+          })) as Conversation[];
+          lastValidData = mapped;
+          callback(mapped);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToConversations error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchConversations();
   const subscription = createRealtimeChannel('conversations', fetchConversations);
+  const poll = setInterval(fetchConversations, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -1117,31 +1127,36 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
   const fetchMessages = async () => {
     try {
       const data = await apiFetch(`/api/messages?conversationId=${conversationId}`);
-      if (data && Array.isArray(data) && (data.length > 0 || !lastValidData)) {
-        const mapped = data.map((item: any) => ({
-          id: item.id,
-          conversationId: item.conversation_id,
-          senderId: item.sender_id,
-          content: item.content,
-          type: item.type,
-          fileName: item.file_name,
-          fileUrl: item.file_url,
-          createdAt: item.created_at,
-          ownerId: item.owner_id
-        })) as ChatMessage[];
-        lastValidData = mapped;
-        callback(mapped);
+      if (data && Array.isArray(data)) {
+        if (data.length > 0 || !lastValidData) {
+          const mapped = data.map((item: any) => ({
+            id: item.id,
+            conversationId: item.conversation_id,
+            senderId: item.sender_id,
+            content: item.content,
+            type: item.type,
+            fileName: item.file_name,
+            fileUrl: item.file_url,
+            createdAt: item.created_at,
+            ownerId: item.owner_id
+          })) as ChatMessage[];
+          lastValidData = mapped;
+          callback(mapped);
+        }
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToMessages error, maintaining stale data:", err);
+      if (lastValidData) callback(lastValidData);
     }
   };
 
   fetchMessages();
   const subscription = createRealtimeChannel('messages', fetchMessages, `conversation_id=eq.${conversationId}`);
+  const poll = setInterval(fetchMessages, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 
@@ -1218,31 +1233,33 @@ export async function markAsRead(conversationId: string) {
 
 export function subscribeToTotalUnreadMessages(callback: (count: number) => void) {
   const fetchTotalUnread = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      callback(0);
-      return;
-    }
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        callback(0);
+        return;
+      }
+
       const data = await apiFetch(`/api/conversations?ownerId=${user.id}`);
-      if (data) {
-        const total = (data as any[]).reduce((acc, conv) => {
+      if (data && Array.isArray(data)) {
+        const total = data.reduce((acc, conv) => {
           return acc + (conv.unread_count?.[user.id] || 0);
         }, 0);
         callback(total);
       }
     } catch (err) {
       console.error("[lib/db] subscribeToTotalUnreadMessages error:", err);
-      callback(0);
+      // No re-throwing here to avoid breaking UI
     }
   };
 
   fetchTotalUnread();
   const subscription = createRealtimeChannel('conversations', fetchTotalUnread);
+  const poll = setInterval(fetchTotalUnread, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
+    clearInterval(poll);
   };
 }
 

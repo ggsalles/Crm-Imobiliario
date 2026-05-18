@@ -54,33 +54,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }, 3500);
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log("AuthProvider: Initial session obtained", !!session);
-      if (error) {
-        console.error("Initial auth session error:", error.message);
-        if (error.message.includes("Refresh Token Not Found") || error.message.includes("Invalid Refresh Token")) {
-          console.warn("Corrupted session detected, clearing...");
-          supabase.auth.signOut().finally(() => {
-            setLoading(false);
-          });
-          return;
-        }
-      }
+    // Initial session loading
+    setLoading(true);
+    let initialSessionHandled = false;
+
+    const handleInitialSession = async (session: any) => {
+      if (initialSessionHandled) return;
+      initialSessionHandled = true;
       
+      console.log("AuthProvider: Handling initial session", !!session);
       if (session) {
         setUser(session.user);
-        syncProfile(session.user).finally(() => {
-          clearTimeout(timeout);
-        });
-      } else {
-        setLoading(false);
-        clearTimeout(timeout);
+        await syncProfile(session.user);
       }
-    }).catch(err => {
-      console.error("Auth session exception:", err);
       setLoading(false);
       clearTimeout(timeout);
+    };
+
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) console.error("Initial auth getSession error:", error.message);
+      handleInitialSession(session);
     });
 
     // Listen for auth changes
@@ -94,11 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (event === 'INITIAL_SESSION') {
+        handleInitialSession(session);
+        return;
+      }
+
       if (session) {
         setUser(session.user);
         await syncProfile(session.user);
-        setLoading(false);
-      } else if (event === 'INITIAL_SESSION') {
         setLoading(false);
       }
     });
