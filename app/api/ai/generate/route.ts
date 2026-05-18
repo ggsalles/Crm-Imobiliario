@@ -10,8 +10,13 @@ const ai = new GoogleGenAI({
   }
 });
 
-const PRIMARY_MODEL = "gemini-3-flash-preview";
-const FALLBACK_MODEL = "gemini-3.1-flash-lite";
+const MODELS_PRIORITY = [
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-flash-latest",
+  "gemini-1.5-flash-latest", // Unified alias for stabilized 1.5 flash
+  "gemini-1.5-flash-8b-latest"
+];
 
 async function generateWithModel(modelName: string, prompt: string, attempt = 1): Promise<string> {
   try {
@@ -21,9 +26,13 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
     });
     return response.text || "";
   } catch (err: any) {
-    if (attempt < 2 && (err.message.includes("503") || err.message.includes("UNAVAILABLE"))) {
-      console.log(`[API/AI] Retrying ${modelName} after 503 error...`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const errorMsg = err.message || "";
+    const isServiceUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
+
+    // Somente repetimos o MESMO modelo se for erro temporário de serviço (503)
+    if (attempt < 2 && isServiceUnavailable) {
+      console.log(`[API/AI] Retrying ${modelName} after service unavailable (Attempt ${attempt})...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
       return generateWithModel(modelName, prompt, attempt + 1);
     }
     throw err;
@@ -41,34 +50,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    try {
-      // Tenta o modelo primário (Flash - mais rápido)
-      const text = await generateWithModel(PRIMARY_MODEL, prompt);
-      return NextResponse.json({ text });
-    } catch (primaryError: any) {
-      console.warn(`[API/AI] Erro no modelo primário (${PRIMARY_MODEL}):`, primaryError.message);
-      
-      const isRecoverable = primaryError.message.includes("503") || 
-                           primaryError.message.includes("UNAVAILABLE") || 
-                           primaryError.message.includes("high demand") ||
-                           primaryError.message.includes("limit") ||
-                           primaryError.message.includes("Quota") ||
-                           primaryError.message.includes("429");
+    let lastError: any;
+    for (const modelName of MODELS_PRIORITY) {
+      try {
+        console.log(`[API/AI] Tentando gerar conteúdo com ${modelName}...`);
+        const text = await generateWithModel(modelName, prompt);
+        return NextResponse.json({ text });
+      } catch (error: any) {
+        lastError = error;
+        const errorMsg = error.message || "";
+        console.warn(`[API/AI] Erro no modelo ${modelName}:`, errorMsg);
+        
+        const shouldFallback = errorMsg.includes("429") || 
+                             errorMsg.includes("limit") || 
+                             errorMsg.includes("Quota") ||
+                             errorMsg.includes("503") ||
+                             errorMsg.includes("UNAVAILABLE") ||
+                             errorMsg.includes("not found");
 
-      if (isRecoverable) {
-        try {
-          console.log(`[API/AI] Tentando fallback para ${FALLBACK_MODEL}...`);
-          const text = await generateWithModel(FALLBACK_MODEL, prompt);
-          return NextResponse.json({ text });
-        } catch (fallbackError: any) {
-          console.error(`[API/AI] Erro no modelo de fallback (${FALLBACK_MODEL}):`, fallbackError.message);
-          throw fallbackError;
+        if (!shouldFallback) {
+          // Se for um erro de segurança (safety) ou algo não relacionado a cota/serviço, não adianta trocar de modelo
+          break;
         }
+        
+        console.log(`[API/AI] Modelo ${modelName} falhou, tentando próximo da lista...`);
       }
-      throw primaryError;
     }
+
+    // Se chegou aqui, todos os modelos falharam ou o último erro não era recuperável
+    throw lastError;
   } catch (error: any) {
-    console.error("[API/AI] Error:", error);
+    console.error("[API/AI] Final Error:", error);
     
     // Extract error details if it's an ApiError or similar
     let message = error.message || "Internal server error";

@@ -17,6 +17,11 @@ export const supabase = createClient(
       detectSessionInUrl: true,
       storageKey: 'crm-imob-session-v4', 
     },
+    realtime: {
+      params: {
+        events_per_second: 10
+      }
+    },
     global: {
       headers: { 'x-application-name': 'crm-imobiliario' }
     }

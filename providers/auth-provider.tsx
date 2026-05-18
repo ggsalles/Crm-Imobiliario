@@ -32,6 +32,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Online/Offline status handling
+    const handleOnline = () => {
+      console.log("AuthProvider: App is online.");
+      toast.success("Conexão restabelecida", { id: 'network-status' });
+      // Force session refresh when coming back online
+      supabase.auth.getSession();
+    };
+
+    const handleOffline = () => {
+      console.warn("AuthProvider: App is offline.");
+      toast.error("Sem conexão com a internet", { id: 'network-status', duration: Infinity });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     // Safety timeout to prevent stuck loading state - reduced to 3s for better UX
     const timeout = setTimeout(() => {
       console.warn("AuthProvider: Safety timeout reached. Forcing loading to false.");
@@ -69,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("AuthProvider: Event", event);
+      console.log(`AuthProvider: Event [${event}]`, !!session);
       
       if (event === 'SIGNED_OUT' || (event === 'USER_UPDATED' && !session)) {
         setUser(null);
@@ -81,14 +97,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         setUser(session.user);
         await syncProfile(session.user);
-        setLoading(false); // Ensure loading is false after sync
+        setLoading(false);
       } else if (event === 'INITIAL_SESSION') {
         setLoading(false);
       }
     });
 
+    // Keep-alive heartbeat for Supabase Realtime
+    // This helps prevent connection drops in proxy-heavy environments when idle
+    const heartbeatChannel = supabase.channel('realtime-heartbeat');
+    heartbeatChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log("AuthProvider: Realtime heartbeat channel subscribed.");
+      }
+    });
+
+    const heartbeatInterval = setInterval(() => {
+      if (heartbeatChannel.state === 'joined') {
+        heartbeatChannel.send({
+          type: 'broadcast',
+          event: 'heartbeat',
+          payload: { timestamp: new Date().toISOString() }
+        });
+      } else if (heartbeatChannel.state === 'errored' || heartbeatChannel.state === 'closed') {
+        console.log("AuthProvider: Heartbeat channel in bad state, retrying subscription...");
+        // Safety check to avoid "tried to join multiple times" error
+        const state = heartbeatChannel.state as string;
+        if (state !== 'joining' && state !== 'joined') {
+          heartbeatChannel.subscribe();
+        }
+      }
+    }, 15000); // Reduce to 15 seconds for more aggressive keep-alive
+
     return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       subscription.unsubscribe();
+      supabase.removeChannel(heartbeatChannel);
+      clearInterval(heartbeatInterval);
       clearTimeout(timeout);
     };
   }, []);

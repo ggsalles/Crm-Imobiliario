@@ -145,6 +145,34 @@ export interface UserProfile {
   isAdmin?: boolean;
 }
 
+// Helper para subscrições resilientes
+function createRealtimeChannel(tableName: string, callback: () => void, filter?: string, channelPrefix = 'public') {
+  const channelName = `${channelPrefix}:${tableName}:${Math.random().toString(36).substring(7)}`;
+  const channel = supabase
+    .channel(channelName)
+    .on('postgres_changes', { event: '*', schema: 'public', table: tableName, filter }, () => {
+      console.log(`[Realtime] Mudança detectada em ${tableName}${filter ? ` (${filter})` : ''}, atualizando...`);
+      callback();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}), tentando reconectar...`);
+        // Only retry if not already trying to join
+        if (channel.state !== 'joining' && channel.state !== 'joined') {
+          setTimeout(() => {
+            if (channel.state !== 'joining' && channel.state !== 'joined') {
+              channel.subscribe();
+            }
+          }, 5000);
+        }
+      }
+    });
+
+  return channel;
+}
+
 // Contacts
 export async function getContacts(ownerId?: string) {
   try {
@@ -165,13 +193,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
   };
 
   fetchContacts();
-
-  const subscription = supabase
-    .channel(`public:contacts:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, () => {
-      fetchContacts();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('contacts', fetchContacts);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -260,13 +282,7 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
   };
 
   fetchCompanies();
-
-  const subscription = supabase
-    .channel(`public:companies:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'companies' }, () => {
-      fetchCompanies();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('companies', fetchCompanies);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -354,13 +370,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
   };
 
   fetchDeals();
-
-  const subscription = supabase
-    .channel(`public:deals:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'deals' }, () => {
-      fetchDeals();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('deals', fetchDeals);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -445,13 +455,7 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
   };
 
   fetchGoals();
-
-  const subscription = supabase
-    .channel(`public:goals:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'goals' }, () => {
-      fetchGoals();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('goals', fetchGoals);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -512,13 +516,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
   };
 
   fetchUsers();
-
-  const subscription = supabase
-    .channel(`public:profiles:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-      fetchUsers();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('profiles', fetchUsers);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -613,13 +611,7 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
   };
 
   fetchActivities();
-
-  const subscription = supabase
-    .channel(`public:activities:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, () => {
-      fetchActivities();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('activities', fetchActivities);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -697,13 +689,7 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
   };
 
   fetchEvents();
-
-  const subscription = supabase
-    .channel(`public:timeline:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline' }, () => {
-      fetchEvents();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('timeline', fetchEvents);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -762,11 +748,21 @@ async function apiFetch(url: string, options: any = {}) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   
-  // Forward Supabase session token
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  let token: string | undefined;
+  try {
+    // Forward Supabase session token with timeout
+    const sessionPromise = supabase.auth.getSession();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Timeout getting session")), 2000)
+    );
+    
+    const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+    token = sessionData?.session?.access_token;
+  } catch (err) {
+    console.warn("[apiFetch] Could not get session token quickly, proceeding without it:", err);
+  }
   
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
@@ -780,10 +776,16 @@ async function apiFetch(url: string, options: any = {}) {
   let lastError: any;
   for (let i = 0; i < 3; i++) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for the fetch itself
+
       const response = await fetch(fullUrl, {
         ...options,
-        headers
+        headers,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         let errData: any;
@@ -805,12 +807,14 @@ async function apiFetch(url: string, options: any = {}) {
       return result;
     } catch (err: any) {
       lastError = err;
-      if (err.name === 'TypeError' || err.message.includes('fetch')) {
+      const isTimeout = err.name === 'AbortError';
+      if (err.name === 'TypeError' || err.message.includes('fetch') || isTimeout) {
         console.warn(`[apiFetch] Tentativa ${i + 1} falhou para ${url}:`, err.message);
-        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+        // Exponential backoff
+        await new Promise(r => setTimeout(r, Math.min(1000 * (i + 1), 3000)));
         continue;
       }
-      break;
+      throw err; // Don't retry on other errors
     }
   }
   throw lastError;
@@ -844,13 +848,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
   };
 
   fetchProperties();
-
-  const subscription = supabase
-    .channel(`public:properties:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, () => {
-      fetchProperties();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('properties', fetchProperties);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1026,13 +1024,7 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
   };
 
   fetchConversations();
-
-  const subscription = supabase
-    .channel(`public:conversations:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-      fetchConversations();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('conversations', fetchConversations);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1062,13 +1054,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
   };
 
   fetchMessages();
-
-  const subscription = supabase
-    .channel(`public:messages:${conversationId}:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, () => {
-      fetchMessages();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('messages', fetchMessages, `conversation_id=eq.${conversationId}`);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1168,13 +1154,7 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
   };
 
   fetchTotalUnread();
-
-  const subscription = supabase
-    .channel(`public:conversations_unread:${Math.random()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-      fetchTotalUnread();
-    })
-    .subscribe();
+  const subscription = createRealtimeChannel('conversations', fetchTotalUnread);
 
   return () => {
     supabase.removeChannel(subscription);
