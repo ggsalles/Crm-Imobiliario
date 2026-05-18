@@ -162,17 +162,20 @@ export default function PropertiesPage() {
   });
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Deseja realmente excluir este imóvel?")) {
-      setLoading(true);
-      try {
-        await deleteProperty(id);
-        toast.success("Imóvel excluído.");
-        await fetchData();
-      } catch (err) {
-        toast.error("Erro ao excluir imóvel.");
-      } finally {
-        setLoading(false);
-      }
+    console.log(`[Properties] handleDelete: Executando exclusão do ID: ${id}`);
+    setLoading(true);
+    const toastId = toast.loading("Excluindo imóvel...");
+    
+    try {
+      await deleteProperty(id);
+      console.log(`[Properties] handleDelete: Sucesso ao excluir ID: ${id}`);
+      toast.success("Imóvel excluído com sucesso.", { id: toastId });
+      await fetchData();
+    } catch (err: any) {
+      console.error(`[Properties] handleDelete: Erro ao excluir ID: ${id}`, err);
+      toast.error(`Erro ao excluir: ${err.message || "Falha técnica"}`, { id: toastId });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -257,19 +260,19 @@ export default function PropertiesPage() {
     setIsSaving(true);
     isSubmittingRef.current = true;
 
-    // Trava de segurança: Reset automático após 100 segundos se o banco travar
+    // Trava de segurança: Reset automático após 15 segundos se o banco travar
     const uiTimeoutId = setTimeout(() => {
       if (isSubmittingRef.current) {
-        console.error("[Properties] CRITICAL: UI Timeout (100s) - Destravando manual.");
+        console.error("[Properties] CRITICAL: UI Timeout (15s) - Destravando manual.");
         setIsSaving(false);
         isSubmittingRef.current = false;
-        toast.error("O banco de dados demorou muito a responder. Tente novamente.");
+        toast.error("O banco de dados demorou muito a responder. A interface foi liberada, mas verifique se a operação foi concluída no inventário.");
       }
-    }, 100000);
+    }, 15000);
     
     try {
       if (!user) {
-        console.error("[Properties] 1.1 Usuário OFF");
+        console.error("[Properties] handleCreateOrUpdate: Usuário não autenticado");
         throw new Error("Sessão inválida.");
       }
       
@@ -280,8 +283,6 @@ export default function PropertiesPage() {
 
       const isEditing = !!editingProperty;
       const currentPropertyId = editingProperty?.id;
-
-      console.log("[Properties] 2. Preparando dados...", { isEditing });
 
       const cleanUrls = imageUrls.filter(url => 
         typeof url === 'string' &&
@@ -312,24 +313,26 @@ export default function PropertiesPage() {
         imageUrls: cleanUrls,
       };
 
+      console.log("[Properties] Preparando payload final para o servidor...", { isEditing, propertyData: data });
+
       // Deep clone rigoroso
       const dataToSave = JSON.parse(JSON.stringify(data));
 
-      console.log("[Properties] 3. Chamando lib/db...");
-      const toastId = toast.loading(isEditing ? "Atualizando..." : "Cadastrando...");
+      console.log("[Properties] Chamando lib/db -> create/updateProperty...");
+      const toastId = toast.loading(isEditing ? "Atualizando registro..." : "Salvando novo imóvel...");
 
       try {
         if (isEditing && currentPropertyId) {
-          console.log("[Properties] 4. updateProperty...");
+          console.log(`[Properties] Executando UPDATE no ID: ${currentPropertyId}`);
           await updateProperty(currentPropertyId, dataToSave, user.id);
         } else {
-          console.log("[Properties] 4. createProperty...");
+          console.log("[Properties] Executando INSERT de novo imóvel");
           await createProperty(dataToSave, user.id);
         }
         
-        console.log("[Properties] 5. Sucesso DB");
+        console.log("[Properties] Resposta de SUCESSO recebida do banco de dados.");
         clearTimeout(uiTimeoutId);
-        toast.success(isEditing ? "Imóvel atualizado!" : "Imóvel cadastrado!", { id: toastId });
+        toast.success(isEditing ? "Imóvel atualizado com sucesso!" : "Imóvel cadastrado com sucesso!", { id: toastId });
         
         setEditingProperty(null);
         setImageUrls([]);
@@ -440,8 +443,14 @@ export default function PropertiesPage() {
                   { id: "all", label: "Todos", icon: Home },
                   { id: "casa", label: "Casas", icon: Home },
                   { id: "apartamento", label: "Apartamentos", icon: Building },
+                  { id: "sobrado", label: "Sobrados", icon: Home },
+                  { id: "cobertura", label: "Coberturas", icon: Building },
                   { id: "comercial", label: "Comercial", icon: Briefcase },
                   { id: "terreno", label: "Terrenos", icon: TreePine },
+                  { id: "sítio", label: "Sítios", icon: TreePine },
+                  { id: "chácara", label: "Chácaras", icon: TreePine },
+                  { id: "fazenda", label: "Fazendas", icon: TreePine },
+                  { id: "outros", label: "Outros", icon: Plus },
                 ].map(type => (
                   <button
                     key={type.id}
@@ -516,9 +525,15 @@ export default function PropertiesPage() {
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                       >
                         <option value="casa">Casa</option>
+                        <option value="sobrado">Sobrado</option>
                         <option value="apartamento">Apartamento</option>
+                        <option value="cobertura">Cobertura</option>
                         <option value="comercial">Comercial</option>
                         <option value="terreno">Terreno</option>
+                        <option value="sítio">Sítio</option>
+                        <option value="chácara">Chácara</option>
+                        <option value="fazenda">Fazenda</option>
+                        <option value="outros">Outros</option>
                       </select>
                     </div>
 
@@ -757,9 +772,18 @@ export default function PropertiesPage() {
 
 function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEdit: () => void; onDelete: () => void }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  
   const images = property.imageUrls && property.imageUrls.length > 0 
     ? property.imageUrls 
     : ["https://picsum.photos/seed/realestate/800/600"];
+
+  useEffect(() => {
+    if (confirmDelete) {
+      const timer = setTimeout(() => setConfirmDelete(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [confirmDelete]);
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -884,25 +908,50 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
           <div className="flex gap-2">
             <div className="flex gap-1">
               <button 
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit();
                 }} 
                 className="w-10 h-10 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
+                title="Editar imóvel"
               >
                 <Edit className="w-4 h-4" />
               </button>
               <button 
+                type="button"
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
-                  onDelete();
+                  console.log(`[PropertyCard] Clique no botão lixeira. Estado confirmDelete: ${confirmDelete}`);
+                  if (confirmDelete) {
+                    console.log("[PropertyCard] Segunda confirmação recebida. Chamando onDelete...");
+                    onDelete();
+                    setConfirmDelete(false);
+                  } else {
+                    console.log("[PropertyCard] Primeira confirmação. Ativando estado de confirmação.");
+                    setConfirmDelete(true);
+                  }
                 }} 
-                className="w-10 h-10 rounded-xl bg-muted text-muted-foreground hover:bg-red-500/10 hover:text-red-500 flex items-center justify-center transition-all"
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer z-20 relative border",
+                  confirmDelete 
+                    ? "bg-red-500 text-white border-red-600 scale-110 shadow-lg shadow-red-500/20" 
+                    : "bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
+                )}
+                title={confirmDelete ? "Clique novamente para confirmar" : "Excluir imóvel"}
               >
-                <Trash2 className="w-4 h-4" />
+                {confirmDelete ? (
+                  <Trash2 className="w-4 h-4 animate-pulse pointer-events-none" />
+                ) : (
+                  <Trash2 className="w-4 h-4 pointer-events-none" />
+                )}
               </button>
             </div>
-            <button className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm">
+            <button 
+              type="button"
+              className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
+            >
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>

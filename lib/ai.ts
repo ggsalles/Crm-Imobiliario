@@ -9,15 +9,53 @@ export interface AISafeResponse {
  */
 export async function safeAiCall(prompt: string, fallbackText: string): Promise<AISafeResponse> {
   try {
-    const response = await fetch('/api/ai/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
+    let lastFetchError: any;
+    let response: Response | null = null;
+    
+    // Retry logic for the fetch call itself (network/transient issues)
+    for (let i = 0; i < 2; i++) {
+      try {
+        const url = typeof window !== 'undefined' ? `${window.location.origin}/api/ai/generate` : '/api/ai/generate';
+        
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        break; // Success
+      } catch (err: any) {
+        lastFetchError = err;
+        console.warn(`[AI/Fetch] Attempt ${i + 1} failed:`, err.message);
+        if (i < 1) await new Promise(r => setTimeout(r, 1000));
+      }
+    }
 
+    if (!response) {
+      throw lastFetchError || new Error("Não foi possível conectar ao servidor de IA.");
+    }
+
+    const contentType = response.headers.get("content-type");
+    
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      let errorMessage = `Erro na API de IA (${response.status})`;
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) { /* ignore */ }
+      } else {
+        try {
+          const errorText = await response.text();
+          if (errorText && errorText.length < 500 && !errorText.includes("<!doctype")) {
+             errorMessage = errorText;
+          }
+        } catch (e2) { /* ignore */ }
+      }
+      throw new Error(errorMessage);
+    }
+
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("A API de IA retornou um formato inesperado (HTML/Text). Tente novamente.");
     }
 
     const data = await response.json();

@@ -5,7 +5,7 @@
  * Build: 2026-05-10 v0.2.0 - Novo Leads corrigido para 1
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -106,7 +106,101 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState("Visão Geral");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  const refreshData = useCallback(async () => {
+    if (!user || !profile) return;
+    setLoading(true);
+    setErrorStatus(null);
+    try {
+      const ownerId = profile.role === 'Admin' ? undefined : user.id;
+      // Force initial fetch
+      const { getDeals, getContacts, getGoals, getActivitiesByContact, getProperties } = await import("@/lib/db");
+      
+      const [dealsData, contactsData, propertiesData, goalsData] = await Promise.all([
+        getDeals(ownerId),
+        getContacts(ownerId),
+        getProperties(ownerId),
+        getGoals(ownerId)
+      ]);
+      
+      setDeals(dealsData);
+      setContacts(contactsData);
+      setProperties(propertiesData);
+      setGoals(goalsData);
+    } catch (err: any) {
+      console.error("[Dashboard] Refresh error:", err);
+      setErrorStatus(err.message || "Erro ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user, profile]);
+
+  useEffect(() => {
+    if (user && profile) {
+      refreshData();
+    }
+  }, [user, profile, refreshData]);
+
+  const generateAIInsights = useCallback(async () => {
+    const { safeAiCall } = await import("@/lib/ai");
+    setLoadingAI(true);
+    const currentMonthStr = format(new Date(), "yyyy-MM");
+    const currentGoal = goals.find(g => g.month === currentMonthStr && g.ownerId === user?.id) || 
+                        goals.find(g => g.month === currentMonthStr);
+    const goalRevenue = currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 0;
+    const closedDealsTotal = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
+    const totalPipelineValue = deals
+      .filter(d => STAGES.some(s => s.id === d.stage && s.id !== 'closed'))
+      .reduce((acc, d) => acc + d.value, 0);
+    
+    const weightedPipelineValue = deals
+      .filter(d => d.stage !== 'closed')
+      .reduce((acc, d) => {
+        const prob = customProbabilities[d.stage] ?? (STAGES.findIndex(s => s.id === d.stage) + 1) * 20;
+        return acc + (d.value * (prob / 100));
+      }, 0);
+
+    const forecastValue = weightedPipelineValue + closedDealsTotal;
+    
+    const stageCounts = STAGES.map(stage => ({
+      name: stage.title,
+      count: deals.filter(d => d.stage === stage.id).length,
+      value: deals.filter(d => d.stage === stage.id).reduce((acc, d) => acc + d.value, 0),
+    }));
+
+    const prompt = `
+      Analise os seguintes dados do CRM SalesScore e forneça um resumo executivo de previsões de vendas e recomendações estratégicas.
+      Mês Atual: ${currentMonthStr}
+      Objetivo de Receita: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalRevenue)}
+      Vendas Realizadas (Closed): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedDealsTotal)}
+      Valor em Pipeline (Aberto): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPipelineValue)}
+      Previsão Ponderada (Realista): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(forecastValue)}
+
+      Distribuição do Pipeline:
+      ${stageCounts.map(s => `- ${s.name}: ${s.count} negócios, total ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.value)}`).join('\n')}
+
+      Por favor, forneça:
+      1. Uma avaliação da probabilidade de atingir a meta.
+      2. Qual estágio do funil é o maior gargalo.
+      3. Uma recomendação prática para fechar mais negócios.
+      
+      Responda em PORTUGUÊS, use tom profissional e direto. Use formatação em parágrafos curtos.
+    `;
+
+    const result = await safeAiCall(prompt, "Não foi possível gerar os insights agora. Tente novamente em alguns minutos.");
+    setAiInsights(result.text);
+    setLoadingAI(false);
+  }, [goals, deals, customProbabilities, user?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'Previsões' && deals.length > 0 && !aiInsights && !loadingAI) {
+      generateAIInsights();
+    }
+  }, [activeTab, deals.length, aiInsights, loadingAI, generateAIInsights]);
 
   useEffect(() => {
     const loadProbabilities = () => {
@@ -218,8 +312,9 @@ function DashboardContent() {
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthStr = format(lastMonthDate, "yyyy-MM");
 
-  const currentGoal = goals.find(g => g.month === currentMonthStr);
-  const goalRevenue = currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 100000;
+  const currentGoal = goals.find(g => g.month === currentMonthStr && g.ownerId === user?.id) || 
+                      goals.find(g => g.month === currentMonthStr);
+  const goalRevenue = currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 0;
   const closedDealsTotal = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
 
   // Metric Data helper for Sparklines
@@ -265,7 +360,7 @@ function DashboardContent() {
   const winRateDetails = `${totalDealsFinished} de ${validDeals.length} negócios`;
 
   // progressPercentage - Use monthly revenue for monthly goal
-  const progressPercentage = Math.round((currentMonthRevenue / goalRevenue) * 100);
+  const progressPercentage = goalRevenue > 0 ? Math.round((currentMonthRevenue / goalRevenue) * 100) : 0;
 
   // New Leads (Deals in Novo Lead stage created this month) - Force Sync trigger
   // We use deals instead of contacts as it aligns better with the pipeline view
@@ -363,10 +458,26 @@ function DashboardContent() {
         {/* Header */}
         <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-12 flex-1">
-            <div className="flex flex-col">
-              <h2 className="text-lg md:text-xl font-bold text-foreground shrink-0">Dashboard</h2>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <h2 className="text-lg md:text-xl font-bold text-foreground shrink-0">Dashboard</h2>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
+              </div>
+              <button 
+                onClick={() => refreshData()}
+                className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                title="Recarregar Dados"
+              >
+                <TrendingUp className={cn("w-5 h-5", loading && "animate-pulse")} />
+              </button>
             </div>
+            
+            {errorStatus && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[10px] font-bold uppercase tracking-widest">
+                <Info className="w-3 h-3" />
+                {errorStatus}
+              </div>
+            )}
             
             <div className="w-full md:max-w-md relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -686,6 +797,10 @@ function DashboardContent() {
                 goalRevenue={goalRevenue} 
                 progressPercentage={progressPercentage}
                 customProbabilities={customProbabilities}
+                aiInsights={aiInsights}
+                loadingAI={loadingAI}
+                onRefreshAI={generateAIInsights}
+                currentGoal={currentGoal}
               />
             )}
           </motion.div>
@@ -811,17 +926,22 @@ function ForecastView({
   goals, 
   goalRevenue, 
   progressPercentage,
-  customProbabilities
+  customProbabilities,
+  aiInsights,
+  loadingAI,
+  onRefreshAI,
+  currentGoal
 }: { 
   deals: Deal[], 
   goals: Goal[], 
   goalRevenue: number, 
   progressPercentage: number,
-  customProbabilities: Record<string, number>
+  customProbabilities: Record<string, number>,
+  aiInsights: string | null,
+  loadingAI: boolean,
+  onRefreshAI: () => void,
+  currentGoal?: Goal
 }) {
-  const currentMonthStr = format(new Date(), "yyyy-MM");
-  const currentGoal = goals.find(g => g.month === currentMonthStr);
-  
   const closedDealsTotal = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
   const totalPipelineValue = deals
     .filter(d => STAGES.some(s => s.id === d.stage && s.id !== 'closed'))
@@ -847,92 +967,137 @@ function ForecastView({
   return (
     <div className="space-y-10 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-card rounded-[40px] border border-border p-10 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h3 className="text-2xl font-bold text-foreground tracking-tight">Funil de Vendas</h3>
-              <p className="text-sm text-muted-foreground mt-1">Estimativa de conversão por estágio.</p>
+        <div className="lg:col-span-2 space-y-10">
+          <div className="bg-card rounded-[40px] border border-border p-10 shadow-sm overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] rotate-12 pointer-events-none">
+              <Layers className="w-64 h-64" />
             </div>
-            <div className="text-right group relative">
-              <div className="flex items-center justify-end gap-1.5 mb-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valor Total Pipeline</p>
-                <div className="cursor-help text-muted-foreground/30 hover:text-primary transition-colors">
-                  <Info className="w-3 h-3" />
-                  <div className="absolute right-0 top-full mt-2 w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10 font-medium normal-case tracking-normal">
-                    <p>A &quot;Previsão de Fechamento&quot; é calculada somando suas vendas realizadas ao 20% do valor total deste pipeline.</p>
+
+            <div className="flex items-center justify-between mb-10 relative z-10">
+              <div>
+                <h3 className="text-2xl font-bold text-foreground tracking-tight">Funil de Vendas</h3>
+                <p className="text-sm text-muted-foreground mt-1">Sua pipeline ativa distribuída por estágio.</p>
+              </div>
+              <div className="text-right group relative">
+                <div className="flex items-center justify-end gap-1.5 mb-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valor Total Pipeline</p>
+                  <div className="cursor-help text-muted-foreground/30 hover:text-primary transition-colors">
+                    <Info className="w-3 h-3" />
+                    <div className="absolute right-0 top-full mt-2 w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10 font-medium normal-case tracking-normal">
+                      <p>Valor bruto de todos os negócios que estão ativos no seu funil, sem considerar a probabilidade de fechamento.</p>
+                    </div>
                   </div>
                 </div>
+                <p className="text-2xl font-light text-foreground tracking-tighter">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPipelineValue)}
+                </p>
               </div>
-              <p className="text-2xl font-light text-foreground tracking-tighter">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPipelineValue)}
-              </p>
+            </div>
+
+            <div className="space-y-6 relative z-10">
+              {stageCounts.map((stage, idx) => {
+                const progressByValue = stage.goal > 0 
+                  ? (stage.value / stage.goal) * 100 
+                  : (totalPipelineValue > 0 ? (stage.value / totalPipelineValue) * 100 : 0);
+                
+                const visualProgress = stage.value > 0 ? Math.max(2, Math.min(100, progressByValue)) : 0;
+
+                return (
+                  <div key={stage.name} className="relative group">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          stage.color === 'blue' ? "bg-primary" :
+                          stage.color === 'purple' ? "bg-purple-600" :
+                          stage.color === 'orange' ? "bg-orange-600" :
+                          stage.color === 'yellow' ? "bg-yellow-600" : "bg-emerald-600"
+                        )} />
+                        <span className="text-sm font-bold text-foreground">{stage.name}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-2">
+                          {stage.count} {stage.count === 1 ? 'negócio' : 'negócios'}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-foreground">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.value)}
+                        </p>
+                        {stage.goal > 0 && (
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                            Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.goal)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-4 bg-muted rounded-full overflow-hidden shadow-inner ring-1 ring-border p-0.5">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${visualProgress}%` }}
+                        className={cn(
+                          "h-full rounded-full transition-all duration-1000",
+                          stage.color === 'blue' ? "bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)]" :
+                          stage.color === 'purple' ? "bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.4)]" :
+                          stage.color === 'orange' ? "bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.4)]" :
+                          stage.color === 'yellow' ? "bg-yellow-600 shadow-[0_0_8px_rgba(202,138,4,0.4)]" : 
+                          "bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.4)]"
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="space-y-6">
-            {stageCounts.map((stage, idx) => {
-              // Calculate progress based on value vs goal if goal exists, 
-              // otherwise show value relative to total pipeline
-              const progressByValue = stage.goal > 0 
-                ? (stage.value / stage.goal) * 100 
-                : (totalPipelineValue > 0 ? (stage.value / totalPipelineValue) * 100 : 0);
-              
-              // For visual fallback: 0% if value is 0, at least 2% if value > 0 for visibility
-              const visualProgress = stage.value > 0 ? Math.max(2, Math.min(100, progressByValue)) : 0;
-
-              return (
-                <div key={stage.name} className="relative group">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-2 h-2 rounded-full",
-                        stage.color === 'blue' ? "bg-primary" :
-                        stage.color === 'purple' ? "bg-purple-600" :
-                        stage.color === 'orange' ? "bg-orange-600" :
-                        stage.color === 'yellow' ? "bg-yellow-600" : "bg-emerald-600"
-                      )} />
-                      <span className="text-sm font-bold text-foreground">{stage.name}</span>
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-2">
-                        {stage.count} {stage.count === 1 ? 'negócio' : 'negócios'}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-bold text-foreground">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.value)}
-                      </p>
-                      {stage.goal > 0 && (
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.goal)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="h-4 bg-muted rounded-full overflow-hidden shadow-inner ring-1 ring-border p-0.5">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${visualProgress}%` }}
-                      className={cn(
-                        "h-full rounded-full transition-all duration-1000",
-                        stage.color === 'blue' ? "bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)]" :
-                        stage.color === 'purple' ? "bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.4)]" :
-                        stage.color === 'orange' ? "bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.4)]" :
-                        stage.color === 'yellow' ? "bg-yellow-600 shadow-[0_0_8px_rgba(202,138,4,0.4)]" : 
-                        "bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.4)]"
-                      )}
-                    />
-                  </div>
+          <div className="bg-card rounded-[40px] border border-border p-10 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
+                  <Zap className="w-6 h-6" />
                 </div>
-              );
-            })}
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight">Insights de IA</h3>
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Análise Estratégica do Pipeline</p>
+                </div>
+              </div>
+              <button 
+                onClick={onRefreshAI}
+                disabled={loadingAI}
+                className="p-3 bg-muted hover:bg-muted-foreground/10 text-muted-foreground rounded-xl transition-all disabled:opacity-50"
+              >
+                <div className={cn(loadingAI && "animate-spin")}>
+                  <Clock className="w-5 h-5" />
+                </div>
+              </button>
+            </div>
+
+            <div className="min-h-[150px] relative">
+              {loadingAI ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
+                  <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest animate-pulse">Inteligência Artificial processando...</p>
+                </div>
+              ) : aiInsights ? (
+                <div className="space-y-4 text-sm leading-relaxed text-muted-foreground font-medium">
+                  {aiInsights.split('\n').map((para, i) => para.trim() ? (
+                    <p key={i}>{para}</p>
+                  ) : null)}
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                  <p className="text-sm text-muted-foreground italic">Clique no ícone de relógio para gerar novas previsões baseadas no estado atual dos negócios.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="bg-slate-900 rounded-[40px] p-10 text-white shadow-2xl relative overflow-hidden">
+        <div className="bg-slate-900 rounded-[40px] p-10 text-white shadow-2xl relative overflow-hidden flex flex-col">
           <div className="absolute top-0 right-0 p-10 opacity-10">
             <TrendingUp className="w-40 h-40" />
           </div>
           
-          <div className="relative z-10">
+          <div className="relative z-10 flex-1">
             <h3 className="text-xl font-bold tracking-tight mb-8">Meta Mensal</h3>
             
             <div className="mb-12">
@@ -947,7 +1112,7 @@ function ForecastView({
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(100, progressPercentage)}%` }}
-                  className="h-full bg-primary rounded-full shadow-[0_0_15px_rgba(var(--primary),0.6)]"
+                  className="h-full bg-primary rounded-full shadow-[0_0_15px_rgba(var(--color-primary),0.6)]"
                 />
               </div>
               <div className="flex justify-between items-center mt-4">
@@ -958,21 +1123,68 @@ function ForecastView({
               </div>
             </div>
 
-            <div className="space-y-6 pt-10 border-t border-white/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Previsão Fechamento</p>
-                  <p className="text-lg font-bold">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}
-                  </p>
+            <div className="space-y-8 pt-10 border-t border-white/10 mt-auto">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Previsão Realista</p>
+                  <div className="flex items-center gap-3">
+                    <div className="group relative">
+                      <div className="cursor-help text-slate-500 hover:text-emerald-500 transition-colors">
+                        <Info className="w-3.5 h-3.5" />
+                        <div className="absolute right-0 top-full mt-2 w-64 p-5 bg-slate-800 text-white text-[10px] rounded-[24px] opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 shadow-2xl border border-white/10 font-medium normal-case tracking-normal backdrop-blur-xl translate-y-1 group-hover:translate-y-0">
+                          <p className="font-bold mb-3 uppercase tracking-widest text-emerald-400 border-b border-white/10 pb-2 flex items-center gap-2">
+                            <Layers className="w-3 h-3" />
+                            Equação do Momento
+                          </p>
+                          <div className="space-y-2.5">
+                            <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
+                              <span className="text-slate-400">Realizado (100%):</span>
+                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(closedDealsTotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
+                              <span className="text-slate-400">Ponderado (Pipeline):</span>
+                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(weightedPipelineValue)}</span>
+                            </div>
+                            <div className="h-px bg-white/10 my-1"></div>
+                            <div className="flex justify-between items-center text-[11px] px-1">
+                              <span className="font-bold text-emerald-400">Previsão Final:</span>
+                              <span className="font-bold text-emerald-400 font-mono italic">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}</span>
+                            </div>
+                          </div>
+                          <p className="mt-4 text-[9px] text-slate-500 leading-tight">
+                            * O valor ponderado é a soma de cada negócio multiplicado pela probabilidade de fechamento do seu respectivo estágio.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 bg-emerald-500/20 text-emerald-500 rounded-lg flex items-center justify-center">
+                      <ArrowUpRight className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
-                <div className="w-10 h-10 bg-emerald-500/20 text-emerald-500 rounded-xl flex items-center justify-center">
-                  <ArrowUpRight className="w-5 h-5" />
-                </div>
+                <p className="text-3xl font-light tracking-tighter mb-2">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                  Cálculo baseado no fechamento atual somado à probabilidade de conversão ponderada de cada estágio do funil.
+                </p>
               </div>
-              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                Sua previsão é baseada em 20% do valor total do seu funil atual somado às vendas já realizadas.
-              </p>
+
+              <div className="bg-white/5 rounded-[24px] p-6 border border-white/10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-blue-500/20 text-blue-500 rounded-lg flex items-center justify-center">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status da Meta</span>
+                </div>
+                <p className="text-sm font-medium leading-relaxed">
+                  {progressPercentage >= 100 
+                    ? "Meta atingida! Excelente trabalho! Sua previsão indica que você pode superar o objetivo em mais de " + 
+                      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.max(0, forecastValue - goalRevenue)) + "."
+                    : "Você ainda tem " + (100 - progressPercentage) + "% para atingir seu objetivo. Foque nos estágios de negociação final para acelerar o fechamento."
+                  }
+                </p>
+              </div>
             </div>
           </div>
         </div>
