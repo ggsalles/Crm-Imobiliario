@@ -27,6 +27,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
 import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, getUserProfile, UserProfile } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
+import { formatCurrencyBRL } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -194,7 +195,7 @@ export default function DealDetailPage() {
                   </div>
                   
                   <div className="text-2xl font-black text-foreground pt-2">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
+                    {formatCurrencyBRL(deal.value)}
                   </div>
                 </div>
               </div>
@@ -208,6 +209,7 @@ export default function DealDetailPage() {
                   Mensagem
                 </button>
                 <button 
+                  disabled={loading}
                   onClick={async () => {
                     const STAGES = [
                       { id: 'lead', title: 'Novo Lead' },
@@ -220,20 +222,23 @@ export default function DealDetailPage() {
                     if (currentIndex < STAGES.length - 1) {
                       const nextStage = STAGES[currentIndex + 1];
                       try {
+                        setLoading(true);
                         await updateDeal(deal.id, { stage: nextStage.id });
                         toast.success(`Estágio avançado para: ${nextStage.title}`);
-                        refreshData();
+                        await refreshData();
                       } catch (err) {
                         toast.error("Erro ao avançar estágio.");
+                      } finally {
+                        setLoading(false);
                       }
                     } else {
                       toast.info("Este negócio já está no último estágio.");
                     }
                   }}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/30"
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50"
                 >
-                  <Zap className="w-4 h-4" />
-                  Avançar Estágio
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  {loading ? "Processando..." : "Avançar Estágio"}
                 </button>
               </div>
             </div>

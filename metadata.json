@@ -1,6 +1,6 @@
 {
   "name": "SalesScore",
-  "description": "CRM mobiliário de elite para gestão de contatos e inventário.",
+  "description": "CRM mobiliário de elite com inteligência preditiva e resiliência de dados em tempo real.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

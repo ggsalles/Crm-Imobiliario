@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Plus, 
@@ -52,6 +52,7 @@ export default function PropertiesPage() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [title, setTitle] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,10 +76,13 @@ export default function PropertiesPage() {
 
   useEffect(() => {
     if (view === 'form') {
+      setTitle(editingProperty?.title || "");
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
       setImageUrls(editingProperty?.imageUrls || []);
     }
-  }, [view, editingProperty]);
+    // Only reset when switching TO form view or editing a different property
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, editingProperty?.id]);
 
   // Address form states (for auto-fill)
   const [addressData, setAddressData] = useState({
@@ -112,11 +116,13 @@ export default function PropertiesPage() {
       
       if (!data.erro) {
         setAddressData({
-          street: data.logradouro,
-          neighborhood: data.bairro,
-          city: data.localidade,
-          state: data.uf,
+          street: data.logradouro || "",
+          neighborhood: data.bairro || "",
+          city: data.localidade || "",
+          state: data.uf || "",
         });
+      } else {
+        toast.error("CEP não encontrado.");
       }
     } catch (error) {
       console.error("Erro ao buscar CEP:", error);
@@ -144,13 +150,16 @@ export default function PropertiesPage() {
     }
   }, [user, authLoading, profile, router]);
 
-  const filteredProperties = properties.filter((p) => {
-    const matchesSearch =
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.location.toLowerCase().includes(search.toLowerCase());
-    const matchesType = filterType === "all" || p.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  const filteredProperties = useMemo(() => {
+    if (typeof window === 'undefined') return [];
+    return properties.filter((p) => {
+      const matchesSearch =
+        (p.title || "").toLowerCase().includes(search.toLowerCase()) ||
+        (p.location || "").toLowerCase().includes(search.toLowerCase());
+      const matchesType = filterType === "all" || p.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  }, [properties, search, filterType]);
 
   const handleDelete = async (id: string) => {
     console.log(`[Properties] handleDelete: Executando exclusão do ID: ${id}`);
@@ -171,43 +180,86 @@ export default function PropertiesPage() {
 
   const [isDragging, setIsDragging] = useState(false);
 
-  const processFiles = async (files: FileList | File[]) => {
+  const handleNew = useCallback(() => {
+    setEditingProperty(null);
+    setView('form');
+    setAddressData({ street: "", neighborhood: "", city: "", state: "" });
+    setImageUrls([]);
+    setTitle("");
+    setDisplayPrice("");
+  }, []);
+
+  const handleEdit = useCallback((property: Property) => {
+    setEditingProperty(property);
+    setView('form');
+  }, []);
+
+  const processFiles = useCallback(async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
 
     const totalFiles = files.length;
     let uploadedCount = 0;
     
     setIsUploading(true);
-    const toastId = toast.loading(`Enviando ${totalFiles} ${totalFiles === 1 ? 'imagem' : 'imagens'}...`);
+    const toastId = toast.loading(`Processando ${totalFiles} ${totalFiles === 1 ? 'imagem' : 'imagens'}...`);
 
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
-        if (file.size > 10 * 1024 * 1024) {
-          throw new Error(`Arquivo "${file.name}" é muito grande (Máx 10MB).`);
-        }
+      // Processamento sequencial para evitar travamentos em conexões instáveis ou limites de rede
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        toast.loading(`Enviando ${i + 1} de ${totalFiles}: ${file.name}`, { id: toastId });
         
-        try {
-          const result = await uploadFile(file);
-          uploadedCount++;
-          return result.url;
-        } catch (err: any) {
-          console.error(`Erro ao subir ${file.name}:`, err);
-          throw err;
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`Arquivo "${file.name}" excede 10MB.`, { duration: 3000 });
+          continue;
         }
-      });
 
-      const urls = await Promise.all(uploadPromises);
-      setImageUrls(prev => [...prev, ...urls]);
-      toast.success(`${uploadedCount} ${uploadedCount === 1 ? 'imagem enviada' : 'imagens enviadas'} com sucesso!`, { id: toastId });
+        try {
+          // Pequeno delay para permitir que o browser processe as mensagens de toast e renderize o progresso
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Proteção contra arquivos vazios ou corrompidos
+          if (file.size === 0) {
+            toast.error(`Arquivo "${file.name}" está vazio.`, { duration: 3000 });
+            continue;
+          }
+
+          // Timeout de 60 segundos por imagem (mais generoso para conexões lentas)
+          const uploadTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout de 60s excedido")), 60000)
+          );
+
+          console.log(`[Properties] Iniciando upload ${i+1}/${totalFiles}: ${file.name} (${file.size} bytes)`);
+          const uploadOp = uploadFile(file, 'property-images', user?.id);
+          const result = await Promise.race([uploadOp, uploadTimeout]) as { url: string };
+          
+          if (result && result.url) {
+            console.log(`[Properties] Upload concluído para ${file.name}: ${result.url}`);
+            // Atualização incremental para feedback imediato
+            setImageUrls(prev => [...prev, result.url]);
+            uploadedCount++;
+          }
+        } catch (err: any) {
+          console.error(`[Properties] Falha no upload da imagem ${i+1}:`, err);
+          toast.error(`Não foi possível enviar: ${file.name}`, { duration: 3000 });
+        }
+      }
+
+      if (uploadedCount > 0) {
+        toast.success(`${uploadedCount} ${uploadedCount === 1 ? 'imagem enviada' : 'imagens enviadas'} com sucesso!`, { id: toastId });
+      } else {
+        toast.error("Nenhuma imagem foi enviada corretamente.", { id: toastId });
+      }
     } catch (error: any) {
-      console.error("Erro no upload múltiplo:", error);
-      toast.error(error.message || "Erro no envio de uma ou mais imagens.", { id: toastId });
+      console.error("[Properties] Erro fatal no processFiles:", error);
+      toast.error("Erro ao processar lote de imagens.", { id: toastId });
     } finally {
       setIsUploading(false);
     }
-  };
+  }, []);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploading) return;
     const files = e.target.files;
     if (files) {
       await processFiles(files);
@@ -215,28 +267,30 @@ export default function PropertiesPage() {
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
-  };
+    if (!isDragging) setIsDragging(true);
+  }, [isDragging]);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-  };
+  }, []);
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+
+    if (isUploading) return;
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       await processFiles(files);
     }
-  };
+  }, [processFiles, isUploading]);
 
   const handleCreateOrUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -250,15 +304,15 @@ export default function PropertiesPage() {
     setIsSaving(true);
     isSubmittingRef.current = true;
 
-    // Trava de segurança: Reset automático após 15 segundos se o banco travar
+    // Trava de segurança: Reset automático após 90 segundos se o banco travar (ajustado para evitar conflito com retentativas do apiFetch)
     const uiTimeoutId = setTimeout(() => {
       if (isSubmittingRef.current) {
-        console.error("[Properties] CRITICAL: UI Timeout (15s) - Destravando manual.");
+        console.error("[Properties] CRITICAL: UI Timeout (90s) - Destravando manual.");
         setIsSaving(false);
         isSubmittingRef.current = false;
         toast.error("O banco de dados demorou muito a responder. A interface foi liberada, mas verifique se a operação foi concluída no inventário.");
       }
-    }, 15000);
+    }, 90000);
     
     try {
       if (!user) {
@@ -397,12 +451,9 @@ export default function PropertiesPage() {
                   />
                 </div>
                 <button 
-                  onClick={() => {
-                    setEditingProperty(null);
-                    setView('form');
-                  }}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
-                >
+  onClick={handleNew}
+  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
+>
                   <Plus className="w-4 h-4" />
                   Novo Imóvel
                 </button>
@@ -463,14 +514,11 @@ export default function PropertiesPage() {
                 <AnimatePresence>
                   {filteredProperties.map((property) => (
                     <PropertyCard 
-                      key={property.id} 
-                      property={property} 
-                      onEdit={() => {
-                        setEditingProperty(property);
-                        setView('form');
-                      }}
-                      onDelete={() => handleDelete(property.id)}
-                    />
+  key={property.id} 
+  property={property} 
+  onEdit={() => handleEdit(property)}
+  onDelete={() => handleDelete(property.id)}
+/>
                   ))}
                 </AnimatePresence>
               </div>
@@ -487,7 +535,14 @@ export default function PropertiesPage() {
             </div>
           ) : (
             <div className="max-w-4xl mx-auto">
-              <form onSubmit={handleCreateOrUpdate} className="bg-card border border-border rounded-[40px] shadow-2xl overflow-hidden pb-12">
+                  <form 
+                    key={editingProperty?.id || 'new-property'}
+                    onSubmit={handleCreateOrUpdate} 
+                    className={cn(
+                      "bg-card border border-border rounded-[40px] shadow-2xl overflow-hidden pb-12 transition-opacity",
+                      (isSaving || isUploading) && "opacity-80 cursor-wait"
+                    )}
+                  >
                 <div className="p-10 space-y-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="md:col-span-2 space-y-3">
@@ -495,7 +550,8 @@ export default function PropertiesPage() {
                       <input 
                         name="title"
                         required
-                        defaultValue={editingProperty?.title}
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
                         placeholder="Ex: Apartamento Vista Mar Premium"
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                       />
@@ -542,6 +598,7 @@ export default function PropertiesPage() {
                         required
                         value={displayPrice}
                         onChange={(e) => setDisplayPrice(formatCurrencyBRL(e.target.value))}
+                        onFocus={(e) => e.target.select()}
                         placeholder="R$ 0,00"
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-black text-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                       />
@@ -558,7 +615,9 @@ export default function PropertiesPage() {
                         required
                         defaultValue={editingProperty?.cep}
                         placeholder="00000-000"
-                        className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-mono font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                        autoComplete="new-password"
+                        className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-mono font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none autofill:shadow-[0_0_0_1000px_#111827_inset] autofill:text-white"
+                        style={{ backgroundColor: '#111827' }}
                       />
                     </div>
 
@@ -729,11 +788,11 @@ export default function PropertiesPage() {
                 <div className="px-10 py-8 bg-muted/30 border-t border-border flex flex-col md:flex-row gap-4">
                   <button 
                     type="submit" 
-                    disabled={isSaving}
+                    disabled={isSaving || isUploading}
                     className="flex-1 bg-primary text-primary-foreground py-5 rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                   >
-                    {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {editingProperty ? 'Salvar Alterações' : 'Publicar no Inventário'}
+                    {(isSaving || isUploading) && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isUploading ? "Processando Imagens..." : isSaving ? "Salvando..." : editingProperty ? 'Salvar Alterações' : 'Publicar no Inventário'}
                   </button>
                   <button 
                     type="button" 

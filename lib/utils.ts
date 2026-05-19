@@ -5,24 +5,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrencyBRL(value: string | number) {
-  const amount = typeof value === 'string' 
-    ? value.replace(/\D/g, '') 
-    : Math.round(Number(value) * 100).toString();
+export function formatCurrencyBRL(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") return "R$ 0,00";
   
-  if (!amount || amount === '0') return 'R$ 0,00';
+  let cents: number;
+  if (typeof value === "string") {
+    // Para inputs de digitação, pegamos apenas os dígitos
+    const numeric = value.replace(/\D/g, "");
+    cents = numeric ? parseInt(numeric, 10) : 0;
+  } else {
+    // Para valores numéricos (ex: do banco), convertemos para centavos
+    cents = Math.round(Number(value) * 100);
+  }
   
-  const numberValue = parseInt(amount, 10) / 100;
-  
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(numberValue);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(cents / 100);
 }
 
-export function parseCurrencyBRLToNumber(formattedValue: string) {
-  if (!formattedValue) return 0;
-  const numericString = formattedValue.replace(/\D/g, '');
+export function parseCurrencyBRLToNumber(formattedValue: string | number | null | undefined) {
+  if (formattedValue === null || formattedValue === undefined || formattedValue === "") return 0;
+  if (typeof formattedValue === "number") return formattedValue;
+  
+  const numericString = formattedValue.replace(/\D/g, "");
   return numericString ? parseInt(numericString, 10) / 100 : 0;
 }
 

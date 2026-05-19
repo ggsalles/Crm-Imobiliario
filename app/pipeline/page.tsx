@@ -171,6 +171,11 @@ export default function PipelinePage() {
     const updatedDeals = deals.map(d => d.id === draggableId ? { ...d, stage: newStage } : d);
     setDeals(updatedDeals);
 
+    if (!draggableId || draggableId === 'undefined' || draggableId === 'null') {
+      console.warn("[Pipeline] onDragEnd: draggableId is invalid", draggableId);
+      return;
+    }
+
     try {
       await updateDeal(draggableId, { stage: newStage });
       
@@ -333,7 +338,7 @@ export default function PipelinePage() {
                   <Target className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
                   <div className="text-left">
                     <p className="text-[9px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-1">Definir Meta</p>
-                    <p className="leading-none">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalValue)}</p>
+                    <p className="leading-none">{formatCurrencyBRL(goalValue)}</p>
                   </div>
                 </button>
                 <button 
@@ -365,7 +370,7 @@ export default function PipelinePage() {
                   />
                 </div>
                 <div className="text-[10px] text-right font-bold text-muted-foreground uppercase tracking-wider">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalClosed)} / {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalValue)}
+                  {formatCurrencyBRL(totalClosed)} / {formatCurrencyBRL(goalValue)}
                 </div>
               </div>
             </div>
@@ -415,7 +420,7 @@ export default function PipelinePage() {
                       {/* Stage Mini Progress */}
                       <div className="space-y-1">
                         <div className="flex justify-between items-center text-[10px] font-bold">
-                          <span className="text-muted-foreground uppercase">Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stageGoalValue)}</span>
+                          <span className="text-muted-foreground uppercase">Meta: {formatCurrencyBRL(stageGoalValue)}</span>
                           <span className={cn(stageProgress >= 100 ? "text-emerald-500" : "text-primary")}>{Math.round(stageProgress)}%</span>
                         </div>
                         <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
@@ -484,7 +489,7 @@ export default function PipelinePage() {
                                 
                                 <div className="flex items-center justify-between pt-3 border-t border-border/50">
                                   <span className="text-sm font-bold text-foreground">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
+                                    {formatCurrencyBRL(deal.value)}
                                   </span>
                                   <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
                                     <Clock className="w-3 h-3" />
@@ -600,7 +605,7 @@ export default function PipelinePage() {
                   >
                     <option value="" className="bg-card">Nenhum imóvel vinculado</option>
                     {properties.map(p => (
-                      <option key={p.id} value={p.id} className="bg-card">{p.title} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.price)}</option>
+                      <option key={p.id} value={p.id} className="bg-card">{p.title} - {formatCurrencyBRL(p.price)}</option>
                     ))}
                   </select>
                 </div>

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const ownerId = searchParams.get('ownerId');
     const id = searchParams.get('id');
 
-    if (id) {
+    if (id && id !== 'undefined' && id !== 'null') {
         const { data, error } = await supabase.from('contacts').select('*').eq('id', id).maybeSingle();
         if (error) throw error;
         if (!data) return NextResponse.json(null);
@@ -104,7 +104,9 @@ export async function PATCH(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) throw new Error("ID required");
+    if (!id || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
+    }
 
     const data = await req.json();
 
@@ -127,7 +129,9 @@ export async function DELETE(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) throw new Error("ID required");
+    if (!id || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
+    }
 
     // Using .select() to confirm deletion as in original db.ts
     const { data, error } = await supabase

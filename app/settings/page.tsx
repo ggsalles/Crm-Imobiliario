@@ -278,32 +278,22 @@ export default function SettingsPage() {
                   <DocItem 
                     title="Dashboard" 
                     icon={LayoutDashboard} 
-                    content="A tela principal (Dashboard) é onde você tem o pulso do seu negócio. O gráfico de performance da equipe mostra o ranking dos agentes por volume de vendas e taxa de conversão. Os cards superiores mostram métricas rápidas como média de vendas e melhor performance individual. Use o filtro de período para analisar tendências históricas."
+                    content="A tela principal (Dashboard) integra inteligência preditiva para fornecer o pulso do seu negócio. O gráfico de performance da equipe mostra o ranking dos agentes por volume de vendas e taxa de conversão real. Os cards superiores mostram métricas rápidas como o Forecast (Previsão Realista) que utiliza algoritmos de probabilidade para estimar o fechamento do mês, além da média de vendas e melhor performance individual."
                   />
                   <DocItem 
                     title="Pipeline (Funil de Vendas)" 
                     icon={Trello} 
-                    content="O Pipeline é o coração operacional do CRM. Cada card representa um negócio (Deal). Você pode arrastar os cards entre as colunas (Prospecção, Qualificação, Proposta, Negociação, Fechado) para atualizar o status. Clique em um card para ver o histórico completo, documentos anexos e atividades relacionadas a esse negócio específico."
+                    content="O Pipeline é o centro de comando. Cada card (Deal) exibe o valor formatado, empresa vinculada e data de atualização. Você pode arrastar os cards entre os estágios configuráveis. Ao editar um negócio, o sistema oferece integração direta com o Inventário de Imóveis e Contatos, garantindo resiliência de dados através de um cache inteligente que permite visualização imediata mesmo com instabilidades de rede."
                   />
                   <DocItem 
-                    title="Calendário e Atividades" 
-                    icon={Calendar} 
-                    content="No Calendário, você gerencia seu tempo. As atividades (reuniões, visitas, chamadas) são sincronizadas em tempo real. Você pode criar novas atividades clicando em qualquer data, definir lembretes e associá-las a contatos ou imóveis. O sistema sinaliza atividades atrasadas em vermelho para evitar perda de oportunidades."
+                    title="Vendas Inteligentes (IA)" 
+                    icon={Sparkles} 
+                    content="O SalesScore utiliza IA para analisar o histórico de interações e sugerir o próximo passo ideal. No detalhe do negócio, o módulo 'Vendas Inteligentes' gera orientações de coaching em tempo real para acelerar o fechamento, identificando gargalos no funil e sugerindo imóveis do inventário que possuem maior 'Match' com o perfil do comprador."
                   />
                   <DocItem 
-                    title="Clientes e Contatos" 
-                    icon={Users} 
-                    content="Este módulo centraliza todas as informações de pessoas físicas e jurídicas. Cada perfil de cliente armazena dados de contato, preferências de imóveis pesquisados, histórico de conversas e documentos (como RG/CPF). Você pode segmentar clientes por 'Tipo' (Comprador, Proprietário, Investidor) para campanhas de marketing direcionadas."
-                  />
-                  <DocItem 
-                    title="Relatórios e Analytics" 
-                    icon={BarChart3} 
-                    content="A aba de Relatórios transforma dados brutos em inteligência comercial. Analise a origem dos seus leads, o ticket médio das vendas, o tempo médio de fechamento e a eficácia de cada canal de aquisição. Os relatórios podem ser exportados para apresentações de resultados da equipe."
-                  />
-                  <DocItem 
-                    title="Gestão de Imóveis" 
+                    title="Gestão de Imóveis e Matching" 
                     icon={Home} 
-                    content="Gerencie seu portfólio completo de propriedades. Adicione fotos em alta resolução, tour virtual, especificações técnicas (área, quartos, vagas) e localização. O sistema permite cruzar automaticamente as características dos imóveis com as preferências cadastradas nos perfis dos clientes (Matching)."
+                    content="Gerencie seu inventário com campos técnicos detalhados. O recurso de 'Match de Imóveis' realiza um cruzamento matemático entre o valor do negócio, preferências do cliente e características do imóvel. Negócios podem ser vinculados a múltiplos registros, permitindo rastreabilidade completa entre o proprietário, o imóvel e o lead comprador."
                   />
                   <DocItem 
                     title="Equipe e Permissões" 
@@ -339,24 +329,24 @@ export default function SettingsPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <DocItem 
-                    title="Cálculo da Taxa de Conversão" 
-                    icon={Percent} 
-                    content="Fórmula: (Total de Negócios Fechados / Total de Negócios no Pipeline) × 100. Consideramos todos os negócios que passaram pelo seu funil este mês. Se você tem 10 negócios e fechou 3, sua taxa é 30%."
-                  />
-                  <DocItem 
                     title="Previsão de Fechamento (Forecast)" 
                     icon={Calculator} 
-                    content="Fórmula: Σ (Valor do Negócio × Probabilidade da Etapa) + Receita Realizada. Nós somamos o que você já vendeu com a expectativa estatística do seu pipeline atual. É a ferramenta mais poderosa para prever o faturamento futuro."
+                    content="Fórmula: Receita Realizada + Σ (Valor em Pipeline × % Probabilidade do Estágio). Esta métrica projeta o fechamento realista do mês. Diferente do valor bruto do pipeline, o Forecast pondera o risco de cada etapa, fornecendo uma visão segura do faturamento esperado."
                   />
                   <DocItem 
-                    title="Score de Probabilidade" 
-                    icon={Target} 
-                    content="A probabilidade é atribuída a cada estágio (ex: Proposta = 60%). No Dashboard, o Score de um negócio individual reflete a chance de fechamento baseada na etapa atual dele. Isso ajuda a priorizar esforços nos leads mais quentes."
+                    title="Taxa de Conversão" 
+                    icon={Percent} 
+                    content="Fórmula: (Negócios Ganhos / Total de Oportunidades Finalizadas) × 100. Analisamos a eficiência individual e coletiva em transformar leads em contratos assinados. Uma taxa saudável gira entre 15% e 25% no mercado imobiliário de alto padrão."
                   />
                   <DocItem 
-                    title="Ticket Médio" 
+                    title="Empresa Individual vs Jurídica" 
+                    icon={Building2} 
+                    content="No SalesScore, um Negócio pode ser associado a uma 'Empresa Individual' quando o cliente é uma pessoa física direta, ou a uma 'Entidade Jurídica' quando envolve representação corporativa. Isso permite segmentar o faturamento entre B2B e B2C com precisão."
+                  />
+                  <DocItem 
+                    title="Ticket Médio Mensal" 
                     icon={Sigma} 
-                    content="Fórmula: Valor Total de Vendas / Número de Negócios Fechados. Esta métrica indica o valor médio de cada contrato assinado em sua imobiliária, essencial para entender se você está focando em imóveis de alto padrão ou volume."
+                    content="Fórmula: Valor Total Faturado / Quantidade de Vendas Realizadas. Essencial para identificar o posicionamento da sua imobiliária no mercado e o perfil de ticket dos imóveis mais líquidos no inventário."
                   />
                   <DocItem 
                     title="Saúde da Carteira (Radar)" 

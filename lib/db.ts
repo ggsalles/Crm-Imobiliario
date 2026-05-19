@@ -222,7 +222,7 @@ export async function getContacts(ownerId?: string) {
 
 export function subscribeToContacts(callback: (contacts: Contact[]) => void, ownerId?: string) {
   const cacheKey = `contacts:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchContacts = async () => {
     try {
@@ -234,7 +234,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
         callback([]); 
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToContacts error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToContacts error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -255,7 +255,8 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
 }
 
 export async function createContact(data: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const contactData = {
@@ -331,7 +332,10 @@ export async function getCompanies(ownerId?: string) {
 
 export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
   const cacheKey = `companies:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  // Only use cache if it actually has data
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) {
+    callback(dataCache[cacheKey]);
+  }
 
   const fetchCompanies = async () => {
     try {
@@ -343,7 +347,7 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
         callback([]);
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToCompanies error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToCompanies error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -364,7 +368,8 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
 }
 
 export async function createCompany(data: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const companyData = {
@@ -439,7 +444,7 @@ export async function getDealsByContact(contactId: string) {
 
 export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: string) {
   const cacheKey = `deals:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchDeals = async () => {
     try {
@@ -451,7 +456,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
         callback([]);
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToDeals error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToDeals error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -472,17 +477,20 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
 }
 
 export async function createDeal(data: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
+
+  const sanitizeId = (id: any) => (id && id !== 'undefined' && id !== 'null') ? id : null;
 
   const dealData = {
     title: data.title,
-    value: data.value,
+    value: Number(data.value) || 0,
     stage: data.stage,
-    company_id: data.companyId || null,
-    contact_id: data.contactId || null,
-    property_id: data.propertyId || null,
-    owner_id: data.ownerId || user.id
+    company_id: sanitizeId(data.companyId),
+    contact_id: sanitizeId(data.contactId),
+    property_id: sanitizeId(data.propertyId),
+    owner_id: sanitizeId(data.ownerId) || user.id
   };
 
   try {
@@ -498,14 +506,21 @@ export async function createDeal(data: any) {
 }
 
 export async function updateDeal(id: string, data: any) {
+  if (!id || id === 'undefined' || id === 'null') {
+    console.warn("[lib/db] updateDeal: Invalid ID, ignoring update request.", id);
+    return;
+  }
+
   const updateData: any = { updated_at: new Date().toISOString() };
+  const sanitizeId = (val: any) => (val && val !== 'undefined' && val !== 'null') ? val : null;
+
   if (data.title !== undefined) updateData.title = data.title;
-  if (data.value !== undefined) updateData.value = data.value;
+  if (data.value !== undefined) updateData.value = Number(data.value) || 0;
   if (data.stage !== undefined) updateData.stage = data.stage;
-  if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
-  if (data.contactId !== undefined) updateData.contact_id = data.contactId || null;
-  if (data.propertyId !== undefined) updateData.property_id = data.propertyId || null;
-  if (data.ownerId !== undefined) updateData.owner_id = data.ownerId || null;
+  if (data.companyId !== undefined) updateData.company_id = sanitizeId(data.companyId);
+  if (data.contactId !== undefined) updateData.contact_id = sanitizeId(data.contactId);
+  if (data.propertyId !== undefined) updateData.property_id = sanitizeId(data.propertyId);
+  if (data.ownerId !== undefined) updateData.owner_id = sanitizeId(data.ownerId);
 
   try {
     await apiFetch(`/api/deals?id=${id}`, {
@@ -519,6 +534,10 @@ export async function updateDeal(id: string, data: any) {
 }
 
 export async function deleteDeal(id: string) {
+  if (!id || id === 'undefined' || id === 'null') {
+    console.warn("[lib/db] deleteDeal: Invalid ID, ignoring delete request.", id);
+    return;
+  }
   try {
     await apiFetch(`/api/deals?id=${id}`, {
       method: "DELETE"
@@ -544,7 +563,7 @@ export async function getGoals(ownerId?: string) {
 
 export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: string) {
   const cacheKey = `goals:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchGoals = async () => {
     try {
@@ -556,7 +575,7 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
         callback([]);
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToGoals error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToGoals error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -577,7 +596,8 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
 }
 
 export async function setGoal(month: string, stageGoals: { [stageId: string]: number }) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   // First, check if a goal for this month and user already exists to get its ID
@@ -609,6 +629,7 @@ export async function setGoal(month: string, stageGoals: { [stageId: string]: nu
 export async function getUserProfile(id: string) {
   try {
     const data = await apiFetch(`/api/profiles?id=${id}`);
+    if (Array.isArray(data)) return data[0] as UserProfile;
     return data as UserProfile;
   } catch (err) {
     console.error("[lib/db] getUserProfile FATAL:", err);
@@ -619,7 +640,7 @@ export async function getUserProfile(id: string) {
 // User Profiles
 export function subscribeToUsers(callback: (users: UserProfile[]) => void, ownerId?: string) {
   const cacheKey = `users:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchUsers = async () => {
     try {
@@ -633,7 +654,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
         callback([]);
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToUsers error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToUsers error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -825,7 +846,7 @@ export async function deleteActivity(id: string) {
 // Timeline
 export function subscribeToTimeline(category: string, relatedId: string, callback: (events: TimelineEvent[]) => void, ownerId?: string) {
   const cacheKey = `timeline:${category}:${relatedId}:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchEvents = async () => {
     try {
@@ -840,7 +861,7 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
         callback([]);
       }
     } catch (err) {
-      console.warn("[lib/db] subscribeToTimeline error, maintaining stale data:", err);
+      console.warn("[lib/db] subscribeToTimeline error:", err);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -861,7 +882,8 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
 }
 
 export async function createTimelineEvent(data: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const eventData = {
@@ -910,29 +932,30 @@ async function winTimeout<T>(promise: Promise<T>, ms: number = 60000, label: str
 
 async function apiFetch(url: string, options: any = {}) {
   const isServer = typeof window === 'undefined';
-  const baseUrl = isServer ? '' : window.location.origin;
-  const fullUrl = (url.startsWith('http') || isServer) ? url : `${baseUrl}${url}`;
+  const timestamp = new Date().toISOString();
   
-  console.log(`[apiFetch] INICIANDO: ${options.method || 'GET'} ${url}`);
+  // No client, relative URLs são preferíveis. No servidor, NEXT_PUBLIC_APP_URL deveria ser usado mas evitamos complexidade se não houver SSR agressivo que dependa de apiFetch.
+  const fullUrl = url;
+  
+  console.log(`[apiFetch] [${timestamp}] ${options.method || 'GET'} ${url}`);
   
   let lastError: any;
+  // Aumentado para 3 tentativas em caso de falhas de rede ou timeout
   for (let i = 0; i < 3; i++) {
     try {
-      // Offline check (client-side only)
       if (!isServer && typeof navigator !== 'undefined' && !navigator.onLine) {
-        throw new Error("OFFLINE_ERROR");
+        throw new Error("Usuário está offline.");
       }
 
-      // Renovação proativa da sessão no loop de tentativa
-      const { data: { session } } = await supabase.auth.getSession();
-      let token = session?.access_token;
+      // Sessão rápida
+      let token = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token;
+      } catch (e) {
+        console.warn("[apiFetch] Erro ao recuperar sessão:", e);
+      }
       
-      // Se estivermos em uma tentativa de erro, forçamos um refresh
-      if (i > 0 && !isServer) {
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        token = refreshData?.session?.access_token || token;
-      }
-
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -943,7 +966,8 @@ async function apiFetch(url: string, options: any = {}) {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); 
+      const timeoutValue = options.timeout || 30000; // Default 30s
+      const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
 
       const response = await fetch(fullUrl, {
         ...options,
@@ -955,48 +979,37 @@ async function apiFetch(url: string, options: any = {}) {
       clearTimeout(timeoutId);
 
       if (response.status === 401 || response.status === 403) {
-        console.warn(`[apiFetch] Erro de autorização (${response.status}) em ${url}. Forçando refresh...`);
         if (!isServer) {
-          const { data: { session } } = await supabase.auth.refreshSession();
-          if (!session) {
-            console.error("[apiFetch] Refresh falhou após 401/403. Disparando evento de expiração.");
+          console.warn("[apiFetch] Sessão possivelmente expirada (401/403), tentando refresh...");
+          const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+          if (!refreshed) {
             window.dispatchEvent(new CustomEvent('app-session-expired'));
-            throw new Error("SESSION_EXPIRED");
+            throw new Error("Sessão expirada.");
           }
+          continue; // Tenta novamente com o novo token
         }
-        throw new Error("AUTH_RETRY");
       }
 
       if (!response.ok) {
-        let errData: any;
-        try {
-          errData = await response.json();
-        } catch {
-          errData = { error: `HTTP ${response.status}` };
-        }
-        throw new Error(errData.error || `Erro na API: ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro ${response.status}: ${response.statusText}`);
       }
 
-      const result = await response.json();
-      console.log(`[apiFetch] SUCESSO: ${url} (${Array.isArray(result) ? result.length : 'object'} itens)`);
-      return result;
+      return await response.json();
     } catch (err: any) {
       lastError = err;
-      const isTimeout = err.name === 'AbortError';
-      const isAuthRetry = err.message === 'AUTH_RETRY';
-      const isOffline = err.message === 'OFFLINE_ERROR';
       
-      if (isOffline) {
-        console.warn(`[apiFetch] App offline, aguardando conexão para ${url}`);
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
+      const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError';
+      const isTimeout = err.name === 'AbortError';
 
-      if (err.name === 'TypeError' || err.message.includes('fetch') || isTimeout || isAuthRetry) {
-        console.warn(`[apiFetch] Tentativa ${i + 1} falhou para ${url}:`, err.message);
-        await new Promise(r => setTimeout(r, Math.min(500 * (i + 1), 2000)));
+      if ((isNetworkError || isTimeout) && i < 2) {
+        console.warn(`[apiFetch] Falha na tentativa ${i+1} para ${url}: ${err.message}. Retentando em 1s...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
       }
+      
+      // Se não for erro de rede/timeout ou se acabaram as tentativas, propaga o erro
+      console.error(`[apiFetch] Erro fatal em ${url}:`, err);
       throw err;
     }
   }
@@ -1022,7 +1035,7 @@ export async function getProperties(ownerId?: string) {
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
   const cacheKey = `properties:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchProperties = async () => {
     try {
@@ -1034,7 +1047,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
         callback([]);
       }
     } catch (e) {
-      console.warn("[lib/db] subscribeToProperties error, maintaining stale data:", e);
+      console.warn("[lib/db] subscribeToProperties error:", e);
       if (dataCache[cacheKey]) {
         callback(dataCache[cacheKey]);
       } else {
@@ -1172,6 +1185,7 @@ export async function deleteProperty(id: string) {
 export async function getContact(id: string) {
   try {
     const data = await apiFetch(`/api/contacts?id=${id}`);
+    if (Array.isArray(data)) return data[0] as Contact;
     return data as Contact;
   } catch (err) {
     console.error("[lib/db] getContact FATAL:", err);
@@ -1182,6 +1196,7 @@ export async function getContact(id: string) {
 export async function getCompany(id: string) {
   try {
     const data = await apiFetch(`/api/companies?id=${id}`);
+    if (Array.isArray(data)) return data[0] as Company;
     return data as Company;
   } catch (err) {
     console.error("[lib/db] getCompany FATAL:", err);
@@ -1190,8 +1205,10 @@ export async function getCompany(id: string) {
 }
 
 export async function getDeal(id: string) {
+  if (!id || id === 'undefined' || id === 'null') return null;
   try {
     const data = await apiFetch(`/api/deals?id=${id}`);
+    if (Array.isArray(data)) return data[0] as Deal;
     return data as Deal;
   } catch (err) {
     console.error("[lib/db] getDeal FATAL:", err);
@@ -1408,35 +1425,58 @@ export async function createConversation(participants: string[], category: 'clie
   }
 }
 
-export async function uploadFile(file: File, bucketName: string = 'property-images') {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+export async function uploadFile(file: File, bucketName: string = 'property-images', bypassUserId?: string) {
+  try {
+    let userId = bypassUserId;
 
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-  const filePath = `${user.id}/${fileName}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(bucketName)
-    .upload(filePath, file, {
-      upsert: true,
-      cacheControl: '3600'
-    });
-
-  if (uploadError) {
-    console.error(`[Storage] Error uploading to "${bucketName}":`, uploadError);
-    // If bucket doesn't exist, try 'images' bucket as fallback
-    if (uploadError.message.includes('bucket not found') && bucketName !== 'images') {
-      return uploadFile(file, 'images');
+    if (!userId) {
+      // getSession is usually faster/cached than getUser which hits the server
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+      
+      if (!userId) {
+        console.warn("[Storage] No session found, trying getUser() as fallback...");
+        const { data: { user: verifiedUser } } = await supabase.auth.getUser();
+        userId = verifiedUser?.id;
+        if (!userId) throw new Error("Usuário não autenticado para upload.");
+      }
     }
-    throw uploadError;
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = `${userId}/${fileName}`;
+
+    console.log(`[Storage] Iniciando upload: ${fileName} para o bucket ${bucketName}`);
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file, {
+        upsert: true,
+        cacheControl: '3600',
+        contentType: file.type // Explicitly set content type
+      });
+
+    if (uploadError) {
+      console.error(`[Storage] Erro no bucket "${bucketName}":`, uploadError);
+      // Fallback para bucket 'images' se o principal falhar por não existir
+      if ((uploadError as any).status === 404 || uploadError.message.includes('bucket not found')) {
+        if (bucketName !== 'images') {
+          console.log("[Storage] Tentando bucket de fallback 'images'...");
+          return uploadFile(file, 'images', userId);
+        }
+      }
+      throw uploadError;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+
+    return { name: file.name, url: publicUrl };
+  } catch (err: any) {
+    console.error("[Storage] Falha crítica no uploadFile:", err);
+    throw err;
   }
-
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(filePath);
-
-  return { name: file.name, url: publicUrl };
 }
 
 export async function uploadChatFile(file: File) {

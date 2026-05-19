@@ -116,6 +116,13 @@ function DashboardContent() {
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Pequeno delay para garantir que containers Recharts tenham largura calculada
+    const timer = setTimeout(() => setMounted(true), 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   // --- Calculations ---
   const now = useMemo(() => new Date(), []);
@@ -194,13 +201,13 @@ function DashboardContent() {
     const prompt = `
       Analise os seguintes dados do CRM SalesScore e forneça um resumo executivo de previsões de vendas e recomendações estratégicas.
       Mês Atual: ${currentMonthStr}
-      Objetivo de Receita: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalRevenue)}
-      Vendas Realizadas (Closed): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(closedDealsTotal)}
-      Valor em Pipeline (Aberto): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPipelineValue)}
-      Previsão Ponderada (Realista): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(forecastValue)}
+      Objetivo de Receita: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(goalRevenue) || 0)}
+      Vendas Realizadas (Closed): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(closedDealsTotal) || 0)}
+      Valor em Pipeline (Aberto): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(totalPipelineValue) || 0)}
+      Previsão Ponderada (Realista): ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(forecastValue) || 0)}
 
       Distribuição do Pipeline:
-      ${stageCounts.map(s => `- ${s.name}: ${s.count} negócios, total ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.value)}`).join('\n')}
+      ${stageCounts.map(s => `- ${s.name}: ${s.count} negócios, total ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(s.value) || 0)}`).join('\n')}
 
       Por favor, forneça:
       1. Uma avaliação da probabilidade de atingir a meta.
@@ -445,7 +452,7 @@ function DashboardContent() {
         id: d.id,
         account: d.title,
         initials: d.title.substring(0, 2).toUpperCase(),
-        value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.value),
+        value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(d.value) || 0),
         stage: stage?.title || d.stage,
         color: stage?.color || 'slate',
         date: d.updatedAt ? format(new Date(d.updatedAt), "MMM dd, yyyy") : '-',
@@ -562,7 +569,7 @@ function DashboardContent() {
                   <MetricCard 
                     variants={itemVariants}
                     title="RECEITA MENSAL" 
-                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(currentMonthRevenue)} 
+                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(currentMonthRevenue) || 0)} 
                     trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}% vs mês ant.`}
                     description="Valor total faturado este mês com imóveis vendidos ou alugados. Reflete o desempenho financeiro direto do período atual."
                     isPositive={revenueTrend >= 0}
@@ -633,7 +640,7 @@ function DashboardContent() {
                           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Receita Real</span>
                         </div>
                         <p className="text-2xl md:text-3xl font-light text-foreground tracking-tighter">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(currentMonthRevenue)}
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(currentMonthRevenue) || 0)}
                         </p>
                       </div>
                       <div>
@@ -648,49 +655,51 @@ function DashboardContent() {
                           </div>
                         </div>
                         <p className="text-2xl md:text-3xl font-light text-foreground tracking-tighter">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(forecastValue) || 0)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="h-[250px] md:h-[350px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                          <XAxis 
-                            dataKey="name" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                            dy={15}
-                          />
-                          <YAxis hide />
-                          <Tooltip 
-                            cursor={{ fill: 'rgba(59, 130, 246, 0.03)' }}
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                return (
-                                  <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/50">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{payload[0].payload.name}</p>
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between gap-6">
-                                        <span className="text-xs text-slate-300">Realizado:</span>
-                                        <span className="text-xs font-bold text-blue-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(payload[1].value as number)}</span>
-                                      </div>
-                                      <div className="flex justify-between gap-6">
-                                        <span className="text-xs text-slate-300">Objetivo:</span>
-                                        <span className="text-xs font-bold text-slate-200">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(payload[0].value as number)}</span>
+                    <div className="h-[250px] md:h-[350px] w-full min-h-[250px]">
+                      {mounted && (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                            <XAxis 
+                              dataKey="name" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                              dy={15}
+                            />
+                            <YAxis hide />
+                            <Tooltip 
+                              cursor={{ fill: 'rgba(59, 130, 246, 0.03)' }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/50">
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{payload[0].payload.name}</p>
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between gap-6">
+                                          <span className="text-xs text-slate-300">Realizado:</span>
+                                          <span className="text-xs font-bold text-blue-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(payload[1].value) || 0)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-6">
+                                          <span className="text-xs text-slate-300">Objetivo:</span>
+                                          <span className="text-xs font-bold text-slate-200">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(payload[0].value) || 0)}</span>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Bar dataKey="projected" fill="#F1F5F9" radius={[12, 12, 12, 12]} barSize={32} />
-                          <Bar dataKey="actual" fill="hsl(var(--primary))" radius={[12, 12, 12, 12]} barSize={32} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="projected" fill="#F1F5F9" radius={[12, 12, 12, 12]} barSize={32} />
+                            <Bar dataKey="actual" fill="hsl(var(--primary))" radius={[12, 12, 12, 12]} barSize={32} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
                     </div>
                   </motion.div>
 
@@ -881,7 +890,7 @@ function TeamView({ users, deals }: { users: UserProfile[], deals: Deal[] }) {
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Média de Vendas/Agente</p>
           <p className="text-2xl font-light text-foreground tracking-tighter">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
-              agents.reduce((acc, a) => acc + a.stats.totalValue, 0) / (agents.length || 1)
+              Number(agents.reduce((acc, a) => acc + a.stats.totalValue, 0) / (agents.length || 1)) || 0
             )}
           </p>
         </div>
@@ -924,7 +933,7 @@ function TeamView({ users, deals }: { users: UserProfile[], deals: Deal[] }) {
                   </td>
                   <td className="px-10 py-6 border-b border-border">
                     <p className="text-sm font-bold text-foreground">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(agent.stats.totalValue)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(agent.stats.totalValue) || 0)}
                     </p>
                   </td>
                   <td className="px-10 py-6 border-b border-border text-sm font-medium text-muted-foreground">{agent.stats.count}</td>
@@ -1019,7 +1028,7 @@ function ForecastView({
                   </div>
                 </div>
                 <p className="text-2xl font-light text-foreground tracking-tighter">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalPipelineValue)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(totalPipelineValue) || 0)}
                 </p>
               </div>
             </div>
@@ -1050,11 +1059,11 @@ function ForecastView({
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-bold text-foreground">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.value)}
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(stage.value) || 0)}
                         </p>
                         {stage.goal > 0 && (
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stage.goal)}
+                            Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(stage.goal) || 0)}
                           </p>
                         )}
                       </div>
@@ -1148,7 +1157,7 @@ function ForecastView({
               <div className="flex justify-between items-center mt-4">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Objetivo:</span>
                 <span className="text-xs font-bold text-white">
-                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(goalRevenue)}
+                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(goalRevenue) || 0)}
                 </span>
               </div>
             </div>
@@ -1169,16 +1178,16 @@ function ForecastView({
                           <div className="space-y-2.5">
                             <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
                               <span className="text-slate-400">Realizado (100%):</span>
-                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(closedDealsTotal)}</span>
+                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(closedDealsTotal) || 0)}</span>
                             </div>
                             <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg">
                               <span className="text-slate-400">Ponderado (Pipeline):</span>
-                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(weightedPipelineValue)}</span>
+                              <span className="font-bold font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(weightedPipelineValue) || 0)}</span>
                             </div>
                             <div className="h-px bg-white/10 my-1"></div>
                             <div className="flex justify-between items-center text-[11px] px-1">
                               <span className="font-bold text-emerald-400">Previsão Final:</span>
-                              <span className="font-bold text-emerald-400 font-mono italic">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}</span>
+                              <span className="font-bold text-emerald-400 font-mono italic">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(forecastValue) || 0)}</span>
                             </div>
                           </div>
                           <p className="mt-4 text-[9px] text-slate-500 leading-tight">
@@ -1193,7 +1202,7 @@ function ForecastView({
                   </div>
                 </div>
                 <p className="text-3xl font-light tracking-tighter mb-2">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(forecastValue)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(forecastValue) || 0)}
                 </p>
                 <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
                   Cálculo baseado no fechamento atual somado à probabilidade de conversão ponderada de cada estágio do funil.
@@ -1210,7 +1219,7 @@ function ForecastView({
                 <p className="text-sm font-medium leading-relaxed">
                   {progressPercentage >= 100 
                     ? "Meta atingida! Excelente trabalho! Sua previsão indica que você pode superar o objetivo em mais de " + 
-                      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.max(0, forecastValue - goalRevenue)) + "."
+                      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.max(0, (Number(forecastValue) || 0) - (Number(goalRevenue) || 0))) + "."
                     : "Você ainda tem " + (100 - progressPercentage) + "% para atingir seu objetivo. Foque nos estágios de negociação final para acelerar o fechamento."
                   }
                 </p>
@@ -1224,6 +1233,9 @@ function ForecastView({
 }
 
 function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], contacts: Contact[], progressPercentage: number }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Define color mapping for the chart to match STAGES colors
   const STAGE_COLORS: Record<string, string> = {
     blue: 'hsl(var(--primary))',
@@ -1292,7 +1304,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard 
           title="Faturamento Acumulado" 
-          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalRevenue)} 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(totalRevenue) || 0)} 
           trend="+12.5% vs histórico"
           isPositive={true}
           description="Total gerado em negócios fechados."
@@ -1300,7 +1312,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
         />
         <MetricCard 
           title="Ticket Médio" 
-          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(avgTicket)} 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(avgTicket) || 0)} 
           trend="Equilíbrio de Vendas"
           isPositive={true}
           isNeutral={true}
@@ -1317,7 +1329,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
         />
         <MetricCard 
           title="Pipeline Ativo" 
-          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(activePipelineValue)} 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(activePipelineValue) || 0)} 
           trend="Oportunidades em aberto"
           isPositive={true}
           isNeutral={true}
@@ -1332,31 +1344,33 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
             <h3 className="text-2xl font-bold text-foreground tracking-tight">Fluxo de Receita</h3>
             <p className="text-sm text-muted-foreground mt-1">Sazonalidade das vendas (últimos 6 meses).</p>
           </div>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }}
-                  dy={15}
-                />
-                <YAxis hide />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '24px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px' }}
-                  formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[350px] w-full min-h-[350px]">
+            {mounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }}
+                    dy={15}
+                  />
+                  <YAxis hide />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '24px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px' }}
+                    formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -1365,28 +1379,30 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
             <h3 className="text-xl font-bold text-foreground tracking-tight">Fases do Funil</h3>
             <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-bold">Distribuição por Status</p>
           </div>
-          <div className="h-[280px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stageData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
-                  paddingAngle={8}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {stageData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-[280px] w-full relative min-h-[280px]">
+            {mounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stageData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={8}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {stageData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-3xl font-black text-foreground">{validDeals.length}</span>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Negócios</span>
@@ -1410,26 +1426,28 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
             <h3 className="text-2xl font-bold text-foreground tracking-tight">Saúde da Carteira</h3>
             <p className="text-sm text-muted-foreground mt-1">Eficiência multidimensional.</p>
           </div>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={[
-                { subject: 'Volume', A: winRate },
-                { subject: 'Ticket', A: Math.min((avgTicket/100000)*100, 100) },
-                { subject: 'Velocidade', A: 80 },
-                { subject: 'Retenção', A: 70 },
-                { subject: 'Meta', A: progressPercentage },
-              ]}>
-                <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }} />
-                <Radar
-                   name="Enterprise"
-                   dataKey="A"
-                   stroke="hsl(var(--primary))"
-                   fill="hsl(var(--primary))"
-                   fillOpacity={0.1}
-                 />
-              </RadarChart>
-            </ResponsiveContainer>
+          <div className="h-[350px] w-full min-h-[350px]">
+            {mounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={[
+                  { subject: 'Volume', A: winRate },
+                  { subject: 'Ticket', A: Math.min((avgTicket/100000)*100, 100) },
+                  { subject: 'Velocidade', A: 80 },
+                  { subject: 'Retenção', A: 70 },
+                  { subject: 'Meta', A: progressPercentage },
+                ]}>
+                  <PolarGrid stroke="hsl(var(--border))" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10, fontWeight: 700 }} />
+                  <Radar
+                    name="Enterprise"
+                    dataKey="A"
+                    stroke="hsl(var(--primary))"
+                    fill="hsl(var(--primary))"
+                    fillOpacity={0.1}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -1471,6 +1489,9 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
 }
 
 function MetricCard({ title, value, trend, description, isNeutral, isPositive, chartData, variants }: any) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <motion.div 
       variants={variants}
@@ -1514,19 +1535,21 @@ function MetricCard({ title, value, trend, description, isNeutral, isPositive, c
       </div>
 
       {/* Sparkline in the background */}
-      <div className="absolute inset-x-0 bottom-0 h-16 opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none overflow-hidden rounded-b-[28px] md:rounded-b-[36px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData}>
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke={isNeutral ? "hsl(var(--primary))" : isPositive ? "#10b981" : "#ef4444"} 
-              strokeWidth={3} 
-              dot={false}
-              animationDuration={2000}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="absolute inset-x-0 bottom-0 h-16 opacity-30 group-hover:opacity-60 transition-opacity pointer-events-none overflow-hidden rounded-b-[28px] md:rounded-b-[36px] min-h-[64px]">
+        {mounted && (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke={isNeutral ? "hsl(var(--primary))" : isPositive ? "#10b981" : "#ef4444"} 
+                strokeWidth={3} 
+                dot={false}
+                animationDuration={2000}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </motion.div>
   );

@@ -152,7 +152,9 @@ export async function PATCH(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) throw new Error("ID required for PATCH");
+    if (!id || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
+    }
 
     const data = await req.json();
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
@@ -199,7 +201,9 @@ export async function DELETE(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) throw new Error("ID required");
+    if (!id || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
+    }
 
     console.log(`[API/Properties] DELETE ID ${id}: Iniciando remoção...`);
 
