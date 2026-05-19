@@ -618,23 +618,38 @@ export async function getUserProfile(id: string) {
 
 // User Profiles
 export function subscribeToUsers(callback: (users: UserProfile[]) => void, ownerId?: string) {
+  const cacheKey = `users:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchUsers = async () => {
     try {
       const data = await apiFetch('/api/profiles');
-      let filtered = data as UserProfile[];
-      if (ownerId) filtered = filtered.filter(u => u.id === ownerId);
-      callback(filtered);
+      if (data && Array.isArray(data)) {
+        let filtered = data as UserProfile[];
+        if (ownerId) filtered = filtered.filter(u => u.id === ownerId);
+        dataCache[cacheKey] = filtered;
+        callback(filtered);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToUsers error:", err);
+      console.warn("[lib/db] subscribeToUsers error, maintaining stale data:", err);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
   fetchUsers();
   const subscription = createRealtimeChannel('profiles', fetchUsers);
+  const poll = setInterval(fetchUsers, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
     if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
+    clearInterval(poll);
   };
 }
 
@@ -809,23 +824,39 @@ export async function deleteActivity(id: string) {
 
 // Timeline
 export function subscribeToTimeline(category: string, relatedId: string, callback: (events: TimelineEvent[]) => void, ownerId?: string) {
+  const cacheKey = `timeline:${category}:${relatedId}:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchEvents = async () => {
     try {
       let url = `/api/timeline?category=${category}&relatedId=${relatedId}`;
       if (ownerId) url += `&ownerId=${ownerId}`;
       const data = await apiFetch(url);
-      callback(data as TimelineEvent[]);
+      if (data && Array.isArray(data)) {
+        const events = data as TimelineEvent[];
+        dataCache[cacheKey] = events;
+        callback(events);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
+      }
     } catch (err) {
-      console.error("[lib/db] subscribeToTimeline error:", err);
+      console.warn("[lib/db] subscribeToTimeline error, maintaining stale data:", err);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
   fetchEvents();
-  const subscription = createRealtimeChannel('timeline', fetchEvents);
+  const subscription = createRealtimeChannel('timeline', fetchEvents, `related_id=eq.${relatedId}`);
+  const poll = setInterval(fetchEvents, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
     if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
+    clearInterval(poll);
   };
 }
 
