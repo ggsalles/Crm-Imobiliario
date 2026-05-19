@@ -38,7 +38,10 @@ import {
   sendChatMessage,
   markAsRead,
   uploadChatFile,
-  downloadFile
+  downloadFile,
+  subscribeToContacts,
+  subscribeToUsers,
+  createConversation
 } from "@/lib/db";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -110,31 +113,23 @@ function MessagesContent() {
     if (!user || !profile) return;
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
 
-    let unsubContacts: (() => void) | undefined;
-    
-    import("@/lib/db").then(({ subscribeToContacts }) => {
-      unsubContacts = subscribeToContacts((data) => setContacts(data), ownerId);
-    });
+    const unsubContacts = subscribeToContacts((data) => setContacts(data), ownerId);
 
     return () => {
-      if (unsubContacts) unsubContacts();
+      unsubContacts();
     };
   }, [user, profile]);
 
   useEffect(() => {
     if (!user || !profile || activeTab !== 'team') return;
 
-    let unsubProfiles: (() => void) | undefined;
-    
-    import("@/lib/db").then(({ subscribeToUsers }) => {
-      unsubProfiles = subscribeToUsers((data) => {
-        // Filter out the current user from the list
-        setProfiles(data.filter(p => p.id !== user.id));
-      });
+    const unsubProfiles = subscribeToUsers((data) => {
+      // Filter out the current user from the list
+      setProfiles(data.filter(p => p.id !== user.id));
     });
 
     return () => {
-      if (unsubProfiles) unsubProfiles();
+      unsubProfiles();
     };
   }, [user, profile, activeTab]);
 
@@ -223,9 +218,7 @@ function MessagesContent() {
           photoURL: contact.photoURL || null 
         }
       };
-      const newId = await import("@/lib/db").then(({ createConversation }) => 
-        createConversation([user.id, contact.id], activeTab, details)
-      );
+      const newId = await createConversation([user.id, contact.id], activeTab, details);
       setIsNewChatModalOpen(false);
       // Selection will happen automatically via subscribeToConversations
     } catch (error) {
@@ -286,9 +279,7 @@ function MessagesContent() {
           photoURL: targetProfile.photoURL || null 
         }
       };
-      const newId = await import("@/lib/db").then(({ createConversation }) => 
-        createConversation([user.id, targetProfile.id], 'team', details)
-      );
+      const newId = await createConversation([user.id, targetProfile.id], 'team', details);
       setIsNewChatModalOpen(false);
     } catch (error) {
       console.error("Error creating conversation:", error);

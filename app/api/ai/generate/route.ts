@@ -16,7 +16,6 @@ const MODELS_PRIORITY = [
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
   "gemini-3-flash-preview",
-  "gemini-3.1-pro-preview",
 ];
 
 async function generateWithModel(modelName: string, prompt: string, attempt = 1): Promise<string> {
@@ -27,9 +26,16 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
     });
     return response.text || "";
   } catch (err: any) {
-    const errorMsg = JSON.stringify(err);
+    const errorStr = String(err);
+    const errorMsg = err.message || errorStr;
     const isServiceUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
-    const isQuotaExceeded = errorMsg.includes("429") || errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("limit") || errorMsg.includes("Quota");
+    const isQuotaExceeded = 
+      errorMsg.includes("429") || 
+      errorMsg.includes("RESOURCE_EXHAUSTED") || 
+      errorMsg.includes("limit") || 
+      errorMsg.includes("Quota") ||
+      errorStr.includes("429") ||
+      errorStr.includes("RESOURCE_EXHAUSTED");
 
     // Retrying ONLY on 503 (Unavailable)
     // For 429 (Quota), we throw immediately to move to the next model in MODELS_PRIORITY

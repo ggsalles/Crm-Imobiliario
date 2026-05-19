@@ -65,8 +65,14 @@ import {
   updateActivity,
   Activity,
   Property,
-  UserProfile
+  UserProfile,
+  getDeals,
+  getContacts,
+  getGoals,
+  getProperties,
+  subscribeToUsers
 } from "@/lib/db";
+import { safeAiCall } from "@/lib/ai";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -132,8 +138,6 @@ function DashboardContent() {
     try {
       const ownerId = profile.role === 'Admin' ? undefined : user.id;
       
-      const { getDeals, getContacts, getGoals, getProperties } = await import("@/lib/db");
-      
       const [dealsData, contactsData, propertiesData, goalsData] = await Promise.all([
         getDeals(ownerId),
         getContacts(ownerId),
@@ -162,7 +166,6 @@ function DashboardContent() {
   }, [user, profile, refreshData, deals.length, contacts.length]);
 
   const generateAIInsights = useCallback(async () => {
-    const { safeAiCall } = await import("@/lib/ai");
     setLoadingAI(true);
     const currentMonthStr = format(new Date(), "yyyy-MM");
     const currentGoal = goals.find(g => g.month === currentMonthStr && g.ownerId === user?.id) || 
@@ -296,9 +299,7 @@ function DashboardContent() {
     // Fetch team members if Admin
     let unsubUsers = () => {};
     if (profile.role === 'Admin') {
-      import("@/lib/db").then(({ subscribeToUsers }) => {
-        unsubUsers = subscribeToUsers(setUsers);
-      });
+      unsubUsers = subscribeToUsers(setUsers);
     }
 
     return () => {

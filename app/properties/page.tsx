@@ -59,22 +59,20 @@ export default function PropertiesPage() {
   const [displayPrice, setDisplayPrice] = useState("");
   const isSubmittingRef = useRef(false);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (!user || !profile) return;
-    setLoading(true);
-    try {
-      console.log("[Properties] Sincronizando inventário para usuário:", user.id);
-      const ownerId = profile.role === 'Admin' ? undefined : user.id;
-      const data = await getProperties(ownerId);
+    
+    console.log("[Properties] Usuário autenticado, iniciando sincronização em tempo real...");
+    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    
+    const unsubscribe = subscribeToProperties((data) => {
       setProperties(data);
-    } catch (error) {
-      console.error("Erro ao buscar imóveis:", error);
-      toast.error("Não foi possível atualizar a lista de imóveis.");
-    } finally {
       setLoading(false);
-    }
+    }, ownerId);
+
+    return () => unsubscribe();
   }, [user, profile]);
-  
+
   useEffect(() => {
     if (view === 'form') {
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
@@ -146,13 +144,6 @@ export default function PropertiesPage() {
     }
   }, [user, authLoading, profile, router]);
 
-  useEffect(() => {
-    if (!user || !profile) return;
-    
-    console.log("[Properties] Usuário autenticado, iniciando busca de dados...");
-    fetchData();
-  }, [user, profile, fetchData]);
-
   const filteredProperties = properties.filter((p) => {
     const matchesSearch =
       p.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -170,7 +161,6 @@ export default function PropertiesPage() {
       await deleteProperty(id);
       console.log(`[Properties] handleDelete: Sucesso ao excluir ID: ${id}`);
       toast.success("Imóvel excluído com sucesso.", { id: toastId });
-      await fetchData();
     } catch (err: any) {
       console.error(`[Properties] handleDelete: Erro ao excluir ID: ${id}`, err);
       toast.error(`Erro ao excluir: ${err.message || "Falha técnica"}`, { id: toastId });
@@ -337,8 +327,6 @@ export default function PropertiesPage() {
         setEditingProperty(null);
         setImageUrls([]);
         setView('list');
-        
-        setTimeout(() => fetchData(), 800);
 
       } catch (err: any) {
         console.error("[Properties] 6. Erro DB:", err);
@@ -394,14 +382,10 @@ export default function PropertiesPage() {
           <div className="flex items-center gap-3">
             {view === 'list' && (
               <>
-                <button 
-                  onClick={fetchData}
-                  disabled={loading}
-                  className="p-2.5 rounded-xl hover:bg-muted text-muted-foreground transition-all border border-border"
-                  title="Sincronizar dados"
-                >
-                  <Loader2 className={cn("w-4 h-4", loading && "animate-spin")} />
-                </button>
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center gap-2" title="Conexão em tempo real ativa">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                  <span className="text-[9px] font-black uppercase tracking-tighter hidden sm:inline">Ao Vivo</span>
+                </div>
                 <div className="relative hidden md:block">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input 

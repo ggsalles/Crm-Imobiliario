@@ -66,13 +66,14 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
     } finally {
       setLoading(false);
     }
-  }, [activities, deals, loading]); // Added back missing dependencies
+  }, [loading, activities, deals]); 
 
   useEffect(() => {
-    if (activities.length > 0) {
+    // Only trigger once when data first arrives or if explicitly requested
+    if (activities.length > 0 && insights === DEFAULT_INSIGHTS && !loading) {
       generateInsight();
     }
-  }, [activities.length, generateInsight]);
+  }, [activities.length, generateInsight, insights, loading]);
 
   useEffect(() => {
     // Rotation logic - 20 seconds as requested

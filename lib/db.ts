@@ -146,7 +146,7 @@ export interface UserProfile {
 }
 
 // Constants
-const POLL_INTERVAL = 300000; // 5 minutes - balance between fresh data and rate limits
+const POLL_INTERVAL = 60000; // 1 minute - balance between fresh data and rate limits
 
 // Helper para subscrições resilientes
 function createRealtimeChannel(tableName: string, callback: () => void, filter?: string, channelPrefix = 'public') {
@@ -195,10 +195,8 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
     try {
       const data = await getContacts(ownerId);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data;
-          callback(data);
-        }
+        lastValidData = data;
+        callback(data);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToContacts error, maintaining stale data:", err);
@@ -298,10 +296,8 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
     try {
       const data = await getCompanies(ownerId);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data;
-          callback(data);
-        }
+        lastValidData = data;
+        callback(data);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToCompanies error, maintaining stale data:", err);
@@ -399,10 +395,8 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
     try {
       const data = await getDeals(ownerId);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data;
-          callback(data);
-        }
+        lastValidData = data;
+        callback(data);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToDeals error, maintaining stale data:", err);
@@ -497,10 +491,8 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
     try {
       const data = await getGoals(ownerId);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data;
-          callback(data);
-        }
+        lastValidData = data;
+        callback(data);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToGoals error, maintaining stale data:", err);
@@ -662,10 +654,8 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
       if (ownerId) url += `?ownerId=${ownerId}`;
       const data = await apiFetch(url);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data as Activity[];
-          callback(lastValidData);
-        }
+        lastValidData = data as Activity[];
+        callback(lastValidData);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToActivities error, maintaining stale data:", err);
@@ -924,10 +914,8 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
     try {
       const data = await getProperties(ownerId);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          lastValidData = data;
-          callback(data);
-        }
+        lastValidData = data;
+        callback(data);
       }
     } catch (e) {
       console.warn("[lib/db] subscribeToProperties error, maintaining stale data:", e);
@@ -1097,21 +1085,19 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
       if (ownerId) url += `&ownerId=${ownerId}`;
       const data = await apiFetch(url);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          const mapped = data.map((item: any) => ({
-            id: item.id,
-            participants: item.participants,
-            participantDetails: item.participant_details,
-            lastMessage: item.last_message,
-            lastMessageAt: item.last_message_at,
-            type: item.type,
-            category: item.category,
-            ownerId: item.owner_id,
-            unreadCount: item.unread_count
-          })) as Conversation[];
-          lastValidData = mapped;
-          callback(mapped);
-        }
+        const mapped = data.map((item: any) => ({
+          id: item.id,
+          participants: item.participants,
+          participantDetails: item.participant_details,
+          lastMessage: item.last_message,
+          lastMessageAt: item.last_message_at,
+          type: item.type,
+          category: item.category,
+          ownerId: item.owner_id,
+          unreadCount: item.unread_count
+        })) as Conversation[];
+        lastValidData = mapped;
+        callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToConversations error, maintaining stale data:", err);
@@ -1135,21 +1121,19 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
     try {
       const data = await apiFetch(`/api/messages?conversationId=${conversationId}`);
       if (data && Array.isArray(data)) {
-        if (data.length > 0 || !lastValidData) {
-          const mapped = data.map((item: any) => ({
-            id: item.id,
-            conversationId: item.conversation_id,
-            senderId: item.sender_id,
-            content: item.content,
-            type: item.type,
-            fileName: item.file_name,
-            fileUrl: item.file_url,
-            createdAt: item.created_at,
-            ownerId: item.owner_id
-          })) as ChatMessage[];
-          lastValidData = mapped;
-          callback(mapped);
-        }
+        const mapped = data.map((item: any) => ({
+          id: item.id,
+          conversationId: item.conversation_id,
+          senderId: item.sender_id,
+          content: item.content,
+          type: item.type,
+          fileName: item.file_name,
+          fileUrl: item.file_url,
+          createdAt: item.created_at,
+          ownerId: item.owner_id
+        })) as ChatMessage[];
+        lastValidData = mapped;
+        callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToMessages error, maintaining stale data:", err);
