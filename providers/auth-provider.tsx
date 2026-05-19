@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleOffline = () => {
       console.warn("AuthProvider: App is offline.");
-      toast.error("Sem conexão com a internet", { id: 'network-status', duration: Infinity });
+      toast.error("Sem conexão com a internet (verifique se está offline)", { id: 'network-status', duration: 4000 });
     };
 
     window.addEventListener('online', handleOnline);

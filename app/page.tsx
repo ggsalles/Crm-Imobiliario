@@ -1232,6 +1232,38 @@ function ForecastView({
   );
 }
 
+const CustomRevenueTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card text-foreground px-4 py-2.5 border border-border rounded-2xl shadow-xl">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{label}</p>
+        <p className="text-sm font-bold text-foreground mt-1">
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(payload[0].value)}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-card border border-border text-foreground md:min-w-[150px] shadow-xl p-2.5 rounded-2xl flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
+          <span className="text-xs font-bold text-foreground tracking-wider uppercase">{data.name}</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Negócios: <span className="font-bold text-foreground">{data.value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], contacts: Contact[], progressPercentage: number }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -1364,8 +1396,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                   />
                   <YAxis hide />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '24px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px' }}
-                    formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)}
+                    content={<CustomRevenueTooltip />}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
                 </AreaChart>
@@ -1398,7 +1429,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--foreground))', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    content={<CustomPieTooltip />}
                   />
                 </PieChart>
               </ResponsiveContainer>

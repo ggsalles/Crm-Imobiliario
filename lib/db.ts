@@ -191,7 +191,7 @@ function createRealtimeChannel(tableName: string, callback: () => void, filter?:
         console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}), tentando reconectar...`);
-        if (typeof window !== 'undefined' && navigator.onLine) {
+        if (typeof window !== 'undefined') {
           setTimeout(() => channel.subscribe(), 3000);
         }
       }
@@ -943,10 +943,6 @@ async function apiFetch(url: string, options: any = {}) {
   
   for (let i = 0; i <= maxRetries; i++) {
     try {
-      if (!isServer && typeof navigator !== 'undefined' && !navigator.onLine) {
-        throw new Error("Usuário está offline.");
-      }
-
       // Sessão rápida
       let token = null;
       try {
@@ -1111,47 +1107,6 @@ export async function createProperty(data: any, bypassUserId?: string) {
   // Refatoração image_url: Enviamos a primeira URL como string simples para compatibilidade
   const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
 
-  // 1. TENTATIVA DIRETA CLIENT-SIDE (para máxima velocidade e contorno de problemas no Proxy)
-  if (typeof window !== 'undefined') {
-    try {
-      console.log("[lib/db] createProperty: Tentando inserção direta no Supabase (Client-Side)...");
-      const { data: insertResult, error: insertError } = await supabase
-        .from('properties')
-        .insert([{
-          ...sanitized,
-          image_url: primaryImageUrl
-        }])
-        .select();
-
-      if (insertError) throw insertError;
-      if (!insertResult || insertResult.length === 0) {
-        throw new Error("Nenhum resultado retornado após inserção direta.");
-      }
-
-      const newId = insertResult[0].id;
-      console.log(`[lib/db] createProperty: Imóvel criado com ID: ${newId}. Sincronizando ${cleanImageUrls.length} imagens no cliente...`);
-
-      if (cleanImageUrls.length > 0) {
-        const imageInserts = cleanImageUrls.map(url => ({
-          property_id: newId,
-          url: String(url)
-        }));
-        const { error: imgError } = await supabase
-          .from('property_images')
-          .insert(imageInserts);
-        if (imgError) {
-          console.warn("[lib/db] Erro ao sincronizar fotos direta no cliente:", imgError);
-        }
-      }
-
-      console.log("[lib/db] createProperty DIRETA: Sucesso absoluto! ID:", newId);
-      return newId;
-    } catch (clientErr: any) {
-      console.error("[lib/db] createProperty DIRETA falhou, recorrendo ao Proxy da API...", clientErr);
-    }
-  }
-
-  // 2. FALLBACK VIA PROXY DA API
   const insertData = { 
     ...sanitized, 
     image_url: primaryImageUrl, 
@@ -1188,54 +1143,6 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
   // Refatoração image_url: Enviamos a primeira URL como string simples para compatibilidade
   const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
 
-  // 1. TENTATIVA DIRETA CLIENT-SIDE (para evitar e resolver o loop/freeze do Proxy de rede)
-  if (typeof window !== 'undefined') {
-    try {
-      console.log(`[lib/db] updateProperty: Executando atualização direta no Supabase (Client-Side) para ID: ${id}`);
-      
-      const { error: updateError } = await supabase
-        .from('properties')
-        .update({
-          ...sanitized,
-          image_url: primaryImageUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      // Sincronização de fotos direta
-      console.log(`[lib/db] updateProperty: Sincronizando fotos (Total: ${cleanImageUrls.length}) diretamente pelo cliente...`);
-      const { error: delError } = await supabase
-        .from('property_images')
-        .delete()
-        .eq('property_id', id);
-        
-      if (delError) {
-        console.warn("[lib/db] Erro ao limpar fotos antigas diretamente:", delError);
-      }
-
-      if (cleanImageUrls.length > 0) {
-        const imageInserts = cleanImageUrls.map(url => ({
-          property_id: id,
-          url: String(url)
-        }));
-        const { error: insError } = await supabase
-          .from('property_images')
-          .insert(imageInserts);
-        if (insError) {
-          console.warn("[lib/db] Erro ao registrar fotos novas diretamente:", insError);
-        }
-      }
-
-      console.log("[lib/db] updateProperty DIRETO: Concluído com sucesso!");
-      return id;
-    } catch (clientErr: any) {
-      console.error("[lib/db] updateProperty DIRETO falhou, recorrendo ao Proxy da API...", clientErr);
-    }
-  }
-
-  // 2. FALLBACK VIA PROXY DA API
   const updateData = {
     ...sanitized,
     image_url: primaryImageUrl,
@@ -1260,37 +1167,6 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
 export async function deleteProperty(id: string) {
   console.log(`[lib/db] deleteProperty: Removendo ID: ${id}`);
   
-  // 1. TENTATIVA DIRETA CLIENT-SIDE
-  if (typeof window !== 'undefined') {
-    try {
-      console.log(`[lib/db] deleteProperty: Excluindo diretamente no Supabase (Client-Side)...`);
-      
-      // Limpar imagens
-      const { error: imgError } = await supabase
-        .from('property_images')
-        .delete()
-        .eq('property_id', id);
-        
-      if (imgError) {
-        console.warn("[lib/db] Erro ao excluir fotos associadas diretamente:", imgError);
-      }
-
-      // Excluir registro principal
-      const { error: delError } = await supabase
-        .from('properties')
-        .delete()
-        .eq('id', id);
-
-      if (delError) throw delError;
-
-      console.log("[lib/db] deleteProperty DIRETO: Excluído com sucesso!");
-      return true;
-    } catch (clientErr: any) {
-      console.error("[lib/db] deleteProperty DIRETO falhou, recorrendo ao Proxy da API...", clientErr);
-    }
-  }
-
-  // 2. FALLBACK VIA PROXY DA API
   try {
     await apiFetch(`/api/properties?id=${id}`, {
       method: "DELETE"
