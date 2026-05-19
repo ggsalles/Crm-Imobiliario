@@ -111,7 +111,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const heartbeatInterval = setInterval(async () => {
       // Proactive session validation to keep connection "warm"
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // Se tínhamos um usuário mas agora a sessão sumiu, ou houve um erro crítico de sessão
+        if (user && !session) {
+          console.warn("AuthProvider: Session lost during heartbeat. Logging out...");
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+
         if (session) {
           console.log("AuthProvider: Session validated via heartbeat.");
         }
@@ -134,9 +143,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }, 15000); 
 
+    // Handle global session expiry events from apiFetch
+    const handleSessionExpired = () => {
+      console.warn("AuthProvider: Session expired event received.");
+      setUser(null);
+      setProfile(null);
+      toast.error("Sua sessão expirou. Por favor, faça login novamente.");
+    };
+
+    window.addEventListener('app-session-expired', handleSessionExpired);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('app-session-expired', handleSessionExpired);
       subscription.unsubscribe();
       supabase.removeChannel(heartbeatChannel);
       clearInterval(heartbeatInterval);

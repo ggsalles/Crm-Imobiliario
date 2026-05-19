@@ -856,7 +856,14 @@ async function apiFetch(url: string, options: any = {}) {
 
       if (response.status === 401 || response.status === 403) {
         console.warn(`[apiFetch] Erro de autorização (${response.status}) em ${url}. Forçando refresh...`);
-        if (!isServer) await supabase.auth.refreshSession();
+        if (!isServer) {
+          const { data: { session } } = await supabase.auth.refreshSession();
+          if (!session) {
+            console.error("[apiFetch] Refresh falhou após 401/403. Disparando evento de expiração.");
+            window.dispatchEvent(new CustomEvent('app-session-expired'));
+            throw new Error("SESSION_EXPIRED");
+          }
+        }
         throw new Error("AUTH_RETRY");
       }
 
