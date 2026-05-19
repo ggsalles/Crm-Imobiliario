@@ -318,10 +318,14 @@ export default function PipelinePage() {
               <div className="flex gap-3">
                 <button 
                   onClick={() => setIsGoalModalOpen(true)}
-                  className="bg-card border border-border px-5 py-2.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-muted transition-all flex items-center gap-2"
+                  className="bg-card border border-primary/30 px-5 py-2.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-primary hover:text-white transition-all flex items-center gap-2 group"
+                  title="Clique para definir ou alterar suas metas mensais"
                 >
-                  <Target className="w-5 h-5 text-primary" />
-                  Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalValue)}
+                  <Target className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
+                  <div className="text-left">
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-1">Definir Meta</p>
+                    <p className="leading-none">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goalValue)}</p>
+                  </div>
                 </button>
                 <button 
                   onClick={() => {

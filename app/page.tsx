@@ -5,7 +5,7 @@
  * Build: 2026-05-10 v0.2.0 - Novo Leads corrigido para 1
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -110,6 +110,20 @@ function DashboardContent() {
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+
+  // --- Calculations ---
+  const now = useMemo(() => new Date(), []);
+  const currentMonthStr = useMemo(() => format(now, "yyyy-MM"), [now]);
+  const lastMonthDate = useMemo(() => new Date(now.getFullYear(), now.getMonth() - 1, 1), [now]);
+  const lastMonthStr = useMemo(() => format(lastMonthDate, "yyyy-MM"), [lastMonthDate]);
+
+  const currentGoal = useMemo(() => {
+    const monthGoals = goals.filter(g => g.month === currentMonthStr);
+    return monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
+  }, [goals, currentMonthStr, user]);
+
+  const goalRevenue = useMemo(() => currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 0, [currentGoal]);
+  const closedDealsTotal = useMemo(() => deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0), [deals]);
 
   const refreshData = useCallback(async (showLoading = true) => {
     if (!user || !profile) return;
@@ -297,6 +311,8 @@ function DashboardContent() {
     };
   }, [user, profile]);
 
+  // Metric Data helper for Sparklines
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -320,17 +336,6 @@ function DashboardContent() {
       </div>
     );
   }
-
-  // --- Calculations ---
-  const now = new Date();
-  const currentMonthStr = format(now, "yyyy-MM");
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthStr = format(lastMonthDate, "yyyy-MM");
-
-  const currentGoal = goals.find(g => g.month === currentMonthStr && g.ownerId === user?.id) || 
-                      goals.find(g => g.month === currentMonthStr);
-  const goalRevenue = currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 0;
-  const closedDealsTotal = deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0);
 
   // Metric Data helper for Sparklines
   const getTrendData = (type: 'revenue' | 'leads' | 'deals') => {
@@ -414,7 +419,8 @@ function DashboardContent() {
       .reduce((acc, deal) => acc + deal.value, 0);
     
     // Projected could be from Goal
-    const monthGoal = goals.find(g => g.month === mStr);
+    const monthGoals = goals.filter(g => g.month === mStr);
+    const monthGoal = monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
     const monthlyProjected = monthGoal?.stageGoals?.['closed'] || 0;
 
     return { name: mLabel, actual: monthlyActual, projected: monthlyProjected };
