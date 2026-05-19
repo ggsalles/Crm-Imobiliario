@@ -1551,7 +1551,6 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
     let userId = bypassUserId;
 
     if (!userId) {
-      // getSession is usually faster/cached than getUser which hits the server
       const { data: { session } } = await supabase.auth.getSession();
       userId = session?.user?.id;
       
@@ -1559,43 +1558,36 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
         console.warn("[Storage] No session found, trying getUser() as fallback...");
         const { data: { user: verifiedUser } } = await supabase.auth.getUser();
         userId = verifiedUser?.id;
-        if (!userId) throw new Error("Usuário não autenticado para upload.");
       }
     }
 
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = `${userId}/${fileName}`;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bucketName", bucketName);
+    formData.append("userId", userId || "anonymous");
 
-    console.log(`[Storage] Iniciando upload: ${fileName} para o bucket ${bucketName}`);
+    console.log(`[Storage Client] Redirecionando upload de "${file.name}" para proxy de API local...`);
+    
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(filePath, file, {
-        upsert: true,
-        cacheControl: '3600',
-        contentType: file.type // Explicitly set content type
-      });
-
-    if (uploadError) {
-      console.error(`[Storage] Erro no bucket "${bucketName}":`, uploadError);
-      // Fallback para bucket 'images' se o principal falhar por não existir
-      if ((uploadError as any).status === 404 || uploadError.message.includes('bucket not found')) {
-        if (bucketName !== 'images') {
-          console.log("[Storage] Tentando bucket de fallback 'images'...");
-          return uploadFile(file, 'images', userId);
-        }
+    if (!response.ok) {
+      let errorMsg = `Erro ${response.status}: ${response.statusText}`;
+      try {
+        const errData = await response.json();
+        errorMsg = errData.error || errorMsg;
+      } catch (e) {
+        // Ignora erro se não for JSON
       }
-      throw uploadError;
+      throw new Error(errorMsg);
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(filePath);
-
-    return { name: file.name, url: publicUrl };
+    const result = await response.json();
+    return { name: result.name, url: result.url };
   } catch (err: any) {
-    console.error("[Storage] Falha crítica no uploadFile:", err);
+    console.error("[Storage] Falha crítica no uploadFile através do Proxy:", err);
     throw err;
   }
 }

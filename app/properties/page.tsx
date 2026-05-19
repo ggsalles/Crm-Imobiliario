@@ -197,9 +197,10 @@ export default function PropertiesPage() {
     setView('form');
   }, []);
 
-  const processFiles = useCallback(async (files: FileList | File[]) => {
-    if (!files || files.length === 0) return;
+  const processFiles = useCallback(async (incomingFiles: FileList | File[]) => {
+    if (!incomingFiles || incomingFiles.length === 0) return;
 
+    const files = Array.from(incomingFiles);
     const totalFiles = files.length;
     let uploadedCount = 0;
     
