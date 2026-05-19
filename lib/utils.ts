@@ -41,3 +41,10 @@ export function formatPhone(v: string) {
   if (v.length <= 9) return v.replace(/(\d{2})(\d{2})(\d{0,5})/, "$1 $2 $3");
   return v.replace(/(\d{2})(\d{2})(\d{5})(\d{0,4})/, "$1 $2 $3-$4").trim();
 }
+
+export function formatCEP(v: string) {
+  v = v.replace(/\D/g, "");
+  if (v.length > 8) v = v.substring(0, 8);
+  if (v.length <= 5) return v;
+  return v.replace(/(\d{5})(\d{0,3})/, "$1-$2");
+}

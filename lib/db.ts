@@ -934,14 +934,14 @@ async function apiFetch(url: string, options: any = {}) {
   const isServer = typeof window === 'undefined';
   const timestamp = new Date().toISOString();
   
-  // No client, relative URLs são preferíveis. No servidor, NEXT_PUBLIC_APP_URL deveria ser usado mas evitamos complexidade se não houver SSR agressivo que dependa de apiFetch.
   const fullUrl = url;
   
   console.log(`[apiFetch] [${timestamp}] ${options.method || 'GET'} ${url}`);
   
   let lastError: any;
-  // Aumentado para 3 tentativas em caso de falhas de rede ou timeout
-  for (let i = 0; i < 3; i++) {
+  const maxRetries = 1; // Only 1 retry to fail fast and prevent browser freeze appearance
+  
+  for (let i = 0; i <= maxRetries; i++) {
     try {
       if (!isServer && typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error("Usuário está offline.");
@@ -966,7 +966,7 @@ async function apiFetch(url: string, options: any = {}) {
       }
 
       const controller = new AbortController();
-      const timeoutValue = options.timeout || 30000; // Default 30s
+      const timeoutValue = options.timeout || 10000; // 10s timeout instead of 30s
       const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
 
       const response = await fetch(fullUrl, {
@@ -1002,13 +1002,12 @@ async function apiFetch(url: string, options: any = {}) {
       const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError';
       const isTimeout = err.name === 'AbortError';
 
-      if ((isNetworkError || isTimeout) && i < 2) {
+      if ((isNetworkError || isTimeout) && i < maxRetries) {
         console.warn(`[apiFetch] Falha na tentativa ${i+1} para ${url}: ${err.message}. Retentando em 1s...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
       }
       
-      // Se não for erro de rede/timeout ou se acabaram as tentativas, propaga o erro
       console.error(`[apiFetch] Erro fatal em ${url}:`, err);
       throw err;
     }
@@ -1112,6 +1111,47 @@ export async function createProperty(data: any, bypassUserId?: string) {
   // Refatoração image_url: Enviamos a primeira URL como string simples para compatibilidade
   const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
 
+  // 1. TENTATIVA DIRETA CLIENT-SIDE (para máxima velocidade e contorno de problemas no Proxy)
+  if (typeof window !== 'undefined') {
+    try {
+      console.log("[lib/db] createProperty: Tentando inserção direta no Supabase (Client-Side)...");
+      const { data: insertResult, error: insertError } = await supabase
+        .from('properties')
+        .insert([{
+          ...sanitized,
+          image_url: primaryImageUrl
+        }])
+        .select();
+
+      if (insertError) throw insertError;
+      if (!insertResult || insertResult.length === 0) {
+        throw new Error("Nenhum resultado retornado após inserção direta.");
+      }
+
+      const newId = insertResult[0].id;
+      console.log(`[lib/db] createProperty: Imóvel criado com ID: ${newId}. Sincronizando ${cleanImageUrls.length} imagens no cliente...`);
+
+      if (cleanImageUrls.length > 0) {
+        const imageInserts = cleanImageUrls.map(url => ({
+          property_id: newId,
+          url: String(url)
+        }));
+        const { error: imgError } = await supabase
+          .from('property_images')
+          .insert(imageInserts);
+        if (imgError) {
+          console.warn("[lib/db] Erro ao sincronizar fotos direta no cliente:", imgError);
+        }
+      }
+
+      console.log("[lib/db] createProperty DIRETA: Sucesso absoluto! ID:", newId);
+      return newId;
+    } catch (clientErr: any) {
+      console.error("[lib/db] createProperty DIRETA falhou, recorrendo ao Proxy da API...", clientErr);
+    }
+  }
+
+  // 2. FALLBACK VIA PROXY DA API
   const insertData = { 
     ...sanitized, 
     image_url: primaryImageUrl, 
@@ -1124,10 +1164,10 @@ export async function createProperty(data: any, bypassUserId?: string) {
       method: "POST",
       body: JSON.stringify(insertData)
     });
-    console.log("[lib/db] createProperty: SUCESSO. Novo ID:", result.id);
+    console.log("[lib/db] createProperty Proxy: SUCESSO. Novo ID:", result.id);
     return result.id;
   } catch (err) {
-    console.error("[lib/db] createProperty FATAL:", err);
+    console.error("[lib/db] createProperty Proxy FATAL:", err);
     throw err;
   }
 }
@@ -1148,6 +1188,54 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
   // Refatoração image_url: Enviamos a primeira URL como string simples para compatibilidade
   const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
 
+  // 1. TENTATIVA DIRETA CLIENT-SIDE (para evitar e resolver o loop/freeze do Proxy de rede)
+  if (typeof window !== 'undefined') {
+    try {
+      console.log(`[lib/db] updateProperty: Executando atualização direta no Supabase (Client-Side) para ID: ${id}`);
+      
+      const { error: updateError } = await supabase
+        .from('properties')
+        .update({
+          ...sanitized,
+          image_url: primaryImageUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      // Sincronização de fotos direta
+      console.log(`[lib/db] updateProperty: Sincronizando fotos (Total: ${cleanImageUrls.length}) diretamente pelo cliente...`);
+      const { error: delError } = await supabase
+        .from('property_images')
+        .delete()
+        .eq('property_id', id);
+        
+      if (delError) {
+        console.warn("[lib/db] Erro ao limpar fotos antigas diretamente:", delError);
+      }
+
+      if (cleanImageUrls.length > 0) {
+        const imageInserts = cleanImageUrls.map(url => ({
+          property_id: id,
+          url: String(url)
+        }));
+        const { error: insError } = await supabase
+          .from('property_images')
+          .insert(imageInserts);
+        if (insError) {
+          console.warn("[lib/db] Erro ao registrar fotos novas diretamente:", insError);
+        }
+      }
+
+      console.log("[lib/db] updateProperty DIRETO: Concluído com sucesso!");
+      return id;
+    } catch (clientErr: any) {
+      console.error("[lib/db] updateProperty DIRETO falhou, recorrendo ao Proxy da API...", clientErr);
+    }
+  }
+
+  // 2. FALLBACK VIA PROXY DA API
   const updateData = {
     ...sanitized,
     image_url: primaryImageUrl,
@@ -1161,22 +1249,55 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
-    console.log("[lib/db] updateProperty: Transação concluída com sucesso.");
+    console.log("[lib/db] updateProperty Proxy: Transação concluída com sucesso.");
     return id;
   } catch (err) {
-    console.error(`[lib/db] updateProperty FATAL para o ID ${id}:`, err);
+    console.error(`[lib/db] updateProperty Proxy FATAL para o ID ${id}:`, err);
     throw err;
   }
 }
 
 export async function deleteProperty(id: string) {
+  console.log(`[lib/db] deleteProperty: Removendo ID: ${id}`);
+  
+  // 1. TENTATIVA DIRETA CLIENT-SIDE
+  if (typeof window !== 'undefined') {
+    try {
+      console.log(`[lib/db] deleteProperty: Excluindo diretamente no Supabase (Client-Side)...`);
+      
+      // Limpar imagens
+      const { error: imgError } = await supabase
+        .from('property_images')
+        .delete()
+        .eq('property_id', id);
+        
+      if (imgError) {
+        console.warn("[lib/db] Erro ao excluir fotos associadas diretamente:", imgError);
+      }
+
+      // Excluir registro principal
+      const { error: delError } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', id);
+
+      if (delError) throw delError;
+
+      console.log("[lib/db] deleteProperty DIRETO: Excluído com sucesso!");
+      return true;
+    } catch (clientErr: any) {
+      console.error("[lib/db] deleteProperty DIRETO falhou, recorrendo ao Proxy da API...", clientErr);
+    }
+  }
+
+  // 2. FALLBACK VIA PROXY DA API
   try {
     await apiFetch(`/api/properties?id=${id}`, {
       method: "DELETE"
     });
     return true;
   } catch (error) {
-    console.error("[lib/db] Error in deleteProperty:", error);
+    console.error("[lib/db] Error in deleteProperty Proxy:", error);
     throw error;
   }
 }

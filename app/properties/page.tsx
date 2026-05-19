@@ -38,7 +38,7 @@ import {
   uploadFile,
   Property
 } from "@/lib/db";
-import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber, formatCEP } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "sonner";
 
@@ -58,6 +58,7 @@ export default function PropertiesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
+  const [cep, setCep] = useState("");
   const isSubmittingRef = useRef(false);
 
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function PropertiesPage() {
       setTitle(editingProperty?.title || "");
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
       setImageUrls(editingProperty?.imageUrls || []);
+      setCep(formatCEP(editingProperty?.cep || ""));
     }
     // Only reset when switching TO form view or editing a different property
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +189,7 @@ export default function PropertiesPage() {
     setImageUrls([]);
     setTitle("");
     setDisplayPrice("");
+    setCep("");
   }, []);
 
   const handleEdit = useCallback((property: Property) => {
@@ -256,7 +259,7 @@ export default function PropertiesPage() {
     } finally {
       setIsUploading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isUploading) return;
@@ -294,31 +297,33 @@ export default function PropertiesPage() {
 
   const handleCreateOrUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSaving || isSubmittingRef.current) {
-      console.warn("[Properties] Já existe uma operação de salvamento em curso.");
+    if (isSaving || isUploading || isFetchingCep || isSubmittingRef.current) {
+      console.warn("[Properties] Bloqueio de submissão:", { isSaving, isUploading, isFetchingCep, subRef: isSubmittingRef.current });
+      if (isUploading) toast.error("Aguarde o upload das imagens terminar.");
+      if (isFetchingCep) toast.error("Aguarde a busca do CEP terminar.");
       return;
     }
 
-    console.log("[Properties] 1. Iniciado handleCreateOrUpdate");
+    console.log("[Properties] === INICIANDO SALVAMENTO ===");
     const formData = new FormData(e.currentTarget);
     setIsSaving(true);
     isSubmittingRef.current = true;
 
-    // Trava de segurança: Reset automático após 90 segundos se o banco travar (ajustado para evitar conflito com retentativas do apiFetch)
+    // Timeout de segurança (UI) mais curto para feedback rápido (45s)
     const uiTimeoutId = setTimeout(() => {
       if (isSubmittingRef.current) {
-        console.error("[Properties] CRITICAL: UI Timeout (90s) - Destravando manual.");
+        console.error("[Properties] Emergência: UI Timeout (45s) disparado.");
         setIsSaving(false);
         isSubmittingRef.current = false;
-        toast.error("O banco de dados demorou muito a responder. A interface foi liberada, mas verifique se a operação foi concluída no inventário.");
+        toast.dismiss(); // Remove o loading se houver
+        toast.error("O servidor demorou demais para responder. Tente novamente ou verifique se o registro foi salvo recarregando a página.");
       }
-    }, 90000);
+    }, 45000);
+    
+    let toastId: string | number = "saving-toast";
     
     try {
-      if (!user) {
-        console.error("[Properties] handleCreateOrUpdate: Usuário não autenticado");
-        throw new Error("Sessão inválida.");
-      }
+      if (!user) throw new Error("Sessão inválida ou expirada.");
       
       const neighborhood = String(formData.get("neighborhood") || "");
       const city = String(formData.get("city") || "");
@@ -328,6 +333,7 @@ export default function PropertiesPage() {
       const isEditing = !!editingProperty;
       const currentPropertyId = editingProperty?.id;
 
+      // Sanitização final das URLs
       const cleanUrls = imageUrls.filter(url => 
         typeof url === 'string' &&
         url.trim() !== "" && 
@@ -340,7 +346,7 @@ export default function PropertiesPage() {
         status: (formData.get("status") as any) || "disponível",
         price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
         location: location.substring(0, 500),
-        cep: String(formData.get("cep") || "").substring(0, 20),
+        cep: String(formData.get("cep") || "").replace(/\D/g, "").substring(0, 8), // Salva apenas 8 dígitos
         street: String(formData.get("street") || "").substring(0, 200),
         neighborhood: neighborhood.substring(0, 100),
         city: city.substring(0, 100),
@@ -357,46 +363,31 @@ export default function PropertiesPage() {
         imageUrls: cleanUrls,
       };
 
-      console.log("[Properties] Preparando payload final para o servidor...", { isEditing, propertyData: data });
+      toastId = toast.loading(isEditing ? "Atualizando registro..." : "Salvando novo imóvel...");
 
-      // Deep clone rigoroso
-      const dataToSave = JSON.parse(JSON.stringify(data));
-
-      console.log("[Properties] Chamando lib/db -> create/updateProperty...");
-      const toastId = toast.loading(isEditing ? "Atualizando registro..." : "Salvando novo imóvel...");
-
-      try {
-        if (isEditing && currentPropertyId) {
-          console.log(`[Properties] Executando UPDATE no ID: ${currentPropertyId}`);
-          await updateProperty(currentPropertyId, dataToSave, user.id);
-        } else {
-          console.log("[Properties] Executando INSERT de novo imóvel");
-          await createProperty(dataToSave, user.id);
-        }
-        
-        console.log("[Properties] Resposta de SUCESSO recebida do banco de dados.");
-        clearTimeout(uiTimeoutId);
-        toast.success(isEditing ? "Imóvel atualizado com sucesso!" : "Imóvel cadastrado com sucesso!", { id: toastId });
-        
-        setEditingProperty(null);
-        setImageUrls([]);
-        setView('list');
-
-      } catch (err: any) {
-        console.error("[Properties] 6. Erro DB:", err);
-        clearTimeout(uiTimeoutId);
-        const errorMessage = err.message || "Erro ao gravar dados.";
-        toast.error(`Falha: ${errorMessage}`, { id: toastId });
-      } finally {
-        setIsSaving(false);
-        isSubmittingRef.current = false;
+      console.log("[Properties] Enviando para o banco de dados...");
+      if (isEditing && currentPropertyId) {
+        await updateProperty(currentPropertyId, data, user.id);
+      } else {
+        await createProperty(data, user.id);
       }
-    } catch (saveErr: any) {
-      console.error("[Properties] 7. Erro Fatal:", saveErr);
+      
+      console.log("[Properties] Sucesso absoluto!");
       clearTimeout(uiTimeoutId);
+      toast.success(isEditing ? "Imóvel atualizado com sucesso!" : "Imóvel cadastrado com sucesso!", { id: toastId });
+      
+      setEditingProperty(null);
+      setImageUrls([]);
+      setView('list');
+
+    } catch (err: any) {
+      console.error("[Properties] Falha crítica no salvamento:", err);
+      clearTimeout(uiTimeoutId);
+      toast.error(err.message || "Erro ao gravar dados.", { id: toastId });
+    } finally {
+      console.log("[Properties] Finalizando estado de carregamento.");
       setIsSaving(false);
       isSubmittingRef.current = false;
-      toast.error(`Erro técnico: ${saveErr.message || "Falha técnica"}`);
     }
   };
 
@@ -611,9 +602,10 @@ export default function PropertiesPage() {
                       </label>
                       <input 
                         name="cep"
+                        value={cep}
+                        onChange={(e) => setCep(formatCEP(e.target.value))}
                         onBlur={handleCepBlur}
                         required
-                        defaultValue={editingProperty?.cep}
                         placeholder="00000-000"
                         autoComplete="new-password"
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-mono font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none autofill:shadow-[0_0_0_1000px_#111827_inset] autofill:text-white"
