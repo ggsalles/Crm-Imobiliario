@@ -22,7 +22,7 @@ import {
   Loader2,
   Target
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Deal, 
   Company, 
@@ -130,12 +130,20 @@ export default function PipelinePage() {
     if (!user || !profile) return;
 
     setLoading(true);
+
+    // Safety timeout to clear loading spinner
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
 
     const unsubDeals = subscribeToDeals((data) => {
       setDeals(data);
       setLoading(false);
+      clearTimeout(safetyTimer);
     }, ownerId);
+
     const unsubCompanies = subscribeToCompanies(setCompanies, ownerId);
     const unsubContacts = subscribeToContacts(setContacts, ownerId);
     const unsubProperties = subscribeToProperties(setProperties, ownerId);
@@ -149,6 +157,7 @@ export default function PipelinePage() {
       unsubProperties();
       unsubGoals();
       unsubUsers();
+      clearTimeout(safetyTimer);
     };
   }, [user, profile]);
 

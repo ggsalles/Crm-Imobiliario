@@ -23,7 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useState, useEffect, Suspense } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { subscribeToTotalUnreadMessages } from "@/lib/db";
 
 const navItems = [

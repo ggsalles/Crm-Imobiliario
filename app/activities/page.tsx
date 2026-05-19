@@ -39,7 +39,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { groupActivities, isPriorityActivity, UrgencyGroup } from "@/lib/intelligence";
 import { GeminiBanner } from "@/components/GeminiBanner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function ActivitiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -88,17 +88,37 @@ export default function ActivitiesPage() {
     setLoading(true);
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
 
+    // Safety timeout: force loading false after 8 seconds if it's still stuck
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
     const unsubActivities = subscribeToActivities((data) => {
       setActivities(data);
       setLoading(false);
+      clearTimeout(safetyTimer);
     }, ownerId);
+    
     const unsubContacts = subscribeToContacts(setContacts, ownerId);
     const unsubDeals = subscribeToDeals(setDeals, ownerId);
+
+    // Re-sync when tab gains focus
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[Activities] Tab visible, triggering re-sync...");
+        // subscribe functions already handle initial fetch and polling, 
+        // but visibility changes often mean the environment was hibernating
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       unsubActivities();
       unsubContacts();
       unsubDeals();
+      clearTimeout(safetyTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, profile]);
 

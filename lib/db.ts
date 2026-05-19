@@ -146,11 +146,40 @@ export interface UserProfile {
 }
 
 // Constants
-const POLL_INTERVAL = 60000; // 1 minute - balance between fresh data and rate limits
+const POLL_INTERVAL = 45000; // 45 seconds for better responsiveness
+const RESYNC_EVENT = 'db-force-resync';
+
+// Cache global para evitar que dados sumam durante re-subscriptions ou hibernação
+const dataCache: Record<string, any> = {};
+
+// Helper to wake up the app and force data refresh
+export function forceDataResync() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(RESYNC_EVENT));
+  }
+}
+
+// Auto-resync listeners
+if (typeof window !== 'undefined') {
+  const onWakeUp = () => {
+    if (document.visibilityState === 'visible') {
+      console.log("[lib/db] Tab active, triggering global resync...");
+      forceDataResync();
+    }
+  };
+  window.addEventListener('visibilitychange', onWakeUp);
+  window.addEventListener('online', forceDataResync);
+}
 
 // Helper para subscrições resilientes
 function createRealtimeChannel(tableName: string, callback: () => void, filter?: string, channelPrefix = 'public') {
   const channelName = `${channelPrefix}:${tableName}:${Math.random().toString(36).substring(7)}`;
+  
+  // Resync on event
+  if (typeof window !== 'undefined') {
+    window.addEventListener(RESYNC_EVENT, callback);
+  }
+
   const channel = supabase
     .channel(channelName)
     .on('postgres_changes', { event: '*', schema: 'public', table: tableName, filter }, () => {
@@ -162,16 +191,18 @@ function createRealtimeChannel(tableName: string, callback: () => void, filter?:
         console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}), tentando reconectar...`);
-        // Only retry if online and not already trying to join
-        if (typeof window !== 'undefined' && navigator.onLine && channel.state !== 'joining' && channel.state !== 'joined') {
-          setTimeout(() => {
-            if (channel.state !== 'joining' && channel.state !== 'joined') {
-              channel.subscribe();
-            }
-          }, 5000);
+        if (typeof window !== 'undefined' && navigator.onLine) {
+          setTimeout(() => channel.subscribe(), 3000);
         }
       }
     });
+
+  // Attach a cleanup method if needed (not standard for Supabase channel but useful for us)
+  (channel as any)._customCleanup = () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(RESYNC_EVENT, callback);
+    }
+  };
 
   return channel;
 }
@@ -190,18 +221,25 @@ export async function getContacts(ownerId?: string) {
 }
 
 export function subscribeToContacts(callback: (contacts: Contact[]) => void, ownerId?: string) {
-  let lastValidData: Contact[] | null = null;
+  const cacheKey = `contacts:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchContacts = async () => {
     try {
       const data = await getContacts(ownerId);
       if (data && Array.isArray(data)) {
-        lastValidData = data;
+        dataCache[cacheKey] = data;
         callback(data);
+      } else if (!dataCache[cacheKey]) {
+        callback([]); 
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToContacts error, maintaining stale data:", err);
-      // Invoca callback com dados antigos se existirem
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]); 
+      }
     }
   };
 
@@ -211,6 +249,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -291,17 +330,25 @@ export async function getCompanies(ownerId?: string) {
 }
 
 export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
-  let lastValidData: Company[] | null = null;
+  const cacheKey = `companies:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchCompanies = async () => {
     try {
       const data = await getCompanies(ownerId);
       if (data && Array.isArray(data)) {
-        lastValidData = data;
+        dataCache[cacheKey] = data;
         callback(data);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToCompanies error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
@@ -311,6 +358,7 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -390,17 +438,25 @@ export async function getDealsByContact(contactId: string) {
 }
 
 export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: string) {
-  let lastValidData: Deal[] | null = null;
+  const cacheKey = `deals:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchDeals = async () => {
     try {
       const data = await getDeals(ownerId);
       if (data && Array.isArray(data)) {
-        lastValidData = data;
+        dataCache[cacheKey] = data;
         callback(data);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToDeals error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
@@ -410,6 +466,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -486,17 +543,25 @@ export async function getGoals(ownerId?: string) {
 }
 
 export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: string) {
-  let lastValidData: Goal[] | null = null;
+  const cacheKey = `goals:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchGoals = async () => {
     try {
       const data = await getGoals(ownerId);
       if (data && Array.isArray(data)) {
-        lastValidData = data;
+        dataCache[cacheKey] = data;
         callback(data);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToGoals error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
@@ -506,6 +571,7 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -568,6 +634,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
   };
 }
 
@@ -647,19 +714,28 @@ export async function getActivitiesByContact(contactId: string) {
 }
 
 export function subscribeToActivities(callback: (activities: Activity[]) => void, ownerId?: string) {
-  let lastValidData: Activity[] | null = null;
+  const cacheKey = `activities:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchActivities = async () => {
     try {
       let url = `/api/activities`;
       if (ownerId) url += `?ownerId=${ownerId}`;
       const data = await apiFetch(url);
       if (data && Array.isArray(data)) {
-        lastValidData = data as Activity[];
-        callback(lastValidData);
+        const result = data as Activity[];
+        dataCache[cacheKey] = result;
+        callback(result);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToActivities error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
@@ -669,6 +745,7 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -748,6 +825,7 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
   };
 }
 
@@ -834,12 +912,13 @@ async function apiFetch(url: string, options: any = {}) {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); 
+      const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
       const response = await fetch(fullUrl, {
         ...options,
         headers,
-        signal: controller.signal
+        signal: controller.signal,
+        cache: 'no-store'
       });
       
       clearTimeout(timeoutId);
@@ -867,7 +946,9 @@ async function apiFetch(url: string, options: any = {}) {
         throw new Error(errData.error || `Erro na API: ${response.status}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log(`[apiFetch] SUCESSO: ${url} (${Array.isArray(result) ? result.length : 'object'} itens)`);
+      return result;
     } catch (err: any) {
       lastError = err;
       const isTimeout = err.name === 'AbortError';
@@ -909,17 +990,25 @@ export async function getProperties(ownerId?: string) {
 }
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
-  let lastValidData: Property[] | null = null;
+  const cacheKey = `properties:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchProperties = async () => {
     try {
       const data = await getProperties(ownerId);
       if (data && Array.isArray(data)) {
-        lastValidData = data;
+        dataCache[cacheKey] = data;
         callback(data);
+      } else if (!dataCache[cacheKey]) {
+        callback([]);
       }
     } catch (e) {
       console.warn("[lib/db] subscribeToProperties error, maintaining stale data:", e);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      } else {
+        callback([]);
+      }
     }
   };
 
@@ -929,6 +1018,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -1078,7 +1168,9 @@ export async function getDeal(id: string) {
   }
 }
 export function subscribeToConversations(category: 'client' | 'team', callback: (conversations: Conversation[]) => void, ownerId?: string) {
-  let lastValidData: Conversation[] | null = null;
+  const cacheKey = `conversations:${category}:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchConversations = async () => {
     try {
       let url = `/api/conversations?category=${category}`;
@@ -1096,12 +1188,12 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
           ownerId: item.owner_id,
           unreadCount: item.unread_count
         })) as Conversation[];
-        lastValidData = mapped;
+        dataCache[cacheKey] = mapped;
         callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToConversations error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
     }
   };
 
@@ -1111,12 +1203,15 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
 
 export function subscribeToMessages(conversationId: string, callback: (messages: ChatMessage[]) => void) {
-  let lastValidData: ChatMessage[] | null = null;
+  const cacheKey = `messages:${conversationId}`;
+  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+
   const fetchMessages = async () => {
     try {
       const data = await apiFetch(`/api/messages?conversationId=${conversationId}`);
@@ -1132,12 +1227,12 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
           createdAt: item.created_at,
           ownerId: item.owner_id
         })) as ChatMessage[];
-        lastValidData = mapped;
+        dataCache[cacheKey] = mapped;
         callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToMessages error, maintaining stale data:", err);
-      if (lastValidData) callback(lastValidData);
+      if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
     }
   };
 
@@ -1147,6 +1242,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }
@@ -1250,6 +1346,7 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
 
   return () => {
     supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
   };
 }

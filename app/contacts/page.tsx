@@ -41,7 +41,7 @@ import {
   isEmailRegistered
 } from "@/lib/db";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 
 import { Suspense } from "react";
 

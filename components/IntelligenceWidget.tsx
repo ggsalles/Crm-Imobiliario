@@ -7,7 +7,7 @@ import { Zap, Clock, ChevronRight, Briefcase, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 
 interface IntelligenceWidgetProps {

@@ -26,7 +26,7 @@ import {
   Upload,
   Loader2
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { 

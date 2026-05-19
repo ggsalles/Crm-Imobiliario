@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Sparkles, Brain, Loader2, Info } from "lucide-react";
+import { Sparkles, Brain, Loader2, Info, AlertCircle } from "lucide-react";
 import { Activity, Deal } from "@/lib/db";
 import { safeAiCall } from "@/lib/ai";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface GeminiBannerProps {
@@ -22,11 +22,14 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
   const [insights, setInsights] = useState<string[]>(DEFAULT_INSIGHTS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState(false);
   const rotationInterval = useRef<NodeJS.Timeout | null>(null);
+  const hasGeneratedRef = useRef(false);
 
-  const generateInsight = useCallback(async () => {
+  const generateInsight = useCallback(async (manual = false) => {
     if (loading) return;
     setLoading(true);
+    setQuotaError(false);
 
     try {
       const pendingActivities = activities.filter(a => a.status === 'pending');
@@ -54,11 +57,16 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
 
       const result = await safeAiCall(prompt, DEFAULT_INSIGHTS.join('; '));
 
+      if (result.isError && result.errorType === 'quota') {
+        setQuotaError(true);
+      }
+
       if (result.text) {
         const newInsights = result.text.split(';').map(s => s.trim()).filter(s => s.length > 5);
         if (newInsights.length > 0) {
-          setInsights(newInsights);
+          setInsights(newInsights.slice(0, 3));
           setCurrentIndex(0);
+          hasGeneratedRef.current = true;
         }
       }
     } catch (error: any) {
@@ -69,11 +77,11 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
   }, [loading, activities, deals]); 
 
   useEffect(() => {
-    // Only trigger once when data first arrives or if explicitly requested
-    if (activities.length > 0 && insights === DEFAULT_INSIGHTS && !loading) {
+    // Only trigger once when data first arrives
+    if (activities.length > 0 && !hasGeneratedRef.current && !loading && !quotaError) {
       generateInsight();
     }
-  }, [activities.length, generateInsight, insights, loading]);
+  }, [activities.length, generateInsight, loading, quotaError]);
 
   useEffect(() => {
     // Rotation logic - 20 seconds as requested
@@ -108,9 +116,15 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
         <div className="flex-1 overflow-hidden">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1 flex items-center gap-2">
             Insight Inteligente
-            {insights.length > 1 && (
+            {insights.length > 1 && !quotaError && (
               <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px]">
                 {currentIndex + 1}/{insights.length}
+              </span>
+            )}
+            {quotaError && (
+              <span className="bg-red-200 text-red-700 px-1.5 py-0.5 rounded text-[8px] flex items-center gap-1">
+                <AlertCircle className="w-2 h-2" />
+                Limite da IA atingido - Dicas Padrão
               </span>
             )}
           </h3>

@@ -76,7 +76,7 @@ import { safeAiCall } from "@/lib/ai";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Suspense } from "react";
 import { IntelligenceWidget } from "@/components/IntelligenceWidget";
 
@@ -278,11 +278,18 @@ function DashboardContent() {
   useEffect(() => {
     if (!user || !profile) return;
 
+    // Safety timeout: force loading false if it takes too long
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
     // Subscriptions
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
 
     const unsubDeals = subscribeToDeals((data) => {
       setDeals(data);
+      setLoading(false);
+      clearTimeout(safetyTimer);
     }, ownerId);
     
     const unsubContacts = subscribeToContacts(setContacts, ownerId);
@@ -309,6 +316,7 @@ function DashboardContent() {
       unsubGoals();
       unsubActivities();
       unsubUsers();
+      clearTimeout(safetyTimer);
     };
   }, [user, profile]);
 
