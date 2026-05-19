@@ -36,6 +36,7 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!user || !profile) return;
@@ -43,6 +44,13 @@ export default function CompaniesPage() {
     const data = await getCompanies(ownerId);
     setCompanies(data);
   };
+
+  useEffect(() => {
+    if (deleteConfirmId) {
+      const timer = setTimeout(() => setDeleteConfirmId(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleteConfirmId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -70,14 +78,13 @@ export default function CompaniesPage() {
   );
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta empresa? Isso não excluirá os contatos vinculados.")) {
-      try {
-        await deleteCompany(id);
-        toast.success("Empresa excluída!");
-        await fetchData();
-      } catch (err) {
-        toast.error("Erro ao excluir empresa.");
-      }
+    try {
+      await deleteCompany(id);
+      toast.success("Empresa excluída!");
+      setDeleteConfirmId(null);
+      await fetchData();
+    } catch (err) {
+      toast.error("Erro ao excluir empresa.");
     }
   };
 
@@ -163,7 +170,24 @@ export default function CompaniesPage() {
                     </div>
                     <div className="flex gap-1">
                       <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => handleDelete(company.id)} className="p-1.5 text-muted-foreground hover:text-red-500 transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                      <button 
+                        onClick={() => {
+                          if (deleteConfirmId === company.id) {
+                            handleDelete(company.id);
+                          } else {
+                            setDeleteConfirmId(company.id);
+                          }
+                        }} 
+                        className={cn(
+                          "p-1.5 rounded-lg transition-all",
+                          deleteConfirmId === company.id 
+                            ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
+                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                        )}
+                        title={deleteConfirmId === company.id ? "Clique novamente para confirmar" : "Excluir"}
+                      >
+                        <Trash2 className={cn("w-4 h-4", deleteConfirmId === company.id && "animate-pulse")} />
+                      </button>
                     </div>
                   </div>
                   {company.website && (
@@ -221,11 +245,23 @@ export default function CompaniesPage() {
                   {editingCompany && (
                     <button 
                       type="button" 
-                      onClick={() => { handleDelete(editingCompany.id); setIsModalOpen(false); }} 
-                      className="px-4 py-3 font-black text-red-500 hover:bg-red-500/10 rounded-2xl transition-colors border border-red-500/20"
-                      title="Excluir empresa"
+                      onClick={() => { 
+                        if (deleteConfirmId === editingCompany.id) {
+                          handleDelete(editingCompany.id); 
+                          setIsModalOpen(false);
+                        } else {
+                          setDeleteConfirmId(editingCompany.id);
+                        }
+                      }} 
+                      className={cn(
+                        "px-4 py-3 rounded-2xl transition-all border",
+                        deleteConfirmId === editingCompany.id 
+                          ? "bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20 scale-105" 
+                          : "text-red-500 hover:bg-red-500/10 border-red-500/20"
+                      )}
+                      title={deleteConfirmId === editingCompany.id ? "Clique novamente para confirmar" : "Excluir empresa"}
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className={cn("w-5 h-5", deleteConfirmId === editingCompany.id && "animate-pulse")} />
                     </button>
                   )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 font-black uppercase tracking-widest text-xs text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-2xl transition-colors">Cancelar</button>

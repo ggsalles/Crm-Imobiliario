@@ -71,11 +71,20 @@ export default function PipelinePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [displayValue, setDisplayValue] = useState("");
   const [displayGoals, setDisplayGoals] = useState<{ [key: string]: string }>({});
 
   const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
+
+  useEffect(() => {
+    if (deleteConfirmId) {
+      const timer = setTimeout(() => setDeleteConfirmId(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleteConfirmId]);
+
   const currentGoal = useMemo(() => {
     const monthGoals = goals.filter(g => g.month === currentMonth);
     // Prioritize the user's specific goal if multiple exist
@@ -266,14 +275,13 @@ export default function PipelinePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Deseja realmente excluir este negócio?")) {
-      try {
-        await deleteDeal(id);
-        toast.success("Negócio excluído.");
-        await fetchDealsData();
-      } catch (err) {
-        toast.error("Erro ao excluir.");
-      }
+    try {
+      await deleteDeal(id);
+      toast.success("Negócio excluído.");
+      setDeleteConfirmId(null);
+      await fetchDealsData();
+    } catch (err) {
+      toast.error("Erro ao excluir.");
     }
   };
 
@@ -428,7 +436,24 @@ export default function PipelinePage() {
                                       <ExternalLink className="w-3 h-3" />
                                     </Link>
                                     <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-1 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
-                                    <button onClick={() => handleDelete(deal.id)} className="p-1 text-muted-foreground hover:text-red-500 transition-all" title="Excluir"><Trash2 className="w-3 h-3" /></button>
+                                    <button 
+                                      onClick={() => {
+                                        if (deleteConfirmId === deal.id) {
+                                          handleDelete(deal.id);
+                                        } else {
+                                          setDeleteConfirmId(deal.id);
+                                        }
+                                      }} 
+                                      className={cn(
+                                        "p-1 rounded-md transition-all",
+                                        deleteConfirmId === deal.id 
+                                          ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
+                                          : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                      )}
+                                      title={deleteConfirmId === deal.id ? "Clique novamente para confirmar" : "Excluir"}
+                                    >
+                                      <Trash2 className={cn("w-3 h-3", deleteConfirmId === deal.id && "animate-pulse")} />
+                                    </button>
                                   </div>
                                   <div className="flex -space-x-2">
                                     <div className="w-6 h-6 rounded-full border-2 border-card bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary uppercase">
@@ -601,11 +626,23 @@ export default function PipelinePage() {
                   {editingDeal?.id && (
                     <button 
                       type="button" 
-                      onClick={() => { handleDelete(editingDeal.id); setIsModalOpen(false); }} 
-                      className="px-4 py-3 font-bold text-red-500 hover:bg-red-500 rounded-2xl transition-all border border-red-500/20 hover:text-white"
-                      title="Excluir negócio"
+                      onClick={() => { 
+                        if (deleteConfirmId === editingDeal.id) {
+                          handleDelete(editingDeal.id); 
+                          setIsModalOpen(false);
+                        } else {
+                          setDeleteConfirmId(editingDeal.id);
+                        }
+                      }} 
+                      className={cn(
+                        "px-4 py-3 rounded-2xl transition-all border",
+                        deleteConfirmId === editingDeal.id 
+                          ? "bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20 scale-105" 
+                          : "text-red-500 hover:bg-red-500/10 border-red-500/20"
+                      )}
+                      title={deleteConfirmId === editingDeal.id ? "Clique novamente para confirmar" : "Excluir negócio"}
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className={cn("w-5 h-5", deleteConfirmId === editingDeal.id && "animate-pulse")} />
                     </button>
                   )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 font-bold text-muted-foreground hover:bg-muted rounded-2xl transition-all">Cancelar</button>

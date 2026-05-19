@@ -497,14 +497,14 @@ function ContactsContent() {
                         }
                       }}
                       className={cn(
-                        "px-4 py-3 font-bold rounded-2xl transition-all border",
+                        "px-4 py-3 rounded-2xl transition-all border",
                         deleteConfirmId === editingContact.id 
-                          ? "bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20" 
+                          ? "bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20 scale-105" 
                           : "text-red-500 hover:bg-red-500/10 border-red-500/20"
                       )}
                       title={deleteConfirmId === editingContact.id ? "Clique novamente para confirmar" : "Excluir este contato"}
                     >
-                      {deleteConfirmId === editingContact.id ? "Confirmar?" : <Trash2 className="w-5 h-5" />}
+                      <Trash2 className={cn("w-5 h-5", deleteConfirmId === editingContact.id && "animate-pulse")} />
                     </button>
                   )}
                   <button 
@@ -570,55 +570,38 @@ function ContactCard({
             </div>
           </div>
           <div className="flex gap-1 shrink-0 items-center">
-            {!isConfirmingDelete ? (
-              <>
-                <button 
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    onEdit(); 
-                  }} 
-                  className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" 
-                  title="Editar"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    setConfirmingDelete?.(true); 
-                  }} 
-                  className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all" 
-                  title="Excluir"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2 duration-200">
-                <button 
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    setConfirmingDelete?.(false); 
-                  }}
-                  className="text-[10px] font-black px-2 py-1 text-muted-foreground hover:text-foreground"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    e.stopPropagation();
-                    onDelete(); 
-                  }}
-                  className="text-[10px] font-black px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all shadow-sm shadow-red-900/20"
-                >
-                  Excluir
-                </button>
-              </div>
-            )}
+            <button 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                onEdit(); 
+              }} 
+              className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" 
+              title="Editar"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                if (isConfirmingDelete) {
+                  onDelete();
+                  setConfirmingDelete?.(false);
+                } else {
+                  setConfirmingDelete?.(true);
+                }
+              }} 
+              className={cn(
+                "p-2 rounded-lg transition-all relative",
+                isConfirmingDelete 
+                  ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
+                  : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+              )}
+              title={isConfirmingDelete ? "Clique novamente para confirmar" : "Excluir"}
+            >
+              <Trash2 className={cn("w-4 h-4", isConfirmingDelete && "animate-pulse")} />
+            </button>
           </div>
         </div>
 

@@ -160,9 +160,8 @@ export default function ActivitiesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta atividade?")) {
-      await deleteActivity(id);
-    }
+    await deleteActivity(id);
+    setDeleteConfirmId(null);
   };
 
   const filteredActivities = activities.filter(a => {
@@ -366,11 +365,22 @@ export default function ActivitiesPage() {
                                   <Pencil className="w-5 h-5" />
                                 </button>
                                 <button 
-                                  onClick={() => handleDelete(activity.id)}
-                                  className="p-3 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all"
-                                  title="Excluir"
+                                  onClick={() => {
+                                    if (deleteConfirmId === activity.id) {
+                                      handleDelete(activity.id);
+                                    } else {
+                                      setDeleteConfirmId(activity.id);
+                                    }
+                                  }} 
+                                  className={cn(
+                                    "p-3 rounded-2xl transition-all shadow-sm shrink-0",
+                                    deleteConfirmId === activity.id 
+                                      ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
+                                      : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                  )}
+                                  title={deleteConfirmId === activity.id ? "Clique novamente para confirmar" : "Excluir"}
                                 >
-                                  <Trash2 className="w-5 h-5" />
+                                  <Trash2 className={cn("w-5 h-5", deleteConfirmId === activity.id && "animate-pulse")} />
                                 </button>
                               </div>
                             </motion.div>
@@ -500,14 +510,14 @@ export default function ActivitiesPage() {
                       }
                     }}
                     className={cn(
-                      "px-6 py-4 border-2 rounded-2xl font-bold transition-all font-sans",
+                      "px-6 py-4 rounded-2xl transition-all border",
                       deleteConfirmId === editingActivity.id
-                        ? "bg-red-500 text-white border-red-500 hover:bg-red-600"
+                        ? "bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20 scale-105"
                         : "border-red-500/10 text-red-500 hover:bg-red-500/5"
                     )}
                     title={deleteConfirmId === editingActivity.id ? "Clique para confirmar" : "Excluir atividade"}
                   >
-                    {deleteConfirmId === editingActivity.id ? "Confirmar?" : <Trash2 className="w-5 h-5" />}
+                    <Trash2 className={cn("w-5 h-5", deleteConfirmId === editingActivity.id && "animate-pulse")} />
                   </button>
                 )}
                 <button 
