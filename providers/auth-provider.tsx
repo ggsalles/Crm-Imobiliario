@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { UserProfile } from "@/lib/db";
@@ -30,6 +31,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const lastActivityTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     // Online/Offline status handling
@@ -163,6 +166,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    // Reset activity time upon mount or user change
+    lastActivityTimeRef.current = Date.now();
+
+    const handleActivity = () => {
+      lastActivityTimeRef.current = Date.now();
+    };
+
+    // Register active user events
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart", "click"];
+    events.forEach(eventName => {
+      window.addEventListener(eventName, handleActivity, { passive: true });
+    });
+
+    const intervalId = setInterval(() => {
+      const isEnabled = localStorage.getItem("session_timeout_enabled") !== "false"; // default to true
+      const minutes = Number(localStorage.getItem("session_timeout_minutes") || "15"); // default to 15 minutes as fallback
+      const timeoutMs = minutes * 60 * 1000;
+
+      const elapsed = Date.now() - lastActivityTimeRef.current;
+      if (isEnabled && elapsed >= timeoutMs) {
+        console.warn(`AuthProvider: Recurso de inatividade detectado por ${minutes} minutos. Desconectando...`);
+        
+        supabase.auth.signOut().then(() => {
+          setUser(null);
+          setProfile(null);
+          toast.warning(`Sua sessão expirou devido a ${minutes} minutos de inatividade. Por favor, entre novamente.`);
+          router.push("/login");
+        });
+      }
+    }, 5000); // Check once every 5 seconds
+
+    const handleSettingsUpdate = () => {
+      lastActivityTimeRef.current = Date.now();
+    };
+    window.addEventListener("storage_timeout_updated", handleSettingsUpdate);
+
+    return () => {
+      events.forEach(eventName => {
+        window.removeEventListener(eventName, handleActivity);
+      });
+      clearInterval(intervalId);
+      window.removeEventListener("storage_timeout_updated", handleSettingsUpdate);
+    };
+  }, [user, router]);
 
   const syncProfile = async (user: User) => {
     try {

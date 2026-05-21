@@ -23,11 +23,13 @@ import {
   Target,
   Percent,
   Calculator,
-  Sigma
+  Sigma,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 const STAGES_CONFIG = [
   { id: "lead", title: "Novo Lead", defaultProb: 20 },
@@ -88,7 +90,12 @@ export default function SettingsPage() {
   const [probabilities, setProbabilities] = useState<Record<string, number>>({});
   const [isSaved, setIsSaved] = useState(false);
 
+  const [sessionEnabled, setSessionEnabled] = useState(true);
+  const [sessionMinutes, setSessionMinutes] = useState(15);
+  const [isSessionSaved, setIsSessionSaved] = useState(false);
+
   useEffect(() => {
+    // Stage probabilities
     const saved = localStorage.getItem("pipeline_probabilities");
     if (saved) {
       setProbabilities(JSON.parse(saved));
@@ -99,6 +106,12 @@ export default function SettingsPage() {
       }, {} as Record<string, number>);
       setProbabilities(defaults);
     }
+
+    // Session Timeout
+    const timeoutEnabled = localStorage.getItem("session_timeout_enabled") !== "false";
+    const timeoutMinutes = Number(localStorage.getItem("session_timeout_minutes") || "15");
+    setSessionEnabled(timeoutEnabled);
+    setSessionMinutes(timeoutMinutes);
   }, []);
 
   const handleProbChange = (id: string, value: string) => {
@@ -116,6 +129,16 @@ export default function SettingsPage() {
     setTimeout(() => setIsSaved(false), 2000);
     // Trigger storage event so other tabs/components can update
     window.dispatchEvent(new Event("storage_probabilities_updated"));
+  };
+
+  const saveSessionSettings = () => {
+    localStorage.setItem("session_timeout_enabled", String(sessionEnabled));
+    localStorage.setItem("session_timeout_minutes", String(sessionMinutes));
+    setIsSessionSaved(true);
+    toast.success("Opção de inatividade salva!");
+    setTimeout(() => setIsSessionSaved(false), 2000);
+    // Trigger storage event for timeout
+    window.dispatchEvent(new Event("storage_timeout_updated"));
   };
 
   return (
@@ -263,6 +286,123 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-bold text-foreground">Inatividade da Sessão (Segurança)</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Configure a desconexão automática se o sistema não detectar ações do usuário.</p>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={saveSessionSettings}
+                  disabled={isSessionSaved}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2 cursor-pointer",
+                    isSessionSaved 
+                      ? "bg-emerald-500 text-white border-emerald-600" 
+                      : "bg-primary text-white border-primary/20 hover:bg-primary/90"
+                  )}
+                >
+                  {isSessionSaved ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Salvo com Sucesso
+                    </>
+                  ) : (
+                    "Salvar Alterações"
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                {/* Toggle Option */}
+                <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Desconexão por Inatividade</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Sair automaticamente ao ficar inativo.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSessionEnabled(!sessionEnabled);
+                      setIsSessionSaved(false);
+                    }}
+                    className={cn(
+                      "w-12 h-6 rounded-full p-1 transition-colors relative cursor-pointer",
+                      sessionEnabled ? "bg-emerald-500" : "bg-muted"
+                    )}
+                  >
+                    <div 
+                      className={cn(
+                        "w-4 h-4 bg-white rounded-full shadow-md transition-transform",
+                        sessionEnabled ? "translate-x-6" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Timer Selector */}
+                <div className={cn(
+                  "p-5 bg-muted/30 rounded-2xl border border-border transition-all duration-300",
+                  !sessionEnabled && "opacity-50 pointer-events-none"
+                )}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-bold text-foreground">Tempo Limite</h4>
+                    <div className="text-xs font-black text-primary uppercase bg-primary/10 px-2.5 py-1 rounded-lg">
+                      {sessionMinutes} {sessionMinutes === 1 ? "minuto" : "minutos"}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      disabled={!sessionEnabled || sessionMinutes <= 1}
+                      onClick={() => {
+                        setSessionMinutes(prev => Math.max(1, prev - 1));
+                        setIsSessionSaved(false);
+                      }}
+                      className="w-10 h-10 rounded-xl bg-background hover:bg-muted border border-border font-bold flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    
+                    <input 
+                      type="range"
+                      min="1"
+                      max="30"
+                      value={sessionMinutes}
+                      disabled={!sessionEnabled}
+                      onChange={(e) => {
+                        setSessionMinutes(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)));
+                        setIsSessionSaved(false);
+                      }}
+                      className="flex-1 accent-primary h-2 bg-border rounded-lg appearance-none cursor-pointer"
+                    />
+                    
+                    <button
+                      type="button"
+                      disabled={!sessionEnabled || sessionMinutes >= 30}
+                      onClick={() => {
+                        setSessionMinutes(prev => Math.min(30, prev + 1));
+                        setIsSessionSaved(false);
+                      }}
+                      className="w-10 h-10 rounded-xl bg-background hover:bg-muted border border-border font-bold flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground font-bold uppercase mt-2 px-1">
+                    <span>Mín: 1 min</span>
+                    <span>Máx: 30 min</span>
+                  </div>
+                </div>
               </div>
             </section>
 
