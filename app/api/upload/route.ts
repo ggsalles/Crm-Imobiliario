@@ -3,15 +3,41 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
 
-const supabaseServer = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false
+function getSupabase(req: NextRequest) {
+  if (supabaseServiceKey) {
+    return createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false
+      }
+    });
   }
-});
+
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader) {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader
+        }
+      },
+      auth: {
+        persistSession: false
+      }
+    });
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false
+    }
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const supabaseServer = getSupabase(req);
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const bucketName = formData.get("bucketName") as string || "property-images";

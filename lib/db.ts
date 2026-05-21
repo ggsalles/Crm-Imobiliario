@@ -1422,6 +1422,31 @@ export async function createConversation(participants: string[], category: 'clie
   }
 }
 
+export async function deleteChatMessage(id: string) {
+  try {
+    await apiFetch(`/api/messages?id=${id}`, {
+      method: "DELETE"
+    });
+    return true;
+  } catch (err) {
+    console.error("[lib/db] deleteChatMessage FATAL:", err);
+    throw err;
+  }
+}
+
+export async function deleteConversation(id: string) {
+  try {
+    await apiFetch(`/api/conversations?id=${id}`, {
+      method: "DELETE"
+    });
+    return true;
+  } catch (err) {
+    console.error("[lib/db] deleteConversation FATAL:", err);
+    throw err;
+  }
+}
+
+
 export async function uploadFile(file: File, bucketName: string = 'property-images', bypassUserId?: string) {
   try {
     let userId = bypassUserId;
@@ -1444,8 +1469,22 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
 
     console.log(`[Storage Client] Redirecionando upload de "${file.name}" para proxy de API local...`);
     
+    let token: string | null = null;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || null;
+    } catch (e) {
+      console.warn("[Storage Client] Erro ao obter session token para upload:", e);
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch("/api/upload", {
       method: "POST",
+      headers,
       body: formData,
     });
 

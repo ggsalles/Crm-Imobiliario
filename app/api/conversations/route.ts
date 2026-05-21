@@ -5,15 +5,27 @@ export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
 
 function getSupabase(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
-  if (authHeader) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+  const token = authHeader?.split(' ')[1];
+
+  if (supabaseServiceKey && token) {
+    return createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false }
     });
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
+
+  if (authHeader) {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false }
+    });
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false }
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -88,3 +100,31 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = getSupabase(req);
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) throw new Error("ID required");
+
+    // Clear messages first due to foreign key constraints if any
+    await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', id);
+
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("[API/Conversations] DELETE Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+

@@ -24,7 +24,14 @@ import {
   TrendingUp,
   X,
   Upload,
-  Loader2
+  Loader2,
+  Sparkles,
+  Compass,
+  Zap,
+  Check,
+  Share2,
+  Copy,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
@@ -36,7 +43,11 @@ import {
   updateProperty, 
   deleteProperty, 
   uploadFile,
-  Property
+  Property,
+  getContacts,
+  Contact,
+  createDeal,
+  createTimelineEvent
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber, formatCEP } from "@/lib/utils";
 import Image from "next/image";
@@ -48,6 +59,7 @@ export default function PropertiesPage() {
 
   const [view, setView] = useState<'list' | 'form'>('list');
   const [properties, setProperties] = useState<Property[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -59,6 +71,53 @@ export default function PropertiesPage() {
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
   const [cep, setCep] = useState("");
+  const [activeMapProperty, setActiveMapProperty] = useState<Property | null>(null);
+  const [sharingProperty, setSharingProperty] = useState<Property | null>(null);
+  const [sharingText, setSharingText] = useState("");
+
+  const generateWhatsappMessage = useCallback((property: Property) => {
+    const priceFormatted = new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL', 
+      maximumFractionDigits: 0 
+    }).format(property.price);
+
+    const financingTxt = property.acceptsFinancing ? "Sim" : "Não";
+    
+    let photosText = "";
+    if (property.imageUrls && property.imageUrls.length > 0) {
+      photosText = "\n📸 *Fotos do Imóvel:*\n" + property.imageUrls.map((url, i) => `Imagem ${i+1}: ${url}`).join("\n");
+    }
+
+    return `✨ *OPORTUNIDADE IMOBILIÁRIA* ✨
+🏡 *${property.title}*
+
+📍 *Localização:* ${property.location}
+💰 *Valor:* ${priceFormatted}
+
+📐 *Área:* ${property.area} m²
+🛏 *Quartos:* ${property.bedrooms} dormitórios
+🚿 *Banheiros:* ${property.bathrooms} banheiros
+🚗 *Vagas:* ${property.parkingSpots} vagas
+✍️ *Tipo:* ${property.type.substring(0,1).toUpperCase() + property.type.substring(1)}
+🏦 *Aceita Financiamento:* ${financingTxt}
+
+📄 *Descrição do Imóvel:*
+${property.description || "Consulte-nos para mais detalhes!"}
+${photosText}
+
+---
+Estou à disposição para agendarmos uma visita e simularmos as melhores condições! 🚀`;
+  }, []);
+
+  useEffect(() => {
+    if (sharingProperty) {
+      setSharingText(generateWhatsappMessage(sharingProperty));
+    } else {
+      setSharingText("");
+    }
+  }, [sharingProperty, generateWhatsappMessage]);
+
   const isSubmittingRef = useRef(false);
 
   useEffect(() => {
@@ -72,8 +131,114 @@ export default function PropertiesPage() {
       setLoading(false);
     }, ownerId);
 
+    // Fetch contacts for dual-directional matchmaking features
+    getContacts(ownerId).then(data => {
+      if (Array.isArray(data)) {
+        setContacts(data);
+      }
+    }).catch(err => {
+      console.error("Error loading contacts in properties page:", err);
+    });
+
     return () => unsubscribe();
   }, [user, profile]);
+
+  interface MatchingContact {
+    contact: Contact;
+    score: number;
+  }
+
+  const getMatchingContactsForProperty = (p: Property): MatchingContact[] => {
+    return contacts
+      .filter(c => c.type === 'cliente')
+      .map(c => {
+        let finalScore = 0;
+        let possibleScore = 0;
+
+        let profileOfInt: any = null;
+        try {
+          if (c.department) {
+            profileOfInt = JSON.parse(c.department);
+          }
+        } catch (e) {}
+
+        if (!profileOfInt) return { contact: c, score: 0 };
+
+        const maxPrice = typeof profileOfInt.maxPrice === 'number' ? profileOfInt.maxPrice : null;
+        const minBedrooms = typeof profileOfInt.minBedrooms === 'number' ? profileOfInt.minBedrooms : null;
+        const propertyType = typeof profileOfInt.propertyType === 'string' ? profileOfInt.propertyType : "todos";
+        const neighborhoods = Array.isArray(profileOfInt.neighborhoods) ? profileOfInt.neighborhoods : [];
+
+        // 1. Price Match (budget limit check)
+        if (maxPrice) {
+          possibleScore += 25;
+          if (p.price <= maxPrice) finalScore += 25;
+          else if (p.price <= maxPrice * 1.15) finalScore += 10;
+        }
+
+        // 2. Type Match (type equal search)
+        if (propertyType && propertyType !== 'todos') {
+          possibleScore += 25;
+          if (p.type === propertyType) finalScore += 25;
+        }
+
+        // 3. Bedrooms Match (at least bedrooms requested)
+        if (minBedrooms) {
+          possibleScore += 25;
+          if (p.bedrooms && p.bedrooms >= minBedrooms) finalScore += 25;
+        }
+
+        // 4. Neighborhood tags Match
+        if (neighborhoods && neighborhoods.length > 0) {
+          possibleScore += 25;
+          const propNeighborhoodClean = (p.neighborhood || "").trim().toLowerCase();
+          const matches = neighborhoods.some(n => 
+            propNeighborhoodClean.includes(n.trim().toLowerCase()) || 
+            n.trim().toLowerCase().includes(propNeighborhoodClean)
+          );
+          if (matches) finalScore += 25;
+        }
+
+        const normScore = possibleScore > 0 ? Math.round((finalScore / possibleScore) * 100) : 0;
+
+        return {
+          contact: c,
+          score: normScore
+        };
+      })
+      .filter(mc => mc.score >= 40)
+      .sort((a, b) => b.score - a.score);
+  };
+
+  const handleCreateDealFromPropertyMatch = async (contact: Contact, p: Property) => {
+    if (!user) return;
+    try {
+      const dealTitle = `${p.title} - ${contact.name}`;
+      const value = p.price;
+      
+      await createDeal({
+        title: dealTitle,
+        value: value,
+        stage: 'lead',
+        contactId: contact.id,
+        propertyId: p.id,
+        ownerId: user.id
+      });
+
+      await createTimelineEvent({
+        type: 'system',
+        category: 'contact',
+        relatedId: contact.id,
+        content: `Lead de imóvel cruzado na visão do Imóvel: associado ao imóvel "${p.title}" com preço de R$ ${p.price.toLocaleString('pt-BR')}.`,
+        title: `Novo negócio de cruzamento`
+      });
+
+      toast.success("Cruzamento realizado! Novo negócio criado para o cliente.");
+    } catch (e: any) {
+      console.error("Error creating matching deal from property layout:", e);
+      toast.error("Erro ao cruzar cliente e criar negócio.");
+    }
+  };
 
   useEffect(() => {
     if (view === 'form') {
@@ -506,11 +671,13 @@ export default function PropertiesPage() {
                 <AnimatePresence>
                   {filteredProperties.map((property) => (
                     <PropertyCard 
-  key={property.id} 
-  property={property} 
-  onEdit={() => handleEdit(property)}
-  onDelete={() => handleDelete(property.id)}
-/>
+                      key={property.id} 
+                      property={property} 
+                      onEdit={() => handleEdit(property)}
+                      onDelete={() => handleDelete(property.id)}
+                      onShowMap={() => setActiveMapProperty(property)}
+                      onShare={() => setSharingProperty(property)}
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -526,7 +693,17 @@ export default function PropertiesPage() {
               )}
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto">
+            <div className={cn(
+              "mx-auto transition-all duration-500",
+              editingProperty ? "max-w-7xl" : "max-w-4xl"
+            )}>
+              <div className={cn(
+                "grid grid-cols-1 gap-8",
+                editingProperty ? "xl:grid-cols-12" : "grid-cols-1"
+              )}>
+                <div className={cn(
+                  editingProperty ? "xl:col-span-8" : "w-full"
+                )}>
                   <form 
                     key={editingProperty?.id || 'new-property'}
                     onSubmit={handleCreateOrUpdate} 
@@ -670,6 +847,23 @@ export default function PropertiesPage() {
                       </div>
                     </div>
 
+                    {cep && cep.replace(/\D/g, "").length === 8 && (
+                      <div className="md:col-span-2 space-y-3">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Localização no Mapa</label>
+                        <div className="w-full h-64 rounded-[32px] overflow-hidden border border-border bg-muted/10 shadow-inner relative">
+                          <iframe
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            allowFullScreen
+                            referrerPolicy="no-referrer-when-downgrade"
+                            src={`https://maps.google.com/maps?q=${encodeURIComponent(`${addressData.street || ""} ${addressData.neighborhood || ""} ${addressData.city || ""} ${addressData.state || ""} ${cep}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 md:grid-cols-4 md:col-span-2 gap-6">
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Área (m²)</label>
@@ -797,14 +991,237 @@ export default function PropertiesPage() {
                 </div>
               </form>
             </div>
-          )}
+
+            {editingProperty && (
+              <div className="xl:col-span-4 space-y-8">
+                {/* Clientes com Match */}
+                <div className="bg-card border border-border rounded-[40px] p-8 shadow-2xl h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 justify-between mb-6 pb-4 border-b border-border/60">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-[#00E5FF]/10 flex items-center justify-center text-[#00E5FF] animate-pulse">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-foreground">Cruzamento Reverso</h3>
+                          <p className="text-xs text-muted-foreground font-medium">Clientes compatíveis</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#00E5FF] px-2.5 py-1.5 bg-[#00E5FF]/10 rounded-xl border border-[#00E5FF]/20">
+                        {getMatchingContactsForProperty(editingProperty).length} Match(es)
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const matches = getMatchingContactsForProperty(editingProperty);
+                      if (matches.length === 0) {
+                        return (
+                          <div className="py-16 text-center text-muted-foreground bg-muted/15 rounded-3xl border border-dashed border-border p-6 flex flex-col justify-center items-center">
+                            <Sparkles className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/75 mb-1">Nenhum cliente compatível</p>
+                            <p className="text-[11px] leading-relaxed max-w-sm mx-auto text-center">Nenhum cliente cadastrado no CRM possui critérios que correspondam às especificações deste imóvel.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1 font-sans">
+                          {matches.map(({ contact, score }) => (
+                            <div key={contact.id} className="p-4 bg-muted/30 hover:bg-muted/70 border border-border rounded-2xl flex items-center justify-between transition-all hover:scale-[1.01] duration-300">
+                              <div className="min-w-0 flex-1 pr-3">
+                                <h4 className="font-bold text-xs text-foreground truncate">{contact.name}</h4>
+                                <p className="text-[9px] font-black text-primary uppercase mt-0.5 tracking-wider">
+                                  Origem: {contact.source || "Direto"}
+                                </p>
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 px-2 py-0.5 bg-background border border-border/60 rounded-lg max-w-max font-mono truncate">
+                                  <span>{contact.email}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-full border shadow-sm flex flex-col items-center justify-center text-[10px] font-black shrink-0",
+                                  score >= 80 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
+                                  score >= 60 ? "bg-primary/10 border-primary/30 text-primary" :
+                                  "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                )}>
+                                  <span>{score}%</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreateDealFromPropertyMatch(contact, editingProperty)}
+                                  className="w-8 h-8 rounded-lg bg-primary text-primary-foreground hover:opacity-95 transition-all flex items-center justify-center shadow shadow-primary/20 cursor-pointer"
+                                  title="Vincular cliente a este imóvel via Negócio"
+                                >
+                                  <Zap className="w-3.5 h-3.5 fill-primary-foreground text-primary-foreground" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
         </div>
       </main>
+
+      {/* Modal de visualização de mapa */}
+      <AnimatePresence>
+        {activeMapProperty && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-card w-full max-w-2xl rounded-[32px] border border-border shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-border flex items-center justify-between bg-muted/20">
+                <div>
+                  <h3 className="text-base font-black text-foreground uppercase tracking-tight line-clamp-1">{activeMapProperty.title}</h3>
+                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                    {activeMapProperty.street 
+                      ? `${activeMapProperty.street}, ${activeMapProperty.number || "S/N"}${activeMapProperty.neighborhood ? ` - ${activeMapProperty.neighborhood}` : ""}, ${activeMapProperty.city} - ${activeMapProperty.state}` 
+                      : activeMapProperty.location}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMapProperty(null)}
+                  className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="h-[400px] w-full bg-muted/25 relative">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                    (activeMapProperty.street 
+                      ? `${activeMapProperty.street}, ${activeMapProperty.number || ""} ${activeMapProperty.neighborhood || ""} ${activeMapProperty.city || ""} ${activeMapProperty.state || ""} ${activeMapProperty.cep || ""}`
+                      : activeMapProperty.location
+                    ).trim()
+                  )}&t=&z=16&ie=UTF8&iwloc=&output=embed`}
+                />
+              </div>
+              <div className="p-6 bg-muted/10 border-t border-border flex justify-end gap-3">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    (activeMapProperty.street 
+                      ? `${activeMapProperty.street}, ${activeMapProperty.number || ""} ${activeMapProperty.neighborhood || ""} ${activeMapProperty.city || ""} ${activeMapProperty.state || ""} ${activeMapProperty.cep || ""}`
+                      : activeMapProperty.location
+                    ).trim()
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-3 bg-muted text-muted-foreground hover:bg-muted/80 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-border"
+                >
+                  Abrir no Google Maps
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveMapProperty(null)}
+                  className="px-6 py-3 bg-primary text-primary-foreground rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-95 transition-all shadow-lg shadow-primary/20"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {sharingProperty && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-card w-full max-w-2xl rounded-[32px] border border-border shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-8 border-b border-border flex items-center justify-between bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                    <Share2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-foreground uppercase tracking-tight">Gerador de Ficha de Imóvel</h3>
+                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.15em] mt-1">Prepare ofertas personalizadas para WhatsApp</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSharingProperty(null)}
+                  className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh]">
+                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 flex items-start gap-3">
+                  <span className="text-xl">💡</span>
+                  <div className="text-xs text-muted-foreground leading-relaxed">
+                    <strong className="text-emerald-500 font-bold block mb-1">Dica do sistema:</strong>
+                    Você pode alterar livremente o texto abaixo antes de copiar ou enviar. Adicione seu nome, dados de contato ou mensagens personalizadas.
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Visualização e Edição da Ficha</label>
+                  <textarea
+                    value={sharingText}
+                    onChange={(e) => setSharingText(e.target.value)}
+                    rows={12}
+                    className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-mono leading-relaxed resize-y"
+                  />
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-6 bg-muted/10 border-t border-border flex flex-col sm:flex-row justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSharingProperty(null)}
+                  className="px-6 py-3 bg-muted text-muted-foreground hover:bg-muted/80 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-border"
+                >
+                  Cancelar
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(sharingText);
+                    toast.success("Ficha do imóvel copiada!");
+                  }}
+                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                >
+                  <Copy className="w-4 h-4 text-white fill-white" />
+                  Copiar Texto
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEdit: () => void; onDelete: () => void }) {
+function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { property: Property; onEdit: () => void; onDelete: () => void; onShowMap: () => void; onShare: () => void }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   
@@ -913,10 +1330,19 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
       <div className="p-6 flex flex-col flex-1">
         <div className="mb-4">
           <h4 className="text-base font-black text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
-          <div className="flex items-center gap-1.5 text-muted-foreground mt-1">
-            <MapPin className="w-3 h-3" />
-            <span className="text-[9px] font-black uppercase tracking-widest truncate">{property.location}</span>
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onShowMap();
+            }}
+            className="flex items-center gap-1.5 text-muted-foreground mt-1 hover:text-primary transition-colors cursor-pointer group/loc text-left"
+            title="Visualizar mapa completo"
+          >
+            <MapPin className="w-3 h-3 group-hover/loc:scale-110 group-hover/loc:text-primary transition-all" />
+            <span className="text-[9px] font-black uppercase tracking-widest truncate group-hover/loc:underline">{property.location}</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -982,9 +1408,27 @@ function PropertyCard({ property, onEdit, onDelete }: { property: Property; onEd
             </div>
             <button 
               type="button"
-              className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onShare();
+              }}
+              className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer"
+              title="Gerar ficha para WhatsApp"
             >
-              <ChevronRight className="w-5 h-5" />
+              <Share2 className="w-4 h-4 pointer-events-none" />
+            </button>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onShowMap();
+              }}
+              className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm cursor-pointer"
+              title="Visualizar mapa"
+            >
+              <MapPin className="w-5 h-5 pointer-events-none" />
             </button>
           </div>
         </div>

@@ -155,7 +155,9 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
               )} />
               {item.label}
               {item.label === "Mensagens" && unreadCount > 0 && (
-                <span className="ml-auto w-2 h-2 bg-green-500 rounded-full shadow-lg shadow-green-500/50 animate-pulse" />
+                <span className="ml-auto flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-lg shadow-red-500/30 animate-pulse">
+                  {unreadCount}
+                </span>
               )}
             </Link>
           );
