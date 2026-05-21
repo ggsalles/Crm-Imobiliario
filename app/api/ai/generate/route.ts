@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 
+const aiApiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+
 const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || "",
+  apiKey: aiApiKey,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
@@ -13,6 +15,8 @@ const ai = new GoogleGenAI({
 });
 
 const MODELS_PRIORITY = [
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
   "gemini-3-flash-preview",
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json();
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "A chave da API Gemini não está configurada no servidor." },
         { status: 500 }

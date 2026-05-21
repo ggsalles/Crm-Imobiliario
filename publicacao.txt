@@ -52,3 +52,5 @@ Combine as regras do piloto com seu amigo e seu corretor parceiro.
 Implemente um limitador/compressor de tamanho de imagem no upload de fotos de imóveis (app/properties/page.tsx) para manter sua infraestrutura de fotos incrivelmente leve.
 Crie uma conta de cobrança rápida (ex: um link de assinatura Pix recorrente no Asaas) para enviar de forma elegante para o corretor piloto.
 Esta aplicação tem um potencial tremendo por ser extremamente enxuta, de alta performance e direta ao ponto. Se precisar de ajuda para programar alguma dessas melhorias (como a compressão de imagens antes do upload ou ajustes de privacidade na tabela), conte comigo!
+
+21/05 - 06:54 - sessão e cores app

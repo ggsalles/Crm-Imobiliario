@@ -86,16 +86,24 @@ export async function safeAiCall(prompt: string, fallbackText: string): Promise<
       };
     }
 
-    if (errorMessage.includes("missing") || errorMessage.includes("api key")) {
+    const isMissingKey = 
+      errorMessage.includes("missing") || 
+      errorMessage.includes("api key") || 
+      errorMessage.includes("não está configurada") || 
+      errorMessage.includes("chave") || 
+      errorMessage.includes("configurada") ||
+      errorMessage.includes("apikey");
+
+    if (isMissingKey) {
       return {
-        text: fallbackText,
+        text: "Chave da API Gemini não configurada no servidor. Por favor, adicione a variável de ambiente GEMINI_API_KEY no painel do seu projeto na Vercel (Configurações > Environment Variables) e reinstale/re-implante para ativar os recursos de IA do SalesScore.",
         isError: true,
         errorType: 'missing_key'
       };
     }
 
     return {
-      text: fallbackText,
+      text: `Ops! Não foi possível gerar os insights agora. Detalhes: ${error?.message || "Erro desconhecido"}.`,
       isError: true,
       errorType: 'general'
     };
