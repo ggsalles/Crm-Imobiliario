@@ -24,7 +24,8 @@ import {
   Percent,
   Calculator,
   Sigma,
-  Clock
+  Clock,
+  Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -177,10 +178,10 @@ export default function SettingsPage() {
                 <h4 className="text-sm font-bold mb-4">Tema do Sistema</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
-                    { id: "system", label: "Sistema", icon: Monitor, bg: "bg-slate-200", border: "border-slate-300" },
-                    { id: "light", label: "Claro", icon: Sparkles, bg: "bg-slate-50", border: "border-slate-200" },
-                    { id: "dark", label: "Escuro", icon: Layout, bg: "bg-slate-900", border: "border-slate-800" },
-                    { id: "neutral", label: "Minimalist", icon: Smartphone, bg: "bg-white", border: "border-slate-100" },
+                    { id: "system", label: "Sistema", icon: Monitor, bg: "bg-slate-200 dark:bg-slate-800", border: "border-slate-300 dark:border-slate-700", iconColor: "text-slate-600 dark:text-slate-400" },
+                    { id: "light", label: "Claro", icon: Sparkles, bg: "bg-slate-50", border: "border-slate-200", iconColor: "text-amber-500" },
+                    { id: "dark", label: "Escuro", icon: Layout, bg: "bg-slate-900", border: "border-slate-800", iconColor: "text-blue-400" },
+                    { id: "neutral", label: "Preto Obsidian", icon: Moon, bg: "bg-black", border: "border-zinc-900", iconColor: "text-zinc-400" },
                   ].map((mode) => (
                     <button
                       key={mode.id}
@@ -193,7 +194,7 @@ export default function SettingsPage() {
                       )}
                     >
                       <div className={cn("w-full h-12 rounded-xl mb-1 flex items-center justify-center overflow-hidden border", mode.bg, mode.border)}>
-                        <mode.icon className="w-5 h-5 opacity-40" />
+                        <mode.icon className={cn("w-5 h-5", mode.iconColor)} />
                       </div>
                       <span className="text-xs font-bold">{mode.label}</span>
                     </button>

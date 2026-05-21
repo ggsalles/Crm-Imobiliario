@@ -62,13 +62,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         input: "217 33% 17%",
       },
       neutral: {
-        background: "0 0% 100%",
-        foreground: "222 47% 11%",
-        card: "0 0% 100%",
-        border: "214 32% 91%",
-        muted: "210 40% 96.1%",
-        mutedForeground: "215.4 16.3% 46.9%",
-        input: "214 32% 91%",
+        background: "0 0% 1.5%", // AMOLED Deep Obsidian Black
+        foreground: "0 0% 98%", // Pure white foreground
+        card: "0 0% 7.1%", // Deep dark charcoal card
+        border: "0 0% 12.9%", // Minimal subtle border
+        muted: "0 0% 9.8%", // Dark muted background
+        mutedForeground: "0 0% 63.9%", // Soft gray
+        input: "0 0% 12.9%",
       }
     };
 
@@ -88,7 +88,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--muted-foreground", currentMode.mutedForeground);
     root.style.setProperty("--input", currentMode.input);
 
-    if (activeMode === "dark") {
+    if (activeMode === "dark" || activeMode === "neutral") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
