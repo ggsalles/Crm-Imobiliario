@@ -135,6 +135,14 @@ export interface ChatMessage {
   ownerId: string;
 }
 
+export interface Tenant {
+  id: string;
+  name: string;
+  slug?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserProfile {
   id: string; // id in profiles table
   displayName: string;
@@ -143,6 +151,8 @@ export interface UserProfile {
   role: 'Membro' | 'Admin';
   userType: 'funcionário' | 'cliente';
   isAdmin?: boolean;
+  tenantId?: string;
+  tenantIds?: string[];
 }
 
 // Constants
@@ -156,6 +166,14 @@ const dataCache: Record<string, any> = {};
 export function forceDataResync() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(RESYNC_EVENT));
+  }
+}
+
+// Clear the global in-memory client cache
+export function clearLocalCache() {
+  console.log("[lib/db] Clearing global dataCache object...");
+  for (const key in dataCache) {
+    delete dataCache[key];
   }
 }
 
@@ -674,19 +692,47 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
   };
 }
 
-export async function updateUserProfile(id: string, data: any) {
+export async function updateUserProfile(id: string, data: any, skipResync = false) {
   const updateData: any = { updated_at: new Date().toISOString() };
   if (data.displayName !== undefined) updateData.display_name = data.displayName;
   if (data.photoURL !== undefined) updateData.photo_url = data.photoURL;
   if (data.role !== undefined) updateData.role = data.role;
   if (data.userType !== undefined) updateData.user_type = data.userType;
   if (data.isAdmin !== undefined) updateData.is_admin = data.isAdmin;
+  if (data.tenantId !== undefined) updateData.tenant_id = data.tenantId;
+  if (data.tenantIds !== undefined) updateData.tenantIds = data.tenantIds;
 
   try {
+    if (typeof window !== "undefined") {
+      const cacheKey = `local-profile:${id}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.id === id) {
+            if (data.displayName !== undefined) parsed.displayName = data.displayName;
+            if (data.photoURL !== undefined) parsed.photoURL = data.photoURL;
+            if (data.role !== undefined) parsed.role = data.role;
+            if (data.userType !== undefined) parsed.userType = data.userType;
+            if (data.isAdmin !== undefined) parsed.isAdmin = data.isAdmin;
+            if (data.tenantId !== undefined) parsed.tenantId = data.tenantId;
+            if (data.tenantIds !== undefined) parsed.tenantIds = data.tenantIds;
+            localStorage.setItem(cacheKey, JSON.stringify(parsed));
+          }
+        } catch (e) {
+          console.warn("[lib/db] Error updating local profile cache synchronously:", e);
+        }
+      }
+    }
+
     await apiFetch(`/api/profiles?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
+    
+    if (!skipResync) {
+      forceDataResync();
+    }
   } catch (err) {
     console.error("[lib/db] updateUserProfile FATAL:", err);
     throw err;
@@ -698,6 +744,7 @@ export async function deleteUserProfile(id: string) {
     await apiFetch(`/api/profiles?id=${id}`, {
       method: "DELETE"
     });
+    forceDataResync();
   } catch (err) {
     console.error("[lib/db] deleteUserProfile FATAL:", err);
     throw err;
@@ -714,7 +761,7 @@ export async function isEmailRegistered(email: string) {
   }
 }
 
-export async function createUserProfile(data: { displayName: string; email: string; role: 'Membro' | 'Admin'; userType: 'funcionário' | 'cliente' }) {
+export async function createUserProfile(data: { displayName: string; email: string; role: 'Membro' | 'Admin'; userType: 'funcionário' | 'cliente'; tenantId?: string; tenantIds?: string[] }) {
   const tempId = crypto.randomUUID();
   
   const profileData = {
@@ -723,7 +770,9 @@ export async function createUserProfile(data: { displayName: string; email: stri
     email: data.email.toLowerCase(),
     role: data.role,
     user_type: data.userType,
-    is_admin: data.role === 'Admin'
+    is_admin: data.role === 'Admin',
+    tenant_id: data.tenantId || null,
+    tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : ["11111111-1111-1111-1111-111111111111"])
   };
 
   try {
@@ -731,6 +780,7 @@ export async function createUserProfile(data: { displayName: string; email: stri
       method: "POST",
       body: JSON.stringify(profileData)
     });
+    forceDataResync();
     return result.id;
   } catch (err) {
     console.error("[lib/db] createUserProfile FATAL:", err);
@@ -930,7 +980,67 @@ async function winTimeout<T>(promise: Promise<T>, ms: number = 60000, label: str
   }
 }
 
-async function apiFetch(url: string, options: any = {}) {
+let isPageUnloading = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    isPageUnloading = true;
+    // Se o unload for abortado ou interceptado por soft-routing, recuperamos o estado em 2s
+    setTimeout(() => {
+      isPageUnloading = false;
+    }, 2000);
+  });
+}
+
+const inFlightRequests = new Map<string, Promise<any>>();
+let activeRefreshPromise: Promise<any> | null = null;
+
+async function getRefreshedSession() {
+  if (activeRefreshPromise) {
+    console.log("[apiFetch] Waiting for concurrent refreshSession to complete...");
+    return activeRefreshPromise;
+  }
+  
+  activeRefreshPromise = (async () => {
+    try {
+      console.log("[apiFetch] Performing single-coalesced refreshSession...");
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      return data.session;
+    } catch (e: any) {
+      console.error("[apiFetch] refreshSession failed:", e.message || e);
+      return null;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+  
+  return activeRefreshPromise;
+}
+
+async function apiFetch(url: string, options: any = {}): Promise<any> {
+  const isServer = typeof window === 'undefined';
+  const method = (options.method || 'GET').toUpperCase();
+  
+  // Deduplicate client-side concurrent GET requests to avoid HTTP 429 and timeouts
+  if (method === 'GET' && !isServer) {
+    const cacheKey = url;
+    if (inFlightRequests.has(cacheKey)) {
+      console.log(`[apiFetch] Concurrent GET merged for url: ${url}`);
+      return inFlightRequests.get(cacheKey)!;
+    }
+    
+    const promise = apiFetchImpl(url, options).finally(() => {
+      inFlightRequests.delete(cacheKey);
+    });
+    
+    inFlightRequests.set(cacheKey, promise);
+    return promise;
+  }
+  
+  return apiFetchImpl(url, options);
+}
+
+async function apiFetchImpl(url: string, options: any = {}) {
   const isServer = typeof window === 'undefined';
   const timestamp = new Date().toISOString();
   
@@ -956,15 +1066,15 @@ async function apiFetch(url: string, options: any = {}) {
         'Content-Type': 'application/json',
         ...options.headers,
       };
-
+ 
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-
+ 
       const controller = new AbortController();
       const timeoutValue = options.timeout || 10000; // 10s timeout instead of 30s
       const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
-
+ 
       const response = await fetch(fullUrl, {
         ...options,
         headers,
@@ -973,11 +1083,11 @@ async function apiFetch(url: string, options: any = {}) {
       });
       
       clearTimeout(timeoutId);
-
+ 
       if (response.status === 401 || response.status === 403) {
         if (!isServer) {
           console.warn("[apiFetch] Sessão possivelmente expirada (401/403), tentando refresh...");
-          const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+          const refreshed = await getRefreshedSession();
           if (!refreshed) {
             window.dispatchEvent(new CustomEvent('app-session-expired'));
             throw new Error("Sessão expirada.");
@@ -993,6 +1103,10 @@ async function apiFetch(url: string, options: any = {}) {
 
       return await response.json();
     } catch (err: any) {
+      if (typeof window !== 'undefined' && (isPageUnloading || window.closed)) {
+        console.log(`[apiFetch] Page is unloading or tab is closing. Silencing fetch error for ${url}.`);
+        return new Promise(() => {}); // never resolving promise to keep React lifecycle quiet during unload
+      }
       lastError = err;
       
       const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError';
@@ -1567,6 +1681,67 @@ export async function findOrCreateConversation(participantId: string, category: 
     return createConversation([user.id, participantId], category, details);
   } catch (err) {
     console.error("[lib/db] findOrCreateConversation FATAL:", err);
+    throw err;
+  }
+}
+
+// ==========================================
+// TENANT MANAGEMENT DB HELPERS
+// ==========================================
+
+export async function getTenants() {
+  try {
+    const data = await apiFetch('/api/tenants');
+    const tenantsList = (data || []) as Tenant[];
+    return tenantsList.map((t: any) => {
+      if (t && t.id === "11111111-1111-1111-1111-111111111111") {
+        return { ...t, name: "SalesScore" };
+      }
+      return t;
+    });
+  } catch (err) {
+    console.error("[lib/db] getTenants FATAL:", err);
+    return [];
+  }
+}
+
+export async function createTenant(data: { name: string; slug?: string }) {
+  try {
+    const result = await apiFetch('/api/tenants', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    forceDataResync();
+    return result as Tenant;
+  } catch (err) {
+    console.error("[lib/db] createTenant FATAL:", err);
+    throw err;
+  }
+}
+
+export async function updateTenant(id: string, data: Partial<Tenant>) {
+  try {
+    await apiFetch(`/api/tenants?id=${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+    forceDataResync();
+    return true;
+  } catch (err) {
+    console.error("[lib/db] updateTenant FATAL:", err);
+    throw err;
+  }
+}
+
+export async function deleteTenant(id: string) {
+  try {
+    await apiFetch(`/api/tenants?id=${id}`, {
+      method: 'DELETE'
+    });
+    forceDataResync();
+    return true;
+  } catch (err) {
+    console.error("[lib/db] deleteTenant FATAL:", err);
     throw err;
   }
 }

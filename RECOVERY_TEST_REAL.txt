@@ -1,0 +1,10 @@
+SIMUTATING DIRECT DATABASE UPDATE FOR TENTANT CHANGE
+
+Initial profile tenant_id: 11111111-1111-1111-1111-111111111111
+Attempting to update profiles tenant_id to c177f8cd-71b6-4bdc-a26d-4d26af076b4f...
+UPDATE SUCCESS. Returned count: 1
+Returned tenant_id in update response: c177f8cd-71b6-4bdc-a26d-4d26af076b4f
+Post-update query tenant_id: c177f8cd-71b6-4bdc-a26d-4d26af076b4f
+
+Resetting profiles tenant_id back to default SalesScore...
+Reset success!

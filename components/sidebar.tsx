@@ -24,7 +24,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useState, useEffect, Suspense } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { subscribeToTotalUnreadMessages } from "@/lib/db";
+import { subscribeToTotalUnreadMessages, getTenants, updateUserProfile } from "@/lib/db";
+import { toast } from "sonner";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -42,7 +43,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { profile, logout } = useAuth();
+  const { profile, logout, changeTenant } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
@@ -65,6 +66,7 @@ export function Sidebar() {
             setIsMobileMenuOpen={setIsMobileMenuOpen} 
             logout={logout}
             profile={profile}
+            changeTenant={changeTenant}
           />
         </Suspense>
       </aside>
@@ -93,6 +95,7 @@ export function Sidebar() {
                   setIsMobileMenuOpen={setIsMobileMenuOpen} 
                   logout={logout}
                   profile={profile}
+                  changeTenant={changeTenant}
                 />
               </Suspense>
             </motion.aside>
@@ -103,16 +106,40 @@ export function Sidebar() {
   );
 }
 
-function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any) {
+function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, changeTenant }: any) {
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab');
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [activeTenant, setActiveTenant] = useState<any | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
     return unsub;
   }, []);
+
+  useEffect(() => {
+    async function loadTenants() {
+      try {
+        const allTenants = await getTenants();
+        if (profile) {
+          const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || profile.email?.toLowerCase() === 'ggsalles@gmail.com';
+          const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
+          const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
+          const active = allTenants.find((t: any) => t.id === profile.tenantId) || { id: profile.tenantId, name: "SalesScore" };
+          
+          setTenants(filtered.length > 0 ? filtered : [active]);
+          setActiveTenant(active);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar tenants no sidebar:", err);
+      }
+    }
+    if (profile) {
+      loadTenants();
+    }
+  }, [profile]);
 
   const handleLogout = async () => {
     await logout();
@@ -130,6 +157,42 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile }: any)
           <X className="w-6 h-6" />
         </button>
       </div>
+
+      {/* Tenant Indicator (Static / Caixa de Texto Estática) */}
+      {profile && (
+        <div className="px-4 mb-4 select-none">
+          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 px-1">
+            Imobiliária Ativa
+          </div>
+          <div className="w-full flex items-center gap-3 px-3.5 py-3 bg-[#1e293b]/30 border border-slate-800/80 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner col-span-1">
+            {/* Elegant glowing background highlight */}
+            <div className="absolute top-0 right-0 w-20 h-20 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+            
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20 shadow-sm relative z-10">
+              {activeTenant ? (
+                activeTenant.name?.[0]?.toUpperCase() || "I"
+              ) : (
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+              )}
+            </div>
+            
+            <div className="min-w-0 flex-1 relative z-10">
+              {activeTenant ? (
+                <span className="text-xs font-bold text-foreground truncate block select-none">
+                  {activeTenant.name}
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-muted-foreground truncate block animate-pulse">
+                  Carregando...
+                </span>
+              )}
+              <span className="text-[9px] text-muted-foreground/60 block uppercase font-bold tracking-wider mt-0.5 select-none">
+                Acesso Autorizado
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {

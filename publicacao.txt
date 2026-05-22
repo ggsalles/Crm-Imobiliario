@@ -54,3 +54,5 @@ Crie uma conta de cobrança rápida (ex: um link de assinatura Pix recorrente no
 Esta aplicação tem um potencial tremendo por ser extremamente enxuta, de alta performance e direta ao ponto. Se precisar de ajuda para programar alguma dessas melhorias (como a compressão de imagens antes do upload ou ajustes de privacidade na tabela), conte comigo!
 
 21/05 - 06:54 - sessão e cores app
+21/05 - 11:07 - ajuste do app 100 ok.
+22/05 - 11:27 - Login para multi imobiliária.

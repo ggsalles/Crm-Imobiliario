@@ -5,15 +5,31 @@ export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
 
 function getSupabase(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
-  if (authHeader) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+
+  if (supabaseServiceKey) {
+    const headers: Record<string, string> = {};
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+    return createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers },
+      auth: { persistSession: false }
     });
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
+
+  if (authHeader) {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false }
+    });
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false }
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -23,8 +39,26 @@ export async function GET(req: NextRequest) {
     const ownerId = searchParams.get('ownerId');
     const id = searchParams.get('id');
 
+    // Fetch active tenant from profile as a software isolation safeguard
+    const { data: { user } } = await supabase.auth.getUser();
+    let activeTenantId: string | null = null;
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.tenant_id) {
+        activeTenantId = profile.tenant_id;
+      }
+    }
+
     if (id && id !== 'undefined' && id !== 'null') {
-        const { data, error } = await supabase.from('contacts').select('*').eq('id', id).maybeSingle();
+        let singleQuery = supabase.from('contacts').select('*').eq('id', id);
+        if (activeTenantId) {
+          singleQuery = singleQuery.eq('tenant_id', activeTenantId);
+        }
+        const { data, error } = await singleQuery.maybeSingle();
         if (error) throw error;
         if (!data) return NextResponse.json(null);
         return NextResponse.json({
@@ -44,12 +78,17 @@ export async function GET(req: NextRequest) {
     }
 
     let query = supabase.from('contacts').select('*').order('name', { ascending: true });
+    
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
     if (ownerId && ownerId !== 'undefined') {
       query = query.eq('owner_id', ownerId);
     }
 
     const { data: contacts, error } = await query;
-    console.log(`[API/Contacts] GET: query returned ${contacts?.length || 0} contacts`);
+    console.log(`[API/Contacts] GET: query returned ${contacts?.length || 0} contacts for tenant ${activeTenantId}`);
 
     if (error) {
       console.error("[API/Contacts] query error:", error);
@@ -84,6 +123,19 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    // Fetch active tenant from profile as a software isolation safeguard
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.tenant_id) {
+        data.tenant_id = profile.tenant_id;
+      }
+    }
+
     const { data: result, error } = await supabase
       .from('contacts')
       .insert([data])

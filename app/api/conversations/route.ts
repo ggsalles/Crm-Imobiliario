@@ -9,13 +9,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || proc
 
 function getSupabase(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
-  const token = authHeader?.split(' ')[1];
-
-  if (supabaseServiceKey && token) {
-    return createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false }
-    });
-  }
 
   if (authHeader) {
     return createClient(supabaseUrl, supabaseAnonKey, {

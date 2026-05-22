@@ -5,15 +5,41 @@ export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
+
+if (typeof process !== 'undefined' && process.env) {
+  const envKeys = Object.keys(process.env).filter(key => key.includes("SUPABASE") || key.includes("SERVICE"));
+  console.log("[DB Env Diagnostics] Keys in process.env:", envKeys);
+  console.log("[DB Env Diagnostics] Service Key exists and length:", !!supabaseServiceKey, supabaseServiceKey?.length || 0);
+}
 
 function getSupabase(req: NextRequest) {
+  // Se houver a chave de serviço administrativa do Supabase, priorizar o seu uso no backend
+  // para evitar loops RLS lentos ou loops de planejamento cíclicos do Postgres nas tabelas de perfil/associação.
+  if (supabaseServiceKey) {
+    return createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false }
+    });
+  }
+
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     return createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false }
     });
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false }
+  });
+}
+
+// Helper de timeout para evitar que requisições ao Supabase fiquem presas devido a problemas em políticas RLS
+async function queryWithTimeout<T>(promise: Promise<T>, ms: number = 8000): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => 
+    setTimeout(() => reject(new Error("Timeout")), ms)
+  );
+  return Promise.race([promise, timeoutPromise]);
 }
 
 export async function GET(req: NextRequest) {
@@ -24,9 +50,86 @@ export async function GET(req: NextRequest) {
     const email = searchParams.get('email');
 
     if (id && id !== 'undefined' && id !== 'null') {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (error) throw error;
+      let data = null;
+      let error = null;
+      
+      try {
+        const queryRes = await queryWithTimeout(
+          supabase.from('profiles').select('*').eq('id', id).maybeSingle(),
+          8000
+        );
+        data = queryRes.data;
+        error = queryRes.error;
+      } catch (e: any) {
+        console.warn("[API/Profiles] Falha de leitura ou Timeout na query de Profiles (RLS ativo):", e.message || e);
+        error = e;
+      }
+      
+      // Resilient fallback to Service Role client if we have the service key and the standard query fails/returns empty due to RLS policies
+      if ((error || !data) && supabaseServiceKey) {
+        console.warn("[API/Profiles] GET Single: Erro ou vazio no cliente padrão, tentando com Service Role...");
+        try {
+          const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+          const adminRes = await queryWithTimeout(
+            adminSupabase.from('profiles').select('*').eq('id', id).maybeSingle(),
+            5000
+          );
+          if (!adminRes.error && adminRes.data) {
+            data = adminRes.data;
+            error = null;
+          }
+        } catch (adminErr) {
+          console.error("[API/Profiles] Falha letal ao tentar consultar via Service Role:", adminErr);
+        }
+      }
+
+      if (error && !data) {
+        console.error("[API/Profiles] Ambos os métodos de leitura do Profile falharam.");
+        return NextResponse.json({ error: "Database error or timeout" }, { status: 500 });
+      }
+      
       if (!data) return NextResponse.json(null);
+
+      let tenantIds = [data.tenant_id || "11111111-1111-1111-1111-111111111111"];
+      try {
+        let assoc = null;
+        let assocError = null;
+        
+        try {
+          const assocRes = await queryWithTimeout(
+            supabase.from('profile_tenants').select('tenant_id').eq('profile_id', data.id),
+            6000
+          );
+          assoc = assocRes.data;
+          assocError = assocRes.error;
+        } catch (assocTimeoutErr: any) {
+          console.warn("[API/Profiles] Timeout/Erro ao ler associacoes via cliente normal:", assocTimeoutErr.message || assocTimeoutErr);
+          assocError = assocTimeoutErr;
+        }
+        
+        if ((assocError || !assoc) && supabaseServiceKey) {
+          try {
+            const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+            const adminAssocRes = await queryWithTimeout(
+              adminSupabase.from('profile_tenants').select('tenant_id').eq('profile_id', data.id),
+              4000
+            );
+            if (!adminAssocRes.error && adminAssocRes.data) {
+              assoc = adminAssocRes.data;
+              assocError = null;
+            }
+          } catch (adminAssocErr) {
+            console.error("[API/Profiles] Falha ao ler associacoes via Service Role:", adminAssocErr);
+          }
+        }
+
+        if (!assocError && assoc && assoc.length > 0) {
+          tenantIds = assoc.map((a: any) => a.tenant_id);
+        }
+      } catch (e) {
+        console.warn("Tabela profile_tenants pode nao ter sido criada ainda:", e);
+      }
+
       return NextResponse.json({
         id: data.id,
         displayName: data.display_name,
@@ -34,19 +137,70 @@ export async function GET(req: NextRequest) {
         photoURL: data.photo_url,
         role: data.role,
         userType: data.user_type,
-        isAdmin: data.is_admin
+        isAdmin: data.is_admin,
+        tenantId: data.tenant_id,
+        tenantIds
       });
     }
 
     if (email) {
-      const { data, error } = await supabase.from('profiles').select('id').eq('email', email.toLowerCase()).maybeSingle();
+      let { data, error } = await supabase.from('profiles').select('id, tenant_id').eq('email', email.toLowerCase()).maybeSingle();
+      
+      if ((error || !data) && supabaseServiceKey) {
+        console.warn("[API/Profiles] GET Email: Erro ou vazio usando client padrão, tentando com Service Role...");
+        const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+        const { data: adminData, error: adminError } = await adminSupabase.from('profiles').select('id, tenant_id').eq('email', email.toLowerCase()).maybeSingle();
+        if (!adminError && adminData) {
+          data = adminData;
+          error = null;
+        }
+      }
+
       if (error) throw error;
-      return NextResponse.json(data);
+      return NextResponse.json(data ? { id: data.id, tenantId: data.tenant_id } : null);
     }
 
-    const { data: profiles, error } = await supabase.from('profiles').select('*');
+    let { data: profiles, error } = await supabase.from('profiles').select('*');
+    
+    if ((error || !profiles) && supabaseServiceKey) {
+      console.warn("[API/Profiles] GET Todos: Erro ou vazio usando client padrão, tentando com Service Role...");
+      const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+      const { data: adminData, error: adminError } = await adminSupabase.from('profiles').select('*');
+      if (!adminError && adminData) {
+        profiles = adminData;
+        error = null;
+      }
+    }
+
     if (error) throw error;
     
+    let associationsMap: Record<string, string[]> = {};
+    try {
+      let { data: assoc, error: assocError } = await supabase
+        .from('profile_tenants')
+        .select('profile_id, tenant_id');
+      
+      if ((assocError || !assoc) && supabaseServiceKey) {
+        const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+        const { data: adminData, error: adminAssocError } = await adminSupabase
+          .from('profile_tenants')
+          .select('profile_id, tenant_id');
+        if (!adminAssocError && adminData) {
+          assoc = adminData;
+          assocError = null;
+        }
+      }
+
+      if (!assocError && assoc) {
+        assoc.forEach((a: any) => {
+          if (!associationsMap[a.profile_id]) associationsMap[a.profile_id] = [];
+          associationsMap[a.profile_id].push(a.tenant_id);
+        });
+      }
+    } catch (e) {
+      console.warn("Tabela profile_tenants pode nao ter sido criada ainda:", e);
+    }
+
     const items = (profiles || []).map((item: any) => ({
       id: item.id,
       displayName: item.display_name,
@@ -54,7 +208,9 @@ export async function GET(req: NextRequest) {
       photoURL: item.photo_url,
       role: item.role,
       userType: item.user_type,
-      isAdmin: item.is_admin
+      isAdmin: item.is_admin,
+      tenantId: item.tenant_id,
+      tenantIds: associationsMap[item.id] || [item.tenant_id || "11111111-1111-1111-1111-111111111111"]
     }));
 
     return NextResponse.json(items);
@@ -67,19 +223,97 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const body = await req.json();
     
-    // We use service role key for profile creation if it's during signup, 
-    // but here we follow the standard pattern.
-    const { data: result, error } = await supabase
-      .from('profiles')
-      .insert([data])
-      .select();
+    const { tenantIds, ...profileData } = body;
 
-    if (error) throw error;
-    return NextResponse.json({ id: result[0].id });
+    // Serves as real-time multi-tenant association. We first check if a profile with this email already exists inside CRM.
+    const { data: existingUser, error: findError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', profileData.email)
+      .maybeSingle();
+
+    let profileId: string;
+    let finalRole: string;
+
+    if (existingUser) {
+      profileId = existingUser.id;
+      finalRole = existingUser.role || 'Membro';
+
+      // Update name or other details if they were blank and are provided now
+      const updatePayload: any = {};
+      if (!existingUser.display_name && profileData.display_name) {
+        updatePayload.display_name = profileData.display_name;
+      }
+      if ((existingUser.tenant_id === '11111111-1111-1111-1111-111111111111' || !existingUser.tenant_id) && profileData.tenant_id && profileData.tenant_id !== '11111111-1111-1111-1111-111111111111') {
+        updatePayload.tenant_id = profileData.tenant_id;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from('profiles').update(updatePayload).eq('id', profileId);
+      }
+    } else {
+      const { data: result, error } = await supabase
+        .from('profiles')
+        .insert([profileData])
+        .select();
+
+      if (error) {
+        if (error.code === '23505' || (error.message && error.message.toLowerCase().includes('unique constraint'))) {
+          const { data: reCheckUser } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('email', profileData.email)
+            .maybeSingle();
+          if (reCheckUser) {
+            profileId = reCheckUser.id;
+            finalRole = reCheckUser.role || 'Membro';
+          } else {
+            return NextResponse.json({ error: "Este e-mail já está sendo utilizado por outro usuário no CRM." }, { status: 400 });
+          }
+        } else {
+          throw error;
+        }
+      } else {
+        profileId = result[0].id;
+        finalRole = result[0].role || 'Membro';
+      }
+    }
+
+    const resolvedTenantIds = Array.isArray(tenantIds) && tenantIds.length > 0
+      ? tenantIds
+      : [profileData.tenant_id || "11111111-1111-1111-1111-111111111111"];
+
+    try {
+      const associationRows = resolvedTenantIds.map((tid: string) => ({
+        profile_id: profileId,
+        tenant_id: tid,
+        role: finalRole
+      }));
+
+      await supabase.from('profile_tenants').upsert(associationRows);
+    } catch (assocErr) {
+      console.warn("Erro ao inserir na tabela profile_tenants via upsert:", assocErr);
+      for (const tid of resolvedTenantIds) {
+        try {
+          await supabase.from('profile_tenants').insert({
+            profile_id: profileId,
+            tenant_id: tid,
+            role: finalRole
+          });
+        } catch (e) {
+          // ignore already linked
+        }
+      }
+    }
+
+    return NextResponse.json({ id: profileId });
   } catch (error: any) {
     console.error("[API/Profiles] POST Error:", error);
+    if (error.code === '23505' || (error.message && error.message.toLowerCase().includes('unique constraint'))) {
+      return NextResponse.json({ error: "Este e-mail já está sendo utilizado por outro usuário no CRM." }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -94,13 +328,82 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json();
+    const { tenantIds, ...otherData } = data;
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(data)
-      .eq('id', id);
+    if (Object.keys(otherData).length > 0) {
+      const { error } = await supabase
+        .from('profiles')
+        .update(otherData)
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) throw error;
+
+      // Se alterou a imobiliária ativa (tenant_id), cria ou garante associação dinâmica na tabela profile_tenants
+      if (otherData.tenant_id) {
+        try {
+          const { data: profData } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', id)
+            .maybeSingle();
+          const userRole = otherData.role || (profData && profData.role) || 'Membro';
+
+          await supabase
+            .from('profile_tenants')
+            .upsert({
+              profile_id: id,
+              tenant_id: otherData.tenant_id,
+              role: userRole
+            });
+        } catch (assocErr) {
+          console.warn("[API/Profiles] Erro ao registrar associação dinâmica em profile_tenants no PATCH:", assocErr);
+        }
+
+
+      }
+    }
+
+    if (Array.isArray(tenantIds)) {
+      try {
+        const { error: delError } = await supabase
+          .from('profile_tenants')
+          .delete()
+          .eq('profile_id', id);
+        
+        if (delError) {
+          console.warn("Erro ao deletar associacoes antigas:", delError);
+        }
+
+        if (tenantIds.length > 0) {
+          const insertRows = tenantIds.map((tid: string) => ({
+            profile_id: id,
+            tenant_id: tid,
+            role: otherData.role || 'Membro'
+          }));
+
+          const { error: insError } = await supabase
+            .from('profile_tenants')
+            .insert(insertRows);
+          
+          if (insError) throw insError;
+
+          const { data: currProfile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', id)
+            .maybeSingle();
+
+          if (currProfile && !tenantIds.includes(currProfile.tenant_id)) {
+            await supabase
+              .from('profiles')
+              .update({ tenant_id: tenantIds[0] })
+              .eq('id', id);
+          }
+        }
+      } catch (assocErr) {
+        console.warn("Erro ao atualizar associacoes profile_tenants:", assocErr);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

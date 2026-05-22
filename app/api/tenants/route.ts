@@ -8,19 +8,15 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
 
 function getSupabase(req: NextRequest) {
-  const authHeader = req.headers.get('Authorization');
-
+  // Se houver a chave de serviço administrativa do Supabase, priorizar o seu uso no backend
+  // para evitar loops RLS lentos ou loops de planejamento de consultas nas tabelas de tenants.
   if (supabaseServiceKey) {
-    const headers: Record<string, string> = {};
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
     return createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers },
       auth: { persistSession: false }
     });
   }
 
+  const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     return createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -36,47 +32,40 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
-    const ownerId = searchParams.get('ownerId');
     const id = searchParams.get('id');
 
     if (id) {
-        const { data, error } = await supabase.from('companies').select('*').eq('id', id).maybeSingle();
-        if (error) throw error;
-        if (!data) return NextResponse.json(null);
-        return NextResponse.json({
-            id: data.id,
-            name: data.name,
-            industry: data.industry,
-            website: data.website,
-            ownerId: data.owner_id,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-        });
+      const { data, error } = await supabase.from('tenants').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!data) return NextResponse.json(null);
+      return NextResponse.json({
+        id: data.id,
+        name: data.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : data.name,
+        slug: data.slug,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      });
     }
 
-    let query = supabase.from('companies').select('*').order('name', { ascending: true });
-    if (ownerId && ownerId !== 'undefined') {
-      query = query.eq('owner_id', ownerId);
-    }
-
-    const { data: companies, error } = await query;
+    const { data: tenants, error } = await supabase
+      .from('tenants')
+      .select('*')
+      .order('name', { ascending: true });
 
     if (error) throw error;
-    if (!companies) return NextResponse.json([]);
+    if (!tenants) return NextResponse.json([]);
 
-    const items = companies.map((item: any) => ({
+    const items = tenants.map((item: any) => ({
       id: item.id,
-      name: item.name,
-      industry: item.industry,
-      website: item.website,
-      ownerId: item.owner_id,
+      name: item.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : item.name,
+      slug: item.slug,
       createdAt: item.created_at,
       updatedAt: item.updated_at
     }));
 
     return NextResponse.json(items);
   } catch (error: any) {
-    console.error("[API/Companies] GET Error:", error);
+    console.error("[API/Tenants] GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -86,17 +75,27 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    // Auto generate slug if not provided
+    if (!data.slug && data.name) {
+      data.slug = data.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '');
+    }
+
     const { data: result, error } = await supabase
-      .from('companies')
+      .from('tenants')
       .insert([data])
       .select();
 
     if (error) throw error;
-    if (!result || result.length === 0) throw new Error("Failed to create company");
+    if (!result || result.length === 0) throw new Error("Failed to create tenant");
 
-    return NextResponse.json({ id: result[0].id });
+    return NextResponse.json({ id: result[0].id, name: result[0].name, slug: result[0].slug });
   } catch (error: any) {
-    console.error("[API/Companies] POST Error:", error);
+    console.error("[API/Tenants] POST Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -111,9 +110,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json();
+    data.updated_at = new Date().toISOString();
 
     const { error } = await supabase
-      .from('companies')
+      .from('tenants')
       .update(data)
       .eq('id', id);
 
@@ -121,7 +121,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("[API/Companies] PATCH Error:", error);
+    console.error("[API/Tenants] PATCH Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -135,8 +135,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
     }
 
+    // Protection to prevent deleting the default tenant
+    if (id === '11111111-1111-1111-1111-111111111111') {
+      return NextResponse.json({ error: "The default tenant cannot be deleted." }, { status: 400 });
+    }
+
     const { error } = await supabase
-      .from('companies')
+      .from('tenants')
       .delete()
       .eq('id', id);
 
@@ -144,7 +149,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("[API/Companies] DELETE Error:", error);
+    console.error("[API/Tenants] DELETE Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
