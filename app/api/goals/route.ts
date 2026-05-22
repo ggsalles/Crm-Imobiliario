@@ -38,13 +38,30 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const ownerId = searchParams.get('ownerId');
 
+    // Fetch active tenant from user profile as a software isolation safeguard
+    const { data: { user } } = await supabase.auth.getUser();
+    let activeTenantId: string | null = null;
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.tenant_id) {
+        activeTenantId = profile.tenant_id;
+      }
+    }
+
     let query = supabase.from('goals').select('*').order('month', { ascending: false });
     if (ownerId && ownerId !== 'undefined') {
       query = query.eq('owner_id', ownerId);
     }
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
 
     const { data: goals, error } = await query;
-    console.log(`[API/Goals] GET: query returned ${goals?.length || 0} goals`);
+    console.log(`[API/Goals] GET: query returned ${goals?.length || 0} goals for tenant: ${activeTenantId}`);
 
     if (error) {
       console.error("[API/Goals] query error:", error);
@@ -58,6 +75,7 @@ export async function GET(req: NextRequest) {
       revenue: item.revenue,
       stageGoals: item.stage_goals,
       ownerId: item.owner_id,
+      tenantId: item.tenant_id,
       createdAt: item.created_at,
       updatedAt: item.updated_at
     }));
@@ -73,6 +91,24 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const data = await req.json();
+
+    // Fetch active tenant from user profile as a software isolation safeguard
+    const { data: { user } } = await supabase.auth.getUser();
+    let activeTenantId: string | null = null;
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile?.tenant_id) {
+        activeTenantId = profile.tenant_id;
+      }
+    }
+
+    if (activeTenantId) {
+      data.tenant_id = activeTenantId;
+    }
     
     const { data: result, error } = await supabase
       .from('goals')
