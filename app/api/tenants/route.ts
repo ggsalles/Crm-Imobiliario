@@ -53,21 +53,9 @@ export async function GET(req: NextRequest) {
       .order('name', { ascending: true });
 
     if (error) throw error;
-    
-    // Garantir que o tenant padrão "SalesScore" está sempre presente na lista para multi-inquilinato correto
-    const finalTenants = tenants ? [...tenants] : [];
-    const hasDefault = finalTenants.some((t: any) => t.id === '11111111-1111-1111-1111-111111111111');
-    if (!hasDefault) {
-      finalTenants.unshift({
-        id: '11111111-1111-1111-1111-111111111111',
-        name: 'SalesScore',
-        slug: 'default',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    }
+    if (!tenants) return NextResponse.json([]);
 
-    const items = finalTenants.map((item: any) => ({
+    const items = tenants.map((item: any) => ({
       id: item.id,
       name: item.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : item.name,
       slug: item.slug,

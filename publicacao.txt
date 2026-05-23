@@ -56,4 +56,3 @@ Esta aplicação tem um potencial tremendo por ser extremamente enxuta, de alta 
 21/05 - 06:54 - sessão e cores app
 21/05 - 11:07 - ajuste do app 100 ok.
 22/05 - 11:27 - Login para multi imobiliária.
-22/05 - 11:39 - Última mexida - validar mudanças para testes finais
