@@ -29,14 +29,36 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get('category');
     const id = searchParams.get('id');
 
+    // Get current authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    // Resolve tenant ID visually active inside user's profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const activeTenantId = profile?.tenant_id;
+
     if (id) {
-      const { data, error } = await supabase.from('conversations').select('*').eq('id', id).maybeSingle();
+      let query = supabase.from('conversations').select('*').eq('id', id);
+      if (activeTenantId) {
+        query = query.eq('tenant_id', activeTenantId);
+      }
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return NextResponse.json(data);
     }
 
     let query = supabase.from('conversations').select('*').order('last_message_at', { ascending: false });
     
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
     if (ownerId) {
       query = query.contains('participants', [ownerId]);
     }
@@ -59,6 +81,22 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    // Resolve active tenant of the user to securely assign it
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    
+    if (profile?.tenant_id) {
+      data.tenant_id = profile.tenant_id;
+    }
+
     const { data: result, error } = await supabase
       .from('conversations')
       .insert([data])
@@ -75,16 +113,31 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const { searchParams } = new URL(req.url);
+    const { searchParams = new URL(req.url).searchParams } = new URL(req.url); // Use searchParams fallback
     const id = searchParams.get('id');
     if (!id) throw new Error("ID required");
 
     const data = await req.json();
 
-    const { error } = await supabase
-      .from('conversations')
-      .update(data)
-      .eq('id', id);
+    // Secure multi-tenant check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const activeTenantId = profile?.tenant_id;
+
+    let query = supabase.from('conversations').update(data).eq('id', id);
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
     return NextResponse.json({ success: true });
@@ -102,16 +155,31 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) throw new Error("ID required");
 
-    // Clear messages first due to foreign key constraints if any
-    await supabase
-      .from('messages')
-      .delete()
-      .eq('conversation_id', id);
+    // Secure multi-tenant check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
 
-    const { error } = await supabase
-      .from('conversations')
-      .delete()
-      .eq('id', id);
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const activeTenantId = profile?.tenant_id;
+
+    // Clear messages first due to foreign key constraints if any
+    let deleteMessagesQuery = supabase.from('messages').delete().eq('conversation_id', id);
+    if (activeTenantId) {
+      deleteMessagesQuery = deleteMessagesQuery.eq('tenant_id', activeTenantId);
+    }
+    await deleteMessagesQuery;
+
+    let deleteConvQuery = supabase.from('conversations').delete().eq('id', id);
+    if (activeTenantId) {
+      deleteConvQuery = deleteConvQuery.eq('tenant_id', activeTenantId);
+    }
+    const { error } = await deleteConvQuery;
 
     if (error) throw error;
     return NextResponse.json({ success: true });

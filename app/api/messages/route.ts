@@ -29,11 +29,30 @@ export async function GET(req: NextRequest) {
 
     if (!conversationId) throw new Error("conversationId required");
 
-    const { data: messages, error } = await supabase
+    // Get current authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    // Resolve tenant ID visually active inside user's profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const activeTenantId = profile?.tenant_id;
+
+    let query = supabase
       .from('messages')
       .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
+      .eq('conversation_id', conversationId);
+
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
+    const { data: messages, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw error;
     return NextResponse.json(messages || []);
@@ -48,6 +67,22 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    // Resolve active tenant of the user to securely assign it
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    
+    if (profile?.tenant_id) {
+      data.tenant_id = profile.tenant_id;
+    }
+
     const { data: result, error } = await supabase
       .from('messages')
       .insert([data])
@@ -69,10 +104,24 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) throw new Error("ID required");
 
-    const { error } = await supabase
-      .from('messages')
-      .delete()
-      .eq('id', id);
+    // Secure multi-tenant check
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const activeTenantId = profile?.tenant_id;
+
+    let query = supabase.from('messages').delete().eq('id', id);
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+    const { error } = await query;
 
     if (error) throw error;
     return NextResponse.json({ success: true });

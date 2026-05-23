@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     
     const { data: result, error } = await supabase
       .from('goals')
-      .upsert(data)
+      .upsert(data, { onConflict: 'owner_id,month' })
       .select();
 
     if (error) throw error;

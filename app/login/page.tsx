@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 export default function LoginPage() {
-  const { user, profile, login, register, resetPassword, loading: authLoading, changeTenant } = useAuth();
+  const { user, profile, login, register, resetPassword, loading: authLoading, changeTenant, logout } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -435,7 +435,7 @@ export default function LoginPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+              className="absolute inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-sm"
             />
             
             {/* Modal Card */}
@@ -478,7 +478,7 @@ export default function LoginPage() {
                         className={cn(
                           "w-full flex items-center justify-between gap-4 p-4 rounded-xl text-left border transition-all duration-300 disabled:opacity-50 cursor-pointer group hover:shadow-md select-none",
                           isSelected 
-                            ? "bg-primary/5 border-primary shadow-lg shadow-primary/5 ring-1 ring-primary/20" 
+                            ? "bg-primary/10 dark:bg-primary/20 border-primary shadow-lg shadow-primary/10 ring-1 ring-primary/30" 
                             : "bg-muted/30 hover:bg-muted/60 border-border hover:border-primary/20"
                         )}
                       >
@@ -536,8 +536,20 @@ export default function LoginPage() {
                   <button
                     type="button"
                     disabled={isSwitchingTenant}
-                    onClick={() => {
-                      window.location.reload();
+                    onClick={async () => {
+                      try {
+                        setIsLoadingUserTenants(true);
+                        await logout();
+                        setShowTenantModal(false);
+                        setHasConfirmedTenant(false);
+                        setUserTenants([]);
+                        setSelectedTenantId(null);
+                      } catch (err) {
+                        console.error("Erro ao fazer logout:", err);
+                        window.location.reload();
+                      } finally {
+                        setIsLoadingUserTenants(false);
+                      }
                     }}
                     className="text-xs font-semibold text-muted-foreground hover:text-foreground text-center select-none cursor-pointer py-1"
                   >
