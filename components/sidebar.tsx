@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   ShieldCheck,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -113,6 +114,8 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [unreadCount, setUnreadCount] = useState(0);
   const [tenants, setTenants] = useState<any[]>([]);
   const [activeTenant, setActiveTenant] = useState<any | null>(null);
+  const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
+  const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
@@ -146,6 +149,24 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
     router.push("/login");
   };
 
+  const handleTenantSwitch = async (tenantId: string) => {
+    if (tenantId === profile?.tenantId) {
+      setIsTenantDropdownOpen(false);
+      return;
+    }
+    setIsSwitchingTenantId(tenantId);
+    setIsTenantDropdownOpen(false);
+    try {
+      await changeTenant(tenantId);
+      toast.success("Imobiliária alterada com sucesso!");
+    } catch (err) {
+      console.error("Erro ao trocar imobiliária no sidebar:", err);
+      toast.error("Erro ao alterar imobiliária.");
+    } finally {
+      setIsSwitchingTenantId(null);
+    }
+  };
+
   return (
     <div className="w-64 bg-card h-full flex flex-col text-muted-foreground transition-colors duration-500">
       <div className="p-6 md:p-8 flex items-center justify-between md:block">
@@ -158,18 +179,39 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         </button>
       </div>
 
-      {/* Tenant Indicator (Static / Caixa de Texto Estática) */}
+      {/* Tenant Indicator (Interactive Switcher) */}
       {profile && (
-        <div className="px-4 mb-4 select-none">
-          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 px-1">
-            Imobiliária Ativa
+        <div className="px-4 mb-4 select-none relative z-50">
+          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 px-1 flex justify-between items-center">
+            <span>Imobiliária Ativa</span>
+            {tenants.length > 1 && (
+              <span className="text-[8px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-black uppercase">
+                Multi-Saas
+              </span>
+            )}
           </div>
-          <div className="w-full flex items-center gap-3 px-3.5 py-3 bg-[#1e293b]/30 border border-slate-800/80 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner col-span-1">
+          
+          <button
+            type="button"
+            disabled={!!isSwitchingTenantId}
+            onClick={() => {
+              if (tenants.length > 1) {
+                setIsTenantDropdownOpen(!isTenantDropdownOpen);
+              }
+            }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3.5 py-3 bg-[#1e293b]/30 border border-slate-800/80 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left transition-all duration-205 select-none",
+              tenants.length > 1 ? "hover:bg-muted/50 cursor-pointer active:scale-[0.99]" : "",
+              isTenantDropdownOpen ? "border-primary/40 ring-1 ring-primary/20 bg-muted/30" : ""
+            )}
+          >
             {/* Elegant glowing background highlight */}
             <div className="absolute top-0 right-0 w-20 h-20 bg-primary/5 rounded-full blur-xl pointer-events-none" />
             
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20 shadow-sm relative z-10">
-              {activeTenant ? (
+              {isSwitchingTenantId ? (
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+              ) : activeTenant ? (
                 activeTenant.name?.[0]?.toUpperCase() || "I"
               ) : (
                 <div className="w-3.5 h-3.5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
@@ -187,10 +229,77 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
                 </span>
               )}
               <span className="text-[9px] text-muted-foreground/60 block uppercase font-bold tracking-wider mt-0.5 select-none">
-                Acesso Autorizado
+                {tenants.length > 1 ? "Clique para alterar" : "Acesso Autorizado"}
               </span>
             </div>
-          </div>
+
+            {tenants.length > 1 && (
+              <ChevronDown 
+                className={cn(
+                  "w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-300 relative z-10",
+                  isTenantDropdownOpen ? "rotate-180 text-primary" : ""
+                )} 
+              />
+            )}
+          </button>
+
+          {/* Elegant Floating Dropdown for multi-tenant switching */}
+          <AnimatePresence>
+            {isTenantDropdownOpen && tenants.length > 1 && (
+              <>
+                {/* Backdrop overlay to catch click-outs */}
+                <div 
+                  className="fixed inset-0 z-45" 
+                  onClick={() => setIsTenantDropdownOpen(false)}
+                />
+                
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-4 right-4 mt-2 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-lg p-2 z-[100] max-h-[220px] overflow-y-auto scrollbar-thin overflow-x-hidden"
+                >
+                  <div className="p-1.5 text-[8px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/60 mb-1 select-none">
+                    Selecione a Imobiliária
+                  </div>
+                  <div className="space-y-1">
+                    {tenants.map((t) => {
+                      const isCurrent = t.id === profile?.tenantId;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => handleTenantSwitch(t.id)}
+                          className={cn(
+                            "w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left text-xs transition-all duration-150 cursor-pointer select-none border border-transparent",
+                            isCurrent 
+                              ? "bg-primary/10 text-primary border-primary/20 font-bold" 
+                              : "hover:bg-slate-800/80 text-slate-300 hover:text-white"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-6 h-6 rounded-md flex items-center justify-center font-bold text-[10px] shrink-0 border select-none",
+                            isCurrent
+                              ? "bg-primary text-white border-primary/10"
+                              : "bg-slate-850 border-slate-800 text-slate-400"
+                          )}>
+                            {t.name?.[0]?.toUpperCase() || "I"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-xs">{t.name}</span>
+                            {isCurrent && (
+                              <span className="text-[8px] opacity-75 font-medium block animate-pulse">Ativa no momento</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

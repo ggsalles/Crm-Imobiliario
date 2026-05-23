@@ -3,6 +3,7 @@
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { 
   LogIn, 
   Rocket, 
@@ -70,19 +71,38 @@ export default function LoginPage() {
       if (user && profile && !authLoading && !hasConfirmedTenant) {
         try {
           setIsLoadingUserTenants(true);
-          const res = await fetch("/api/tenants");
+
+          // Get fresh session token to satisfy RLS rules
+          const { data: { session } } = await supabase.auth.getSession();
+          const headers: Record<string, string> = {};
+          if (session?.access_token) {
+            headers["Authorization"] = `Bearer ${session.access_token}`;
+          }
+
+          // Fetch the REAL database-level profile to guarantee authentic role & tenantIds
+          const profileRes = await fetch(`/api/profiles?id=${user.id}`, { headers });
+          let targetProfile = profile;
+          if (profileRes.ok) {
+            const apiProfile = await profileRes.json();
+            if (apiProfile && apiProfile.id) {
+              targetProfile = apiProfile;
+            }
+          }
+
+          // Fetch all active tenants
+          const res = await fetch("/api/tenants", { headers });
           if (res.ok) {
             const allTenants = await res.json();
             if (Array.isArray(allTenants)) {
-              const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || profile.email?.toLowerCase() === 'ggsalles@gmail.com';
-              const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
+              const isAdmin = targetProfile.role?.toLowerCase() === 'admin' || targetProfile.isAdmin || targetProfile.email?.toLowerCase() === 'ggsalles@gmail.com';
+              const userTenantIds = Array.from(new Set([...(targetProfile.tenantIds || []), targetProfile.tenantId].filter(Boolean)));
               const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
               
               if (filtered.length > 1) {
                 // User owns or acts for multiple tenants, show modal selector
                 setUserTenants(filtered);
                 // Pre-select current profile's tenant
-                setSelectedTenantId(profile.tenantId || filtered[0]?.id || null);
+                setSelectedTenantId(targetProfile.tenantId || filtered[0]?.id || null);
                 setShowTenantModal(true);
               } else {
                 // Single tenant user, proceed directly
