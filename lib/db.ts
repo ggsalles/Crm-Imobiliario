@@ -618,20 +618,12 @@ export async function setGoal(month: string, stageGoals: { [stageId: string]: nu
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
-  // First, check if a goal for this month and user already exists to get its ID
-  const goals = await getGoals(user.id);
-  const existingGoal = goals.find(g => g.month === month);
-
   const goalData: any = {
     month,
     stage_goals: stageGoals,
     owner_id: user.id,
     updated_at: new Date().toISOString()
   };
-
-  if (existingGoal) {
-    goalData.id = existingGoal.id;
-  }
 
   try {
     await apiFetch('/api/goals', {

@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/sidebar";
 import { useTheme } from "@/providers/theme-provider";
+import { InteractiveGuideModal } from "@/components/InteractiveGuideModal";
 import { 
   Palette, 
   Check, 
@@ -49,14 +50,14 @@ const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | 
   { name: "Deep Indigo", value: "indigo", hex: "#6366f1" },
 ];
 
-function DocItem({ title, icon: Icon, content }: { title: string; icon: any; content: string }) {
+function DocItem({ title, icon: Icon, content, onExplore }: { title: string; icon: any; content: string; onExplore?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div className="bg-background rounded-2xl border border-border overflow-hidden transition-all hover:border-primary/30 group">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 text-left"
+        className="w-full flex items-center justify-between p-4 text-left font-sans"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -74,10 +75,23 @@ function DocItem({ title, icon: Icon, content }: { title: string; icon: any; con
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="px-4 pb-4 pt-0">
+            <div className="px-4 pb-4 pt-0 flex flex-col gap-3">
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {content}
               </p>
+              {onExplore && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExplore();
+                  }}
+                  className="w-fit flex items-center gap-1.5 px-3.5 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20 hover:border-primary rounded-xl text-[10px] font-bold transition-all cursor-pointer relative overflow-hidden select-none active:scale-95 mt-1"
+                >
+                  <Sparkles className="w-3 h-3 text-primary group-hover:text-white" />
+                  Visualizar Guia Técnico HTML
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -90,6 +104,8 @@ export default function SettingsPage() {
   const { primaryColor, setPrimaryColor, appearance, setAppearance } = useTheme();
   const [probabilities, setProbabilities] = useState<Record<string, number>>({});
   const [isSaved, setIsSaved] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [selectedGuideSection, setSelectedGuideSection] = useState("dashboard");
 
   const [sessionEnabled, setSessionEnabled] = useState(true);
   const [sessionMinutes, setSessionMinutes] = useState(15);
@@ -407,24 +423,47 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+            <section id="system-guide-section" className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Layout className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-bold text-foreground">Guia do Sistema (Documentação)</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border/50">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Layout className="w-5 h-5 text-primary" />
+                      <h3 className="text-lg font-bold text-foreground">Guia do Sistema (Documentação)</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Explicação detalhada e interativa de cada módulo e recurso do SalesScore CRM.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGuideSection("dashboard");
+                      setIsGuideOpen(true);
+                    }}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-black uppercase tracking-wider rounded-2xl cursor-pointer hover:shadow-lg shadow-primary/20 transition-all select-none shrink-0"
+                  >
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    Abrir Guia HTML Interativo
+                  </button>
                 </div>
-                <p className="text-sm text-muted-foreground mb-6">Explicação detalhada de cada módulo e recurso do SalesScore CRM.</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <DocItem 
-                    title="Dashboard" 
+                    title="Controle Operacional / Dashboard" 
                     icon={LayoutDashboard} 
                     content="A tela principal (Dashboard) integra inteligência preditiva para fornecer o pulso do seu negócio. O gráfico de performance da equipe mostra o ranking dos agentes por volume de vendas e taxa de conversão real. Os cards superiores mostram métricas rápidas como o Forecast (Previsão Realista) que utiliza algoritmos de probabilidade para estimar o fechamento do mês, além da média de vendas e melhor performance individual."
+                    onExplore={() => {
+                      setSelectedGuideSection("dashboard");
+                      setIsGuideOpen(true);
+                    }}
                   />
                   <DocItem 
                     title="Pipeline (Funil de Vendas)" 
                     icon={Trello} 
                     content="O Pipeline é o centro de comando. Cada card (Deal) exibe o valor formatado, empresa vinculada e data de atualização. Você pode arrastar os cards entre os estágios configuráveis. Ao editar um negócio, o sistema oferece integração direta com o Inventário de Imóveis e Contatos, garantindo resiliência de dados através de um cache inteligente que permite visualização imediata mesmo com instabilidades de rede."
+                    onExplore={() => {
+                      setSelectedGuideSection("pipeline");
+                      setIsGuideOpen(true);
+                    }}
                   />
                   <DocItem 
                     title="Vendas Inteligentes (IA)" 
@@ -435,11 +474,19 @@ export default function SettingsPage() {
                     title="Gestão de Imóveis e Matching" 
                     icon={Home} 
                     content="Gerencie seu inventário com campos técnicos detalhados. O recurso de 'Match de Imóveis' realiza um cruzamento matemático entre o valor do negócio, preferências do cliente e características do imóvel. Negócios podem ser vinculados a múltiplos registros, permitindo rastreabilidade completa entre o proprietário, o imóvel e o lead comprador."
+                    onExplore={() => {
+                      setSelectedGuideSection("matching");
+                      setIsGuideOpen(true);
+                    }}
                   />
                   <DocItem 
-                    title="Equipe e Permissões" 
+                    title="Segurança e Isolamento SaaS" 
                     icon={ShieldCheck} 
-                    content="Como Administrador, você pode gerenciar os níveis de acesso da sua equipe. Defina quem pode excluir registros, quem visualiza apenas os próprios leads e quem tem acesso aos relatórios financeiros. Mantenha a segurança dos dados da sua empresa garantindo o acesso correto para cada função."
+                    content="Como Administrador, você pode gerenciar os níveis de acesso da sua equipe. Nosso sistema de Isolamento de Multi-Tenant garante segurança criptográfica e por Row-Level Security no banco de dados, protegendo os negócios, orçamentos e cadastros de clientes contra qualquer vazamento entre imobiliárias contratantes."
+                    onExplore={() => {
+                      setSelectedGuideSection("sec_saas");
+                      setIsGuideOpen(true);
+                    }}
                   />
                   <DocItem 
                     title="Mensagens Internas" 
@@ -534,6 +581,12 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+
+      <InteractiveGuideModal 
+        isOpen={isGuideOpen} 
+        onClose={() => setIsGuideOpen(false)} 
+        initialTab={selectedGuideSection}
+      />
     </div>
   );
 }

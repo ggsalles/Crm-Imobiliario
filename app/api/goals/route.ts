@@ -69,16 +69,22 @@ export async function GET(req: NextRequest) {
     }
     if (!goals) return NextResponse.json([]);
 
-    const items = goals.map((item: any) => ({
-      id: item.id,
-      month: item.month,
-      revenue: item.revenue,
-      stageGoals: item.stage_goals,
-      ownerId: item.owner_id,
-      tenantId: item.tenant_id,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
+    const items = goals.map((item: any) => {
+      let cleanMonth = item.month;
+      if (cleanMonth && cleanMonth.includes('_')) {
+        cleanMonth = cleanMonth.split('_')[0];
+      }
+      return {
+        id: item.id,
+        month: cleanMonth,
+        revenue: item.revenue,
+        stageGoals: item.stage_goals,
+        ownerId: item.owner_id,
+        tenantId: item.tenant_id,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at
+      };
+    });
 
     return NextResponse.json(items);
   } catch (error: any) {
@@ -108,6 +114,9 @@ export async function POST(req: NextRequest) {
 
     if (activeTenantId) {
       data.tenant_id = activeTenantId;
+      if (data.month && !data.month.includes('_')) {
+        data.month = `${data.month}_${activeTenantId}`;
+      }
     }
     
     const { data: result, error } = await supabase

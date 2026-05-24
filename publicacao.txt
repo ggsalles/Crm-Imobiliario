@@ -14,6 +14,11 @@
 20/05 - 17:07 - Mapa
 20/05 - 17:31 - Perfil de Interesse do Cliente
 20/05 - 17:51 - WhatsApp
+21/05 - 06:54 - sessão e cores app
+21/05 - 11:07 - ajuste do app 100 ok.
+22/05 - 11:27 - Login para multi imobiliária.
+22/05 - 11:39 - Última mexida - validar mudanças para testes finais
+23/05 - 09:00 - A princípio após a implementação de multi empresas, app ok, em testes nesta data
 
 1. Está pronto para comercializar ou falta alguma coisa?
 Como MVP (Mínimo Produto Viável) para rodar seu primeiro teste fechado, ele está excelente. Contudo, para abrir a venda ao público geral em escala, você precisará trabalhar em três frentes essenciais antes:
@@ -52,8 +57,3 @@ Combine as regras do piloto com seu amigo e seu corretor parceiro.
 Implemente um limitador/compressor de tamanho de imagem no upload de fotos de imóveis (app/properties/page.tsx) para manter sua infraestrutura de fotos incrivelmente leve.
 Crie uma conta de cobrança rápida (ex: um link de assinatura Pix recorrente no Asaas) para enviar de forma elegante para o corretor piloto.
 Esta aplicação tem um potencial tremendo por ser extremamente enxuta, de alta performance e direta ao ponto. Se precisar de ajuda para programar alguma dessas melhorias (como a compressão de imagens antes do upload ou ajustes de privacidade na tabela), conte comigo!
-
-21/05 - 06:54 - sessão e cores app
-21/05 - 11:07 - ajuste do app 100 ok.
-22/05 - 11:27 - Login para multi imobiliária.
-22/05 - 11:39 - Última mexida - validar mudanças para testes finais
