@@ -118,6 +118,10 @@ export async function POST(req: NextRequest) {
         data.month = `${data.month}_${activeTenantId}`;
       }
     }
+
+    if (data.id) {
+      delete data.id;
+    }
     
     const { data: result, error } = await supabase
       .from('goals')
