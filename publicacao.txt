@@ -19,6 +19,7 @@
 22/05 - 11:27 - Login para multi imobiliária.
 22/05 - 11:39 - Última mexida - validar mudanças para testes finais
 23/05 - 09:00 - A princípio após a implementação de multi empresas, app ok, em testes nesta data
+24/05 - 21:33 - Compilado após correções
 
 1. Está pronto para comercializar ou falta alguma coisa?
 Como MVP (Mínimo Produto Viável) para rodar seu primeiro teste fechado, ele está excelente. Contudo, para abrir a venda ao público geral em escala, você precisará trabalhar em três frentes essenciais antes:

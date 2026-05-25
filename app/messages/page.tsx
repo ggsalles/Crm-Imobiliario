@@ -72,12 +72,20 @@ function MessagesContent() {
   const [loading, setLoading] = useState(true);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [isAiDrafterOpen, setIsAiDrafterOpen] = useState(false);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [convSearchQuery, setConvSearchQuery] = useState("");
   const [contacts, setContacts] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState<string | null>(null);
+
+  const emojis = [
+    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "😉", "😊", "😇", 
+    "😍", "🥰", "😘", "😜", "😎", "🥳", "🤔", "👍", "👎", "👏", 
+    "🙌", "🙏", "👋", "🎉", "🚀", "💡", "🔥", "❤️", "👀", "✨",
+    "✅", "❌", "🤝", "💼", "📅", "📞", "💪", "💯", "⭐", "🌈"
+  ];
 
   useEffect(() => {
     if (deleteConfirmId) {
@@ -681,9 +689,6 @@ function MessagesContent() {
 
                   <form onSubmit={handleSendMessage} className="flex items-center gap-4 bg-card rounded-[32px] p-2 pr-2 border border-border focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                     <div className="flex gap-1">
-                      <button type="button" className="p-3 text-muted-foreground hover:text-primary hover:bg-background rounded-full transition-all">
-                        <Plus className="w-5 h-5" />
-                      </button>
                       <button 
                         type="button" 
                         onClick={() => imageInputRef.current?.click()}
@@ -711,34 +716,35 @@ function MessagesContent() {
                     />
                     
                     <div className="relative">
-                      <AnimatePresence>
-                        {isAiDrafterOpen && (
-                          <AIMessageDrafter 
-                            partnerName={getPartner(selectedConv)?.name || "Cliente"}
-                            onSelect={(draft) => {
-                              setNewMessage(draft);
-                              setIsAiDrafterOpen(false);
-                            }}
-                            onClose={() => setIsAiDrafterOpen(false)}
-                          />
-                        )}
-                      </AnimatePresence>
+                      {isEmojiOpen && (
+                        <div className="absolute bottom-full mb-4 right-0 w-64 p-4 bg-card border border-border rounded-3xl shadow-2xl z-50 grid grid-cols-8 gap-2 max-h-48 overflow-y-auto min-w-[260px]">
+                          {emojis.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                setNewMessage(prev => prev + emoji);
+                                setIsEmojiOpen(false);
+                              }}
+                              className="text-xl p-1.5 hover:bg-muted rounded-xl transition-all hover:scale-115 active:scale-90"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <button 
                         type="button" 
-                        onClick={() => setIsAiDrafterOpen(!isAiDrafterOpen)}
+                        onClick={() => setIsEmojiOpen(!isEmojiOpen)}
                         className={cn(
-                          "p-3 rounded-full transition-all",
-                          isAiDrafterOpen ? "bg-primary text-white" : "text-muted-foreground hover:text-primary hover:bg-background"
+                          "p-3 rounded-full transition-all text-muted-foreground hover:bg-background",
+                          isEmojiOpen ? "text-primary bg-primary/10" : "hover:text-primary"
                         )}
-                        title="Redigir com IA"
+                        title="Inserir Emoji"
                       >
-                        <Wand2 className="w-5 h-5" />
+                        <Smile className="w-5 h-5" />
                       </button>
                     </div>
-
-                    <button type="button" className="p-3 text-muted-foreground hover:text-primary transition-colors">
-                      <Smile className="w-5 h-5" />
-                    </button>
 
                     <button 
                       type="submit"

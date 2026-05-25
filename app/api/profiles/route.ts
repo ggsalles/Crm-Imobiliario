@@ -87,7 +87,125 @@ export async function GET(req: NextRequest) {
         console.error("[API/Profiles] Ambos os métodos de leitura do Profile falharam.");
         return NextResponse.json({ error: "Database error or timeout" }, { status: 500 });
       }
-      
+
+      // Se não encontrou o perfil e temos a Service Role Key, tentamos localizar o e-mail no Auth para realizar o "claim" (fusão) de perfil preexistente
+      if (!data && supabaseServiceKey) {
+        try {
+          console.log(`[API/Profiles] GET: Perfil não encontrado para id=${id}. Buscando usuário auth para claim...`);
+          const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+          const { data: authUserRes } = await adminSupabase.auth.admin.getUserById(id);
+          const userEmail = authUserRes?.user?.email;
+
+          if (userEmail) {
+            console.log(`[API/Profiles] GET: Usuário auth possui email ${userEmail}. Buscando perfil preexistente...`);
+            const { data: existingProfile } = await adminSupabase
+              .from('profiles')
+              .select('*')
+              .eq('email', userEmail.toLowerCase())
+              .maybeSingle();
+
+            if (existingProfile && existingProfile.id !== id) {
+              const oldId = existingProfile.id;
+              const newId = id;
+              console.log(`[API/Profiles] GET Claim: Migrando perfil ${oldId} para o novo ID ${newId}`);
+
+              // A. Renomear e-mail temporariamente no perfil antigo para evitar conflito de chave única "profiles_email_key"
+              const tempEmail = `${existingProfile.email}_migrating_${Date.now()}`;
+              await adminSupabase.from('profiles').update({ email: tempEmail }).eq('id', oldId);
+
+              // B. Copiar para o novo ID com e-mail correto original
+              const { data: copyProfile, error: copyErr } = await adminSupabase
+                .from('profiles')
+                .insert({
+                  id: newId,
+                  display_name: existingProfile.display_name,
+                  email: existingProfile.email,
+                  photo_url: existingProfile.photo_url,
+                  role: existingProfile.role,
+                  user_type: existingProfile.user_type,
+                  is_admin: existingProfile.is_admin,
+                  tenant_id: existingProfile.tenant_id,
+                  created_at: existingProfile.created_at,
+                  updated_at: new Date().toISOString()
+                })
+                .select()
+                .maybeSingle();
+
+              if (!copyErr && copyProfile) {
+                console.log("[API/Profiles] GET Claim: Perfil principal copiado no novo ID!");
+
+                // C. Copiar as associações de inquilinos
+                const { data: oldAssocs } = await adminSupabase
+                  .from('profile_tenants')
+                  .select('*')
+                  .eq('profile_id', oldId);
+
+                if (oldAssocs && oldAssocs.length > 0) {
+                  const newAssocs = oldAssocs.map((a: any) => ({
+                    profile_id: newId,
+                    tenant_id: a.tenant_id,
+                    role: a.role
+                  }));
+                  await adminSupabase.from('profile_tenants').insert(newAssocs);
+                }
+
+                // D. Reassociar entidades de negócios do proprietário antigo para o novo ID
+                await Promise.all([
+                  adminSupabase.from('deals').update({ owner_id: newId }).eq('owner_id', oldId),
+                  adminSupabase.from('contacts').update({ owner_id: newId }).eq('owner_id', oldId),
+                  adminSupabase.from('companies').update({ owner_id: newId }).eq('owner_id', oldId),
+                  adminSupabase.from('properties').update({ owner_id: newId }).eq('owner_id', oldId),
+                  adminSupabase.from('activities').update({ owner_id: newId }).eq('owner_id', oldId),
+                  adminSupabase.from('goals').update({ owner_id: newId }).eq('owner_id', oldId),
+                ]).catch(err => {
+                  console.error("[API/Profiles] GET Claim: Erro nas atualizações de entidades:", err);
+                });
+
+                // E. Reassociar conversas e participantes
+                try {
+                  const { data: convs } = await adminSupabase
+                    .from('conversations')
+                    .select('*')
+                    .contains('participants', [oldId]);
+
+                  if (convs && convs.length > 0) {
+                    for (const conv of convs) {
+                      const updatedParticipants = conv.participants.map((pid: string) => pid === oldId ? newId : pid);
+                      await adminSupabase
+                        .from('conversations')
+                        .update({ 
+                          participants: updatedParticipants,
+                          owner_id: conv.owner_id === oldId ? newId : conv.owner_id
+                        })
+                        .eq('id', conv.id);
+                    }
+                  }
+
+                  await adminSupabase.from('conversations').update({ owner_id: newId }).eq('owner_id', oldId);
+                  await adminSupabase.from('messages').update({ sender_id: newId }).eq('sender_id', oldId);
+                  await adminSupabase.from('messages').update({ owner_id: newId }).eq('owner_id', oldId);
+                } catch (convErr) {
+                  console.error("[API/Profiles] GET Claim: Erro nas atualizações de chats:", convErr);
+                }
+
+                // F. Deletar registros antigos
+                await adminSupabase.from('profile_tenants').delete().eq('profile_id', oldId);
+                await adminSupabase.from('profiles').delete().eq('id', oldId);
+
+                console.log("[API/Profiles] GET Claim: Sucesso no claim!");
+                data = copyProfile;
+              } else {
+                console.error("[API/Profiles] GET Claim: Erro de insert no perfil clonado:", copyErr);
+                // Restaurar e-mail original se deu erro
+                await adminSupabase.from('profiles').update({ email: existingProfile.email }).eq('id', oldId);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[API/Profiles] Falha letal na execução do claim workflow:", err);
+        }
+      }
+
       if (!data) return NextResponse.json(null);
 
       let tenantIds = [data.tenant_id || "11111111-1111-1111-1111-111111111111"];
