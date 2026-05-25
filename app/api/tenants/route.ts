@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { getBlockedTenantIds, setTenantBlocked, getSaaSConfig, getTenantBillingStatus } from '@/lib/billing';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,17 +34,39 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const hasCacheBuster = searchParams.has('t') || !!id;
+    const config = await getSaaSConfig(hasCacheBuster);
+    const blockedIds = config.blockedTenantIds || [];
 
     if (id) {
+      if (id === '99999999-9999-9999-9999-999999999999') {
+        return NextResponse.json(null); // Hide system config
+      }
+      
       const { data, error } = await supabase.from('tenants').select('*').eq('id', id).maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json(null);
+
+      const billingResult = getTenantBillingStatus(config, data.id);
+      const isBlocked = data.id !== '11111111-1111-1111-1111-111111111111' && 
+                        (blockedIds.includes(data.id) || billingResult.status === 'bloqueado');
+
       return NextResponse.json({
         id: data.id,
         name: data.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : data.name,
         slug: data.slug,
         createdAt: data.created_at,
-        updatedAt: data.updated_at
+        updatedAt: data.updated_at,
+        isBlocked,
+        billingStatus: billingResult.status,
+        billingSuspensionDate: billingResult.suspendedUntilStr,
+        dueDay: billingResult.dueDay
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
       });
     }
 
@@ -55,7 +78,10 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
     
     // Garantir que o tenant padrão "SalesScore" está sempre presente na lista para multi-inquilinato correto
-    const finalTenants = tenants ? [...tenants] : [];
+    // E filtrar o tenant de configuração interna para não vazar na listagem
+    const rawTenants = tenants ? [...tenants] : [];
+    const finalTenants = rawTenants.filter((t: any) => t.id !== '99999999-9999-9999-9999-999999999999');
+    
     const hasDefault = finalTenants.some((t: any) => t.id === '11111111-1111-1111-1111-111111111111');
     if (!hasDefault) {
       finalTenants.unshift({
@@ -67,15 +93,31 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const items = finalTenants.map((item: any) => ({
-      id: item.id,
-      name: item.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : item.name,
-      slug: item.slug,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
+    const items = finalTenants.map((item: any) => {
+      const billingResult = getTenantBillingStatus(config, item.id);
+      const isBlocked = item.id !== '11111111-1111-1111-1111-111111111111' && 
+                        (blockedIds.includes(item.id) || billingResult.status === 'bloqueado');
 
-    return NextResponse.json(items);
+      return {
+        id: item.id,
+        name: item.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : item.name,
+        slug: item.slug,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        isBlocked,
+        billingStatus: billingResult.status,
+        billingSuspensionDate: billingResult.suspendedUntilStr,
+        dueDay: billingResult.dueDay
+      };
+    });
+
+    return NextResponse.json(items, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
   } catch (error: any) {
     console.error("[API/Tenants] GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -122,14 +164,25 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json();
-    data.updated_at = new Date().toISOString();
 
-    const { error } = await supabase
-      .from('tenants')
-      .update(data)
-      .eq('id', id);
+    // Catch and process isBlocked / is_blocked dynamic property
+    const isBlockedParam = data.isBlocked !== undefined ? data.isBlocked : data.is_blocked;
+    if (isBlockedParam !== undefined) {
+      await setTenantBlocked(id, !!isBlockedParam);
+      delete data.isBlocked;
+      delete data.is_blocked;
+    }
 
-    if (error) throw error;
+    // Only update Supabase if we have additional properties left to update
+    if (Object.keys(data).length > 0) {
+      data.updated_at = new Date().toISOString();
+      const { error } = await supabase
+        .from('tenants')
+        .update(data)
+        .eq('id', id);
+
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

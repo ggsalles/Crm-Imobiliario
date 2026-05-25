@@ -19,7 +19,7 @@ let globalLastSyncedUserId: string | null = null;
 let globalLastSyncTime = 0;
 const globalActiveSyncPromises: Record<string, Promise<any>> = {};
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { UserProfile, updateUserProfile, clearLocalCache } from "@/lib/db";
@@ -34,6 +34,9 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   changeTenant: (tenantId: string) => Promise<void>;
+  billingStatus?: 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
+  billingSuspensionDate?: string;
+  dueDay?: number;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -45,6 +48,9 @@ const AuthContext = createContext<AuthContextType>({
   resetPassword: async () => {},
   logout: async () => {},
   changeTenant: async () => {},
+  billingStatus: 'regular',
+  billingSuspensionDate: '',
+  dueDay: 10,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -73,7 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfileState(p);
   };
   const [loading, setLoading] = useState(true);
+  const [isTenantBlocked, setIsTenantBlocked] = useState(false);
+  const [blockedTenantName, setBlockedTenantName] = useState("");
+  const [billingStatus, setBillingStatus] = useState<'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado'>('regular');
+  const [billingSuspensionDate, setBillingSuspensionDate] = useState("");
+  const [dueDay, setDueDay] = useState(10);
+  const [hasDismissedCriticalAlert, setHasDismissedCriticalAlert] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   const lastActivityTimeRef = useRef<number>(Date.now());
   const lastSyncedUserIdRef = useRef<string | null>(null);
   const lastSyncTimeRef = useRef<number>(0);
@@ -226,6 +239,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let intervalKey: NodeJS.Timeout;
+
+    async function checkTenantBlock() {
+      if (!profile || !profile.tenantId) {
+        if (active) {
+          setIsTenantBlocked(false);
+          setBillingStatus('regular');
+        }
+        return;
+      }
+      
+      // Never block platform admin ggsalles@gmail.com
+      if (profile.email?.toLowerCase() === 'ggsalles@gmail.com') {
+        if (active) {
+          setIsTenantBlocked(false);
+          setBillingStatus('regular');
+        }
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/tenants?id=${profile.tenantId}&t=${Date.now()}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        if (res.ok && active) {
+          const tenantData = await res.json();
+          if (tenantData) {
+            setBillingStatus(tenantData.billingStatus || 'regular');
+            setBillingSuspensionDate(tenantData.billingSuspensionDate || '');
+            setDueDay(tenantData.dueDay !== undefined ? tenantData.dueDay : 10);
+
+            if (tenantData.isBlocked) {
+              setIsTenantBlocked(true);
+              setBlockedTenantName(tenantData.name || "Sua Imobiliária");
+              return;
+            } else {
+              setIsTenantBlocked(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error checking tenant block:", err);
+        // Do NOT set isTenantBlocked to false here to protect against transient drops
+      }
+    }
+    
+    // Check immediately on profile change
+    checkTenantBlock();
+
+    // Check periodically every 15 seconds for robust real-time block and to recover from failed transitional calls
+    intervalKey = setInterval(() => {
+      checkTenantBlock();
+    }, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalKey);
+    };
+  }, [profile, pathname]);
 
   useEffect(() => {
     if (!user) {
@@ -778,12 +858,151 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     resetPassword,
     logout,
-    changeTenant
-  }), [user, profile, loading]);
+    changeTenant,
+    billingStatus,
+    billingSuspensionDate,
+    dueDay
+  }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay]);
+
+  const isPublicPath = pathname === '/login' || 
+    pathname === '/register' || 
+    pathname === '/reset-password';
+
+  if (isTenantBlocked && !isPublicPath) {
+    return (
+      <AuthContext.Provider value={contextValue}>
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-rose-500 selection:text-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(244,63,94,0.06),transparent_45%)] pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-96 bg-[radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.04),transparent_50%)] pointer-events-none" />
+          
+          <div className="w-full max-w-lg bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl rounded-3xl p-8 md:p-10 shadow-2xl shadow-rose-950/20 relative z-10 text-center">
+            {/* Elegant Shield Lock Icon with Glowing Effect */}
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500/10 to-pink-500/5 text-rose-500 flex items-center justify-center border border-rose-500/20 shadow-lg shadow-rose-950/30 mb-8 relative">
+              <div className="absolute inset-0 bg-rose-500/10 blur-xl rounded-full" />
+              <svg className="w-8 h-8 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+
+            {/* Status Information */}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-4 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              Acesso Suspenso
+            </span>
+
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-100 sm:text-3xl font-sans mb-3">
+              {blockedTenantName}
+            </h1>
+            
+            <p className="text-sm text-slate-400 leading-relaxed max-w-md mx-auto mb-8">
+              O acesso de sua imobiliária aos recursos de CRM da <strong className="text-rose-400 font-bold">SalesScore</strong> foi suspenso temporariamente por pendências de faturamento.
+            </p>
+
+            <div className="space-y-4 max-w-sm mx-auto">
+              <a
+                href={`mailto:ggsalles@gmail.com?subject=Ativacao%20de%20Acesso%20-%20Imobiliaria%20${encodeURIComponent(blockedTenantName)}`}
+                className="w-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-all text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Contatar Financeiro (ggsalles)
+              </a>
+
+              {/* Multi-tenant switching list */}
+              {profile?.tenantIds && profile.tenantIds.length > 1 && (
+                <div className="pt-2 border-t border-slate-800/60 mt-4 text-left">
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-2 text-center">
+                    Alternar para outra imobiliária:
+                  </p>
+                  <div className="space-y-2">
+                    {profile.tenantIds
+                      .filter(tid => tid !== profile.tenantId)
+                      .map(tid => (
+                        <button
+                          key={tid}
+                          onClick={() => changeTenant(tid)}
+                          className="w-full py-2.5 px-3.5 bg-slate-800/40 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white transition-all text-left truncate flex justify-between items-center"
+                        >
+                          <span>Acessar outra imobiliária</span>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={logout}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium py-3 px-4 rounded-xl border border-slate-800 active:scale-[0.98] transition-all text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sair da Conta
+              </button>
+            </div>
+            
+            <p className="text-[9px] text-slate-600 font-mono tracking-widest uppercase mt-8 pointer-events-none select-none">
+              SalesScore Billing Protection v1.2
+            </p>
+          </div>
+        </div>
+      </AuthContext.Provider>
+    );
+  }
 
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
+      {billingStatus === 'aviso_critico' && !hasDismissedCriticalAlert && !isPublicPath && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/30 rounded-3xl p-6 md:p-8 shadow-2xl shadow-amber-950/20 text-center animate-in fade-in zoom-in-95 duration-200">
+            {/* Alert Circle Icon */}
+            <div className="mx-auto w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 mb-6 shadow-md shadow-amber-950/10">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-4 font-mono">
+              Aviso Importante
+            </span>
+
+            <h2 className="text-lg font-black text-slate-100 tracking-tight">Vencimento em Aberto</h2>
+
+            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
+              Identificamos um atraso no pagamento da sua assinatura.
+              <br />
+              <span className="block mt-2 font-bold text-amber-400">
+                Aviso: A suspensão total do serviço está agendada para ocorrer às {billingSuspensionDate}.
+              </span>
+            </p>
+
+            <div className="mt-8 space-y-3">
+              <button
+                onClick={() => setHasDismissedCriticalAlert(true)}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-amber-500/15 active:scale-[0.98] transition-all text-xs cursor-pointer"
+              >
+                Ciente, acessar o sistema temporariamente
+              </button>
+
+              <a
+                href="mailto:ggsalles@gmail.com?subject=Segunda%20Via%20CRM%20SalesScore"
+                className="block text-[11px] text-amber-400 hover:text-amber-300 font-bold transition-colors uppercase tracking-wider py-1"
+              >
+                Solicitar link do Boleto / PIX
+              </a>
+            </div>
+            
+            <p className="text-[9px] text-slate-600 font-mono tracking-widest uppercase mt-6">
+              SalesScore Billing Protection System
+            </p>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

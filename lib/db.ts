@@ -1009,7 +1009,7 @@ async function getRefreshedSession() {
   return activeRefreshPromise;
 }
 
-async function apiFetch(url: string, options: any = {}): Promise<any> {
+export async function apiFetch(url: string, options: any = {}): Promise<any> {
   const isServer = typeof window === 'undefined';
   const method = (options.method || 'GET').toUpperCase();
   

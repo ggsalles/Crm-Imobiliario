@@ -20,6 +20,7 @@ import {
   X,
   ShieldCheck,
   ChevronDown,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -116,6 +117,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [activeTenant, setActiveTenant] = useState<any | null>(null);
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
+  const { billingStatus, billingSuspensionDate } = useAuth();
 
   useEffect(() => {
     const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
@@ -218,6 +220,19 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         </div>
       )}
 
+      {billingStatus === 'aviso_sutil' && (
+        <div className="mx-4 mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-lg pointer-events-none" />
+          <span className="text-[9px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Pendência Financeira
+          </span>
+          <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed font-semibold">
+            Identificamos um atraso na sua fatura. Por favor, regularize para evitar a suspensão do serviço até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
+          </p>
+        </div>
+      )}
+
       <nav className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const isActive = item.href.includes('?') 
@@ -261,6 +276,20 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           <Settings className={cn("w-5 h-5", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
           Configurações
         </Link>
+
+        {profile?.email?.toLowerCase() === 'ggsalles@gmail.com' && (
+          <Link
+            href="/admin/billing"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className={cn(
+              "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-1 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
+              pathname === "/admin/billing" ? "bg-indigo-500/15 text-indigo-300" : ""
+            )}
+          >
+            <CreditCard className={cn("w-5 h-5 text-indigo-400 group-hover:text-indigo-300")} />
+            Financeiro SaaS (ggsalles)
+          </Link>
+        )}
       </nav>
 
       <div className="mt-auto flex flex-col">

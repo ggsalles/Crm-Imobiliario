@@ -503,7 +503,7 @@ function DashboardContent() {
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Header */}
-        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border pl-20 md:pl-8 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
+        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-12 flex-1">
             <div className="flex items-center gap-4">
               <div className="flex flex-col">
@@ -535,7 +535,7 @@ function DashboardContent() {
               />
             </div>
 
-            <nav className="flex overflow-x-auto items-center gap-6 ml-0 md:ml-4 h-full no-scrollbar whitespace-nowrap py-3 md:py-0 border-t md:border-t-0 border-border/40 w-full md:w-auto overflow-y-hidden select-none">
+            <nav className="hidden xl:flex items-center gap-8 ml-4 h-full">
               {['Visão Geral', 'Relatórios', 'Equipe', 'Previsões'].map((tab) => (
                 <button 
                   key={tab} 
@@ -543,7 +543,7 @@ function DashboardContent() {
                     setActiveTab(tab);
                     router.push(`/?tab=${tab}`);
                   }}
-                  className={`text-sm font-bold transition-all relative py-2 md:py-9 ${activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`text-sm font-bold transition-all relative py-9 ${activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {tab}
                   {activeTab === tab && (
@@ -659,7 +659,7 @@ function DashboardContent() {
                           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Previsão</span>
                           <div className="relative group/info">
                             <HelpCircle className="w-3 h-3 cursor-help text-muted-foreground opacity-50 hover:opacity-100 transition-opacity" />
-                            <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
+                            <div className="absolute right-0 top-full mt-2 w-64 p-3.5 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-200 z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-slate-800 dark:border-slate-800/80 font-medium leading-relaxed normal-case tracking-normal -translate-y-1 group-hover/info:translate-y-0">
                               Previsão baseada em 20% do valor total das negociações em aberto + 100% dos negócios já fechados no mês.
                             </div>
                           </div>
@@ -684,10 +684,11 @@ function DashboardContent() {
                             <YAxis hide />
                             <Tooltip 
                               cursor={{ fill: 'rgba(59, 130, 246, 0.03)' }}
+                              wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }}
                               content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
                                   return (
-                                    <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/50">
+                                    <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700/50 relative z-50">
                                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{payload[0].payload.name}</p>
                                       <div className="space-y-1">
                                         <div className="flex justify-between gap-6">
@@ -1022,7 +1023,7 @@ function ForecastView({
               <Layers className="w-64 h-64" />
             </div>
 
-            <div className="flex items-center justify-between mb-10 relative z-10">
+            <div className="flex items-center justify-between mb-10 relative z-20">
               <div>
                 <h3 className="text-2xl font-bold text-foreground tracking-tight">Funil de Vendas</h3>
                 <p className="text-sm text-muted-foreground mt-1">Sua pipeline ativa distribuída por estágio.</p>
@@ -1032,8 +1033,8 @@ function ForecastView({
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valor Total Pipeline</p>
                   <div className="cursor-help text-muted-foreground/30 hover:text-primary transition-colors">
                     <Info className="w-3 h-3" />
-                    <div className="absolute right-0 top-full mt-2 w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-white/10 font-medium normal-case tracking-normal">
-                      <p>Valor bruto de todos os negócios que estão ativos no seu funil, sem considerar a probabilidade de fechamento.</p>
+                    <div className="absolute right-0 top-full mt-2 w-64 p-3.5 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-slate-800 dark:border-slate-800/80 font-medium normal-case tracking-normal translate-y-1 group-hover:translate-y-0">
+                      <p className="leading-relaxed">Valor bruto de todos os negócios que estão ativos no seu funil, sem considerar a probabilidade de fechamento.</p>
                     </div>
                   </div>
                 </div>
@@ -1245,7 +1246,7 @@ function ForecastView({
 const CustomRevenueTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-card text-foreground px-4 py-2.5 border border-border rounded-2xl shadow-xl">
+      <div className="bg-white dark:bg-[#0c1020] text-foreground px-4 py-2.5 border border-[#e2e8f0] dark:border-[#1e293b] rounded-2xl shadow-2xl relative z-50">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{label}</p>
         <p className="text-sm font-bold text-foreground mt-1">
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(payload[0].value)}
@@ -1260,7 +1261,7 @@ const CustomPieTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-card border border-border text-foreground md:min-w-[150px] shadow-xl p-2.5 rounded-2xl flex flex-col gap-1">
+      <div className="bg-white dark:bg-[#0c1020] border border-[#e2e8f0] dark:border-[#1e293b] text-foreground md:min-w-[150px] shadow-2xl p-2.5 rounded-2xl flex flex-col gap-1 relative z-50">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
           <span className="text-xs font-bold text-foreground tracking-wider uppercase">{data.name}</span>
@@ -1407,6 +1408,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                   <YAxis hide />
                   <Tooltip 
                     content={<CustomRevenueTooltip />}
+                    wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
                 </AreaChart>
@@ -1440,6 +1442,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
                   </Pie>
                   <Tooltip 
                     content={<CustomPieTooltip />}
+                    wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -1536,7 +1539,7 @@ function MetricCard({ title, value, trend, description, isNeutral, isPositive, c
   return (
     <motion.div 
       variants={variants}
-      className="bg-card p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-border shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all group relative h-full flex flex-col"
+      className="bg-card p-5 md:p-8 pb-4 rounded-[28px] md:rounded-[36px] border border-border shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all group relative h-full flex flex-col hover:z-30"
     >
       <div className="relative z-10 flex-1">
         <div className="flex items-start justify-between mb-1 md:mb-2 text-muted-foreground group-hover:text-primary transition-colors">
@@ -1544,7 +1547,7 @@ function MetricCard({ title, value, trend, description, isNeutral, isPositive, c
           {description && (
             <div className="relative group/info">
               <HelpCircle className="w-3 h-3 cursor-help opacity-40 hover:opacity-100 transition-opacity" />
-              <div className="absolute right-0 bottom-full mb-2 w-64 p-3 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-300 z-50 shadow-2xl normal-case font-normal leading-relaxed border border-white/10 translate-y-1 group-hover/info:translate-y-0">
+              <div className="absolute right-0 top-full mt-2 w-64 p-3.5 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-2xl opacity-0 group-hover/info:opacity-100 pointer-events-none transition-all duration-200 z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-slate-800 dark:border-slate-800/80 font-medium leading-relaxed normal-case tracking-normal -translate-y-1 group-hover/info:translate-y-0">
                 {description}
               </div>
             </div>
