@@ -19,13 +19,14 @@ import {
   Zap,
   Target,
   User,
-  DollarSign
+  DollarSign,
+  X
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
-import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, getUserProfile, UserProfile } from "@/lib/db";
+import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, getUserProfile, UserProfile, createActivity, createTimelineEvent } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import { formatCurrencyBRL } from "@/lib/utils";
 import Link from "next/link";
@@ -47,6 +48,97 @@ export default function DealDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [owner, setOwner] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Activity scheduling states
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [activityTitle, setActivityTitle] = useState("");
+  const [activityType, setActivityType] = useState<'meeting' | 'call' | 'task' | 'other'>('task');
+  const [activityDate, setActivityDate] = useState("");
+  const [activityDescription, setActivityDescription] = useState("");
+  const [isSavingActivity, setIsSavingActivity] = useState(false);
+
+  const handleOpenActivityModal = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    const hours = String(tomorrow.getHours()).padStart(2, '0');
+    const minutes = String(tomorrow.getMinutes()).padStart(2, '0');
+    
+    setActivityDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+    
+    // Pre-populate with beautiful title
+    const clientSuffix = contact?.name ? ` com ${contact.name}` : "";
+    setActivityTitle(`Revisar negócio "${deal?.title || ""}"${clientSuffix}`);
+    setActivityDescription("");
+    setActivityType("task");
+    setIsActivityModalOpen(true);
+  };
+
+  const handleSaveActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activityTitle.trim() || !user || !profile || !deal) return;
+
+    setIsSavingActivity(true);
+    try {
+      await createActivity({
+        title: activityTitle,
+        type: activityType,
+        date: new Date(activityDate).toISOString(),
+        status: 'pending',
+        contactId: deal.contactId || null,
+        dealId: deal.id,
+        description: activityDescription
+      });
+
+      // Log in deal timeline
+      await createTimelineEvent({
+        type: 'system',
+        category: 'deal',
+        relatedId: deal.id,
+        content: `Nova ${
+          activityType === 'meeting' ? 'reunião' : 
+          activityType === 'task' ? 'tarefa' : 
+          activityType === 'call' ? 'ligação' : 'atividade'
+        } agendada para ${new Date(activityDate).toLocaleDateString('pt-BR')} às ${new Date(activityDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
+        title: activityTitle,
+        author_name: profile.displayName || profile.email
+      });
+
+      if (deal.contactId) {
+        // Also log in contact timeline if exists
+        try {
+          await createTimelineEvent({
+            type: 'system',
+            category: 'contact',
+            relatedId: deal.contactId,
+            content: `Nova ${
+              activityType === 'meeting' ? 'reunião' : 
+              activityType === 'task' ? 'tarefa' : 
+              activityType === 'call' ? 'ligação' : 'atividade'
+            } agendada sob o negócio: "${deal.title}".`,
+            title: activityTitle,
+            author_name: profile.displayName || profile.email
+          });
+        } catch (contactTimelineErr) {
+          console.warn("Could not log to contact timeline:", contactTimelineErr);
+        }
+      }
+
+      toast.success("Atividade agendada com sucesso!");
+      setIsActivityModalOpen(false);
+      
+      // Refresh deal details which will trigger updating UI and states
+      await refreshData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao agendar atividade.");
+    } finally {
+      setIsSavingActivity(false);
+    }
+  };
 
   const refreshData = useCallback(async () => {
     if (!id || !user || !profile) return;
@@ -310,7 +402,10 @@ export default function DealDetailPage() {
                 <p className="text-sm text-primary-foreground/80 mb-6 leading-relaxed font-medium">
                   Agende uma reunião ou crie uma tarefa para manter este negócio em movimento.
                 </p>
-                <button className="w-full py-3 bg-primary-foreground/10 hover:bg-primary-foreground/20 backdrop-blur-md rounded-xl font-black text-[10px] uppercase tracking-widest transition-all">
+                <button 
+                  onClick={handleOpenActivityModal}
+                  className="w-full py-3 bg-primary-foreground/10 hover:bg-primary-foreground/20 backdrop-blur-md rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
+                >
                   Agendar Atividade
                 </button>
               </div>
@@ -319,6 +414,155 @@ export default function DealDetailPage() {
 
         </div>
       </main>
+
+      {/* Activity Scheduler Modal Overlay */}
+      <AnimatePresence>
+        {isActivityModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* Backdrop with backdrop-blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsActivityModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal Body Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.35 }}
+              className="relative w-full max-w-lg bg-card border border-border rounded-[32px] overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh]"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+              
+              {/* Modal Header */}
+              <div className="px-8 py-6 border-b border-border flex items-center justify-between bg-muted/20 relative shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-foreground uppercase tracking-tight font-mono">Agendar Atividade</h3>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-black mt-0.5">Criar Nova Ação de Vendas</p>
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setIsActivityModalOpen(false)}
+                  className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Content - Content scrollable inside maximum boundaries */}
+              <form onSubmit={handleSaveActivity} className="flex-1 overflow-y-auto p-8 space-y-6">
+                
+                {/* Title */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                    Título da Atividade
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={activityTitle}
+                    onChange={(e) => setActivityTitle(e.target.value)}
+                    placeholder="Ex: Ligar para apresentar proposta comercial"
+                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-5 py-3.5 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20"
+                  />
+                </div>
+
+                {/* Grid Type / Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Activity Type Selection */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                      Tipo de Atividade
+                    </label>
+                    <select
+                      value={activityType}
+                      onChange={(e) => setActivityType(e.target.value as any)}
+                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-4 py-3.5 text-xs font-bold text-foreground transition-all cursor-pointer font-sans"
+                    >
+                      <option value="task">📝 Tarefa</option>
+                      <option value="call">📞 Ligação</option>
+                      <option value="meeting">🤝 Reunião</option>
+                      <option value="other">✨ Outro</option>
+                    </select>
+                  </div>
+
+                  {/* Activity Date/Time */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                      Data & Hora Limite
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={activityDate}
+                      onChange={(e) => setActivityDate(e.target.value)}
+                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-4 py-3 text-xs font-bold text-foreground transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Description input */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                    Descrição / Observações (Opcional)
+                  </label>
+                  <textarea
+                    value={activityDescription}
+                    onChange={(e) => setActivityDescription(e.target.value)}
+                    placeholder="Insira notas adicionais, detalhes de contato ou links importantes para orientar a ação..."
+                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-5 py-4 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20 h-28 resize-none"
+                  />
+                </div>
+
+                {/* Action CTA Buttons */}
+                <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    disabled={isSavingActivity}
+                    onClick={() => setIsActivityModalOpen(false)}
+                    className="order-last sm:order-first flex-1 py-3 px-4 border border-border rounded-xl font-bold uppercase tracking-wider text-[9px] text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingActivity || !activityTitle.trim()}
+                    className="flex-1 py-3 px-6 bg-primary text-primary-foreground font-black rounded-xl text-[9px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-primary/25 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isSavingActivity ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      "Confirmar Agendamento"
+                    )}
+                  </button>
+                </div>
+
+              </form>
+
+              {/* Footer */}
+              <div className="px-8 py-3.5 border-t border-border bg-muted/10 text-center select-none shrink-0">
+                <span className="text-[8px] text-muted-foreground/60 font-mono tracking-widest uppercase font-black">
+                  SALESSCORE ACTION SCHEDULER
+                </span>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
