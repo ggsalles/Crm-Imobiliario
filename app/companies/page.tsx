@@ -118,7 +118,7 @@ export default function CompaniesPage() {
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8">
         <div className="max-w-7xl mx-auto">
           <header className="flex justify-between items-center mb-8">
             <div>

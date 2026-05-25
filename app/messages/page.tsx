@@ -324,7 +324,7 @@ function MessagesContent() {
     <>
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="h-20 bg-card border-b border-border px-8 flex items-center justify-between shrink-0 z-20 transition-colors">
+        <header className="h-20 bg-card border-b border-border pl-20 md:pl-8 px-4 md:px-8 flex items-center justify-between shrink-0 z-20 transition-colors">
           <div className="flex-1 max-w-2xl relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input 
@@ -345,7 +345,7 @@ function MessagesContent() {
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left: Conversation List */}
-          <section className="w-96 bg-card border-r border-border flex flex-col shrink-0 transition-colors">
+          <section className={cn("w-full md:w-96 bg-card border-r border-border flex flex-col shrink-0 transition-colors", selectedConv ? "hidden md:flex" : "flex")}>
             <div className="p-6 shrink-0">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-black tracking-tight">Centro de Mensagens</h2>
@@ -484,7 +484,7 @@ function MessagesContent() {
           </section>
 
           {/* Middle: Chat Area */}
-          <section className="flex-1 flex flex-col bg-background overflow-hidden relative transition-colors">
+          <section className={cn("flex-1 flex flex-col bg-background overflow-hidden relative transition-colors", selectedConv ? "flex" : "hidden md:flex")}>
             {!selectedConv ? (
               <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
                 <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
@@ -496,8 +496,14 @@ function MessagesContent() {
             ) : (
               <>
                 {/* Chat Header */}
-                <header className="h-20 border-b border-border px-8 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-md transition-colors">
-                  <div className="flex items-center gap-4">
+                <header className="h-20 border-b border-border px-4 md:px-8 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-md transition-colors">
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setSelectedConv(null)}
+                      className="md:hidden p-2 -ml-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-all"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
                     <div className="w-10 h-10 rounded-xl overflow-hidden relative shadow-sm border border-border">
                       <Image 
                         src={getPartner(selectedConv)?.photoURL || ""} 

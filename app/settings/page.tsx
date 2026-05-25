@@ -161,7 +161,7 @@ export default function SettingsPage() {
   return (
     <div className="flex min-h-screen bg-background transition-colors duration-500">
       <Sidebar />
-      <main className="flex-1 p-4 md:p-8 lg:p-12">
+      <main className="flex-1 p-4 md:p-8 lg:p-12 pt-20 md:pt-8">
         <header className="mb-10">
           <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
           <p className="text-muted-foreground mt-2">Personalize sua experiência e gerencie sua conta.</p>

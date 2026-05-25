@@ -216,20 +216,20 @@ export default function ActivitiesPage() {
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500 font-sans">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 pt-20 md:pt-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           {/* IA Banner */}
           <GeminiBanner activities={activities} deals={deals} />
 
           {/* Header */}
-          <div className="flex justify-between items-center mb-10">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
             <div>
               <h1 className="text-3xl font-black tracking-tight">Atividades</h1>
               <p className="text-muted-foreground font-medium mt-1">Gerencie suas tarefas, chamadas e reuniões</p>
             </div>
             <button 
               onClick={handleOpenAddModal}
-              className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+              className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all w-full sm:w-auto text-sm"
             >
               <Plus className="w-5 h-5" />
               Nova Atividade

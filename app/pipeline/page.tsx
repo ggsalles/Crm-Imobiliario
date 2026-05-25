@@ -322,23 +322,23 @@ export default function PipelinePage() {
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="p-8 pb-4">
-          <div className="flex justify-between items-start mb-8">
+        <header className="p-4 md:p-8 pb-4 pt-20 md:pt-8 bg-card/15 border-b border-border/50">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Pipeline de Vendas</h1>
-              <p className="text-muted-foreground mt-1">Visualize e gerencie seus negócios em andamento.</p>
+              <h1 className="text-3xl font-black tracking-tight">Pipeline de Vendas</h1>
+              <p className="text-muted-foreground mt-1 text-sm font-semibold">Visualize e gerencie seus negócios em andamento.</p>
             </div>
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex gap-3">
+            <div className="w-full lg:w-auto flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-4 shadow-sm bg-muted/25 p-4 rounded-2xl border border-border/40 lg:bg-transparent lg:p-0 lg:border-0 lg:shadow-none">
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <button 
                   onClick={() => setIsGoalModalOpen(true)}
-                  className="bg-card border border-primary/30 px-5 py-2.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-primary hover:text-white transition-all flex items-center gap-2 group"
+                  className="bg-card border border-primary/35 px-5 py-2.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 group w-full sm:w-auto"
                   title="Clique para definir ou alterar suas metas mensais"
                 >
                   <Target className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
                   <div className="text-left">
-                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-1">Definir Meta</p>
-                    <p className="leading-none">{formatCurrencyBRL(goalValue)}</p>
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-1 font-black">Definir Meta</p>
+                    <p className="leading-none text-xs">{formatCurrencyBRL(goalValue)}</p>
                   </div>
                 </button>
                 <button 
@@ -346,30 +346,30 @@ export default function PipelinePage() {
                     setEditingDeal(null);
                     setIsModalOpen(true);
                   }}
-                  className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center gap-2"
+                  className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 w-full sm:w-auto text-xs whitespace-nowrap"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4" />
                   Novo Negócio
                 </button>
               </div>
               
               {/* Goal Progress Bar */}
-              <div className="w-64 space-y-2">
+              <div className="w-full sm:w-64 space-y-2 mt-2 sm:mt-0">
                 <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   <span>Progresso (Fechado)</span>
                   <span>{Math.round(progressPercentage)}%</span>
                 </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-border/30">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${progressPercentage}%` }}
                     className={cn(
-                      "h-full rounded-full transition-all duration-1000",
+                      "h-full rounded-full transition-all duration-1050",
                       progressPercentage >= 100 ? "bg-emerald-500" : "bg-primary"
                     )}
                   />
                 </div>
-                <div className="text-[10px] text-right font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="text-[10px] text-right font-black text-muted-foreground uppercase tracking-wider">
                   {formatCurrencyBRL(totalClosed)} / {formatCurrencyBRL(goalValue)}
                 </div>
               </div>

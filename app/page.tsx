@@ -503,7 +503,7 @@ function DashboardContent() {
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Header */}
-        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
+        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border pl-20 md:pl-8 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-12 flex-1">
             <div className="flex items-center gap-4">
               <div className="flex flex-col">
@@ -535,7 +535,7 @@ function DashboardContent() {
               />
             </div>
 
-            <nav className="hidden xl:flex items-center gap-8 ml-4 h-full">
+            <nav className="flex overflow-x-auto items-center gap-6 ml-0 md:ml-4 h-full no-scrollbar whitespace-nowrap py-3 md:py-0 border-t md:border-t-0 border-border/40 w-full md:w-auto overflow-y-hidden select-none">
               {['Visão Geral', 'Relatórios', 'Equipe', 'Previsões'].map((tab) => (
                 <button 
                   key={tab} 
@@ -543,7 +543,7 @@ function DashboardContent() {
                     setActiveTab(tab);
                     router.push(`/?tab=${tab}`);
                   }}
-                  className={`text-sm font-bold transition-all relative py-9 ${activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`text-sm font-bold transition-all relative py-2 md:py-9 ${activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {tab}
                   {activeTab === tab && (
