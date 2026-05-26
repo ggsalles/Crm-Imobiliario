@@ -28,6 +28,25 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
 
   const generateInsight = useCallback(async (manual = false) => {
     if (loading) return;
+
+    if (!manual) {
+      const cached = localStorage.getItem("activities_ai_insights");
+      if (cached) {
+        try {
+          const { list, timestamp } = JSON.parse(cached);
+          const age = Date.now() - timestamp;
+          if (age < 3600000 && Array.isArray(list) && list.length > 0) {
+            setInsights(list);
+            setCurrentIndex(0);
+            hasGeneratedRef.current = true;
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
     setLoading(true);
     setQuotaError(false);
 
@@ -64,9 +83,18 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
       if (result.text) {
         const newInsights = result.text.split(';').map(s => s.trim()).filter(s => s.length > 5);
         if (newInsights.length > 0) {
-          setInsights(newInsights.slice(0, 3));
+          const finalInsights = newInsights.slice(0, 3);
+          setInsights(finalInsights);
           setCurrentIndex(0);
           hasGeneratedRef.current = true;
+          try {
+            localStorage.setItem("activities_ai_insights", JSON.stringify({
+              list: finalInsights,
+              timestamp: Date.now()
+            }));
+          } catch (e) {
+            // ignore
+          }
         }
       }
     } catch (error: any) {
@@ -79,7 +107,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
   useEffect(() => {
     // Only trigger once when data first arrives
     if (activities.length > 0 && !hasGeneratedRef.current && !loading && !quotaError) {
-      generateInsight();
+      generateInsight(false);
     }
   }, [activities.length, generateInsight, loading, quotaError]);
 
@@ -154,7 +182,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
             <Info className="w-4 h-4 opacity-50 rotate-180" />
           </button>
           <button 
-            onClick={generateInsight}
+            onClick={() => generateInsight(true)}
             className="p-2 hover:bg-white/10 rounded-xl transition-all"
             title="Gerar novos insights"
           >

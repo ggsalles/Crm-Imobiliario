@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Sidebar } from "@/components/sidebar";
@@ -210,11 +212,31 @@ function ContactsContent() {
       companyId: activeTab === 'cliente' ? undefined : formData.get('companyId') as string,
       source: activeTab === 'cliente' ? formData.get('source') as string : undefined,
       department: activeTab === 'equipe' ? formData.get('department') as string : undefined,
+      temperature: activeTab === 'cliente' ? formData.get('temperature') as 'quente' | 'morno' | 'frio' : undefined,
     };
 
     try {
       if (editingContact) {
         await updateContact(editingContact.id, data);
+        
+        // Track temperature change for timeline
+        if (activeTab === 'cliente' && editingContact.temperature !== data.temperature) {
+          const tempLabels: Record<string, string> = {
+            quente: "🔥 Quente",
+            morno: "⚡ Morno",
+            frio: "❄️ Frio"
+          };
+          const newLabel = tempLabels[data.temperature || 'morno'] || '⚡ Morno';
+          await createTimelineEvent({
+            type: 'system',
+            category: 'contact',
+            relatedId: editingContact.id,
+            content: `Temperatura do Lead atualizada para: ${newLabel}`,
+            title: 'Temperatura Atualizada',
+            metadata: { type: 'temperature_update', from: editingContact.temperature, to: data.temperature }
+          });
+        }
+        
         toast.success("Contato atualizado!");
       } else {
         // If creating a team member, also create a profile entry
@@ -440,27 +462,42 @@ function ContactsContent() {
                       className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                     />
                   </div>
-
                   {activeTab === 'cliente' ? (
-                    <div className="col-span-2">
-                      <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Origem (Como chegou?)</label>
-                      <select 
-                        name="source"
-                        defaultValue={editingContact?.source} 
-                        className="w-full px-4 py-3 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] font-medium"
-                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
-                      >
-                        <option value="" className="bg-card">Selecione uma origem</option>
-                        <option value="Instagram" className="bg-card">Instagram</option>
-                        <option value="WhatsApp" className="bg-card">WhatsApp</option>
-                        <option value="Facebook" className="bg-card">Facebook</option>
-                        <option value="Site" className="bg-card">Site / Landing Page</option>
-                        <option value="Indicação" className="bg-card">Indicação</option>
-                        <option value="Portal Imobiliário" className="bg-card">Portal Imobiliário</option>
-                        <option value="Telefone" className="bg-card">Ligação Direta</option>
-                        <option value="Outro" className="bg-card">Outro</option>
-                      </select>
-                    </div>
+                    <>
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Origem (Como chegou?)</label>
+                        <select 
+                          name="source"
+                          defaultValue={editingContact?.source} 
+                          className="w-full pl-3 pr-8 py-3 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em] text-xs sm:text-sm font-medium"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+                        >
+                          <option value="" className="bg-card">Selecione uma origem</option>
+                          <option value="Instagram" className="bg-card">Instagram</option>
+                          <option value="WhatsApp" className="bg-card">WhatsApp</option>
+                          <option value="Facebook" className="bg-card">Facebook</option>
+                          <option value="Site" className="bg-card">Site / Landing Page</option>
+                          <option value="Indicação" className="bg-card">Indicação</option>
+                          <option value="Portal Imobiliário" className="bg-card">Portal Imobiliário</option>
+                          <option value="Telefone" className="bg-card">Ligação Direta</option>
+                          <option value="Outro" className="bg-card">Outro</option>
+                        </select>
+                      </div>
+
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Temperatura do Lead</label>
+                        <select 
+                          name="temperature"
+                          defaultValue={editingContact?.temperature || 'morno'} 
+                          className="w-full pl-3 pr-8 py-3 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em] text-xs sm:text-sm font-medium"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+                        >
+                          <option value="quente" className="bg-card">🔥 Quente (Engajado)</option>
+                          <option value="morno" className="bg-card">⚡ Morno (Negociação)</option>
+                          <option value="frio" className="bg-card">❄️ Frio (Adormecido)</option>
+                        </select>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div className="col-span-2">
@@ -562,8 +599,26 @@ function ContactCard({
             )}>
               {contact.name.charAt(0)}
             </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-lg truncate text-foreground" title={contact.name}>{contact.name}</h3>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h3 className="font-bold text-lg truncate text-foreground" title={contact.name}>{contact.name}</h3>
+                {!isActiveTabEquipe && contact.temperature && (
+                  contact.temperature === 'quente' ? (
+                    <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md relative select-none animate-pulse">
+                      <span className="w-1 h-1 rounded-full bg-red-500 animate-ping inline-block" />
+                      Quente
+                    </span>
+                  ) : contact.temperature === 'morno' ? (
+                    <span className="inline-flex items-center gap-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md select-none">
+                      Morno
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md select-none">
+                      Frio
+                    </span>
+                  )
+                )}
+              </div>
               <p className="text-xs text-muted-foreground truncate font-medium">
                 {isActiveTabEquipe ? contact.role : (contact.source ? `Origem: ${contact.source}` : 'Sem origem')}
               </p>

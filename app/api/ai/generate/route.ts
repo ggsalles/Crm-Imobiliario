@@ -16,10 +16,9 @@ const ai = new GoogleGenAI({
 
 const MODELS_PRIORITY = [
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
   "gemini-3.1-flash-lite",
+  "gemini-3.1-pro-preview",
   "gemini-flash-latest",
-  "gemini-3-flash-preview",
 ];
 
 async function generateWithModel(modelName: string, prompt: string, attempt = 1): Promise<string> {
@@ -32,14 +31,13 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
   } catch (err: any) {
     const errorStr = String(err);
     const errorMsg = err.message || errorStr;
-    const isServiceUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
+    const errorMsgLower = errorMsg.toLowerCase();
+    const isServiceUnavailable = errorMsgLower.includes("503") || errorMsgLower.includes("unavailable");
     const isQuotaExceeded = 
-      errorMsg.includes("429") || 
-      errorMsg.includes("RESOURCE_EXHAUSTED") || 
-      errorMsg.includes("limit") || 
-      errorMsg.includes("Quota") ||
-      errorStr.includes("429") ||
-      errorStr.includes("RESOURCE_EXHAUSTED");
+      errorMsgLower.includes("429") || 
+      errorMsgLower.includes("resource_exhausted") || 
+      errorMsgLower.includes("limit") || 
+      errorMsgLower.includes("quota");
 
     // Retrying ONLY on 503 (Unavailable)
     // For 429 (Quota), we throw immediately to move to the next model in MODELS_PRIORITY
@@ -78,11 +76,12 @@ export async function POST(req: NextRequest) {
       } catch (error: any) {
         lastError = error;
         const errorMsg = error.message || JSON.stringify(error);
+        const errorMsgLower = errorMsg.toLowerCase();
         console.warn(`[API/AI] Erro no modelo ${modelName}:`, errorMsg);
         
-        const isQuota = error.isQuotaError || errorMsg.includes("429") || errorMsg.includes("limit") || errorMsg.includes("Quota");
-        const isUnavailable = errorMsg.includes("503") || errorMsg.includes("UNAVAILABLE");
-        const isNotFound = errorMsg.includes("not found");
+        const isQuota = error.isQuotaError || errorMsgLower.includes("429") || errorMsgLower.includes("limit") || errorMsgLower.includes("quota") || errorMsgLower.includes("resource_exhausted");
+        const isUnavailable = errorMsgLower.includes("503") || errorMsgLower.includes("unavailable");
+        const isNotFound = errorMsgLower.includes("not found") || errorMsgLower.includes("not_found") || errorMsgLower.includes("unsupported") || errorMsgLower.includes("404") || errorMsgLower.includes("400");
 
         const shouldFallback = isQuota || isUnavailable || isNotFound;
 
@@ -92,15 +91,15 @@ export async function POST(req: NextRequest) {
           break;
         }
         
-        console.log(`[API/AI] Modelo ${modelName} falhou por Cota/Indisponibilidade. Tentando próximo...`);
+        console.log(`[API/AI] Modelo ${modelName} falhou por Cota/Indisponibilidade/Não Encontrado. Tentando próximo...`);
         // Optional jitter/delay between models to avoid hitting generic rate limits
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
     // If we reached here, interpret the last error
-    const finalErrorMsg = lastError?.message || JSON.stringify(lastError);
-    if (finalErrorMsg.includes("429") || finalErrorMsg.includes("RESOURCE_EXHAUSTED")) {
+    const finalErrorMsg = (lastError?.message || JSON.stringify(lastError) || "").toLowerCase();
+    if (finalErrorMsg.includes("429") || finalErrorMsg.includes("resource_exhausted") || finalErrorMsg.includes("quota")) {
       return NextResponse.json(
         { error: "Limite de cota da IA atingido em todos os modelos disponíveis. Por favor, tente novamente em alguns minutos." },
         { status: 429 }

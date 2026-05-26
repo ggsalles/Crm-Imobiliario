@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -109,6 +111,7 @@ export default function ContactDetail360Page() {
   const [formMinBedrooms, setFormMinBedrooms] = useState("");
   const [formPropertyType, setFormPropertyType] = useState("todos");
   const [formNeighborhoodsText, setFormNeighborhoodsText] = useState("");
+  const [formTemperature, setFormTemperature] = useState<'quente' | 'morno' | 'frio'>('morno');
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -318,13 +321,35 @@ export default function ContactDetail360Page() {
 
       const departmentText = JSON.stringify(payloadProfile);
       
-      await updateContact(contact.id, { department: departmentText });
+      const tempUpdated = contact.temperature !== formTemperature;
+      
+      await updateContact(contact.id, { 
+        department: departmentText,
+        temperature: formTemperature
+      });
 
       const refreshed = await getContact(id);
       setContact(refreshed);
       
       toast.success("Perfil de interesse atualizado com sucesso!");
       setIsProfileModalOpen(false);
+
+      if (tempUpdated) {
+        const tempLabels: Record<string, string> = {
+          quente: "🔥 Quente",
+          morno: "⚡ Morno",
+          frio: "❄️ Frio"
+        };
+        const newLabel = tempLabels[formTemperature] || '⚡ Morno';
+        await createTimelineEvent({
+          type: 'system',
+          category: 'contact',
+          relatedId: contact.id,
+          content: `Temperatura do Lead atualizada para: ${newLabel}`,
+          title: 'Temperatura Atualizada',
+          metadata: { type: 'temperature_update', from: contact.temperature, to: formTemperature }
+        });
+      }
 
       await createTimelineEvent({
         type: 'system',
@@ -475,11 +500,27 @@ export default function ContactDetail360Page() {
                 </div>
                 
                 <div className="space-y-2">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <h1 className="text-3xl font-bold text-foreground tracking-tight">{contact.name}</h1>
                     <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider rounded-lg border border-primary/20">
                       {contact.type === 'cliente' ? 'CLIENTE' : 'MEMBRO'}
                     </span>
+                    {contact.type === 'cliente' && contact.temperature && (
+                      contact.temperature === 'quente' ? (
+                        <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg relative overflow-hidden shrink-0 select-none shadow-[0_0_12px_rgba(239,68,68,0.15)] animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-0.5 animate-ping" />
+                          🔥 Quente
+                        </span>
+                      ) : contact.temperature === 'morno' ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none shadow-[0_0_8px_rgba(245,158,11,0.1)]">
+                          ⚡ Morno
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none">
+                          ❄️ Frio
+                        </span>
+                      )
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     {contact.type === 'cliente' ? (
@@ -584,6 +625,7 @@ export default function ContactDetail360Page() {
                             setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
                             setFormPropertyType(currentProfile.propertyType || "todos");
                             setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
+                            setFormTemperature((contact.temperature as any) || "morno");
                             setIsProfileModalOpen(true);
                           }}
                           className="w-10 h-10 rounded-xl bg-muted hover:bg-muted/80 flex items-center justify-center transition-all border border-border cursor-pointer group"
@@ -660,6 +702,7 @@ export default function ContactDetail360Page() {
                           setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
                           setFormPropertyType(currentProfile.propertyType || "todos");
                           setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
+                          setFormTemperature((contact.temperature as any) || "morno");
                           setIsProfileModalOpen(true);
                         }}
                         className="w-full py-3 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all gap-2 flex items-center justify-center border border-primary/20 cursor-pointer"
@@ -951,6 +994,19 @@ export default function ContactDetail360Page() {
                       <option value="comercial">Comercial</option>
                       <option value="sobrado">Sobrado</option>
                       <option value="cobertura">Cobertura</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Temperatura do Lead</label>
+                    <select
+                      value={formTemperature}
+                      onChange={(e) => setFormTemperature(e.target.value as any)}
+                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold font-sans"
+                    >
+                      <option value="quente">🔥 Quente (Engajado e Ativo)</option>
+                      <option value="morno">⚡ Morno (Em contato / Negociação)</option>
+                      <option value="frio">❄️ Frio (Adormecido / Estagnado)</option>
                     </select>
                   </div>
 

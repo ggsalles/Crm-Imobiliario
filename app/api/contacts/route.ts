@@ -64,7 +64,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             id: data.id,
             name: data.name,
-            role: data.role,
+            role: data.type === 'equipe' ? data.role : "",
+            temperature: data.type === 'cliente' ? (data.role || 'morno') : undefined,
             email: data.email,
             phone: data.phone,
             type: data.type,
@@ -99,7 +100,8 @@ export async function GET(req: NextRequest) {
     const items = contacts.map((item: any) => ({
       id: item.id,
       name: item.name,
-      role: item.role,
+      role: item.type === 'equipe' ? item.role : "",
+      temperature: item.type === 'cliente' ? (item.role || 'morno') : undefined,
       email: item.email,
       phone: item.phone,
       type: item.type,
@@ -122,6 +124,12 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const data = await req.json();
+    
+    // Map temperature to role for database storing
+    if (data.type === 'cliente' && data.temperature) {
+      data.role = data.temperature;
+    }
+    delete data.temperature;
     
     // Fetch active tenant from profile as a software isolation safeguard
     const { data: { user } } = await supabase.auth.getUser();
@@ -161,6 +169,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json();
+
+    // Map temperature to role for database updates
+    if (data.temperature !== undefined) {
+      data.role = data.temperature;
+      delete data.temperature;
+    }
 
     const { error } = await supabase
       .from('contacts')

@@ -58,6 +58,7 @@ export interface Contact {
   id: string;
   name: string;
   role: string;
+  temperature?: 'quente' | 'morno' | 'frio';
   email: string;
   phone: string;
   type: 'cliente' | 'equipe';
@@ -280,6 +281,7 @@ export async function createContact(data: any) {
   const contactData = {
     name: data.name,
     role: data.role,
+    temperature: data.temperature,
     email: data.email,
     phone: data.phone,
     type: data.type,
@@ -311,6 +313,7 @@ export async function updateContact(id: string, data: any) {
   if (data.department !== undefined) updateData.department = data.department;
   if (data.companyId !== undefined) updateData.company_id = data.companyId || null;
   if (data.source !== undefined) updateData.source = data.source || null;
+  if (data.temperature !== undefined) updateData.temperature = data.temperature;
 
   try {
     await apiFetch(`/api/contacts?id=${id}`, {
@@ -995,11 +998,22 @@ async function getRefreshedSession() {
   activeRefreshPromise = (async () => {
     try {
       console.log("[apiFetch] Performing single-coalesced refreshSession...");
+      // Check if we even have a session/refresh token before calling refreshSession
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || !session.refresh_token) {
+        console.info("[apiFetch] No active session or refresh token found. Skipping refreshSession.");
+        return null;
+      }
+      
       const { data, error } = await supabase.auth.refreshSession();
       if (error) throw error;
       return data.session;
     } catch (e: any) {
-      console.error("[apiFetch] refreshSession failed:", e.message || e);
+      if (e.message?.includes("Refresh Token Not Found") || e.message?.includes("invalid_grant")) {
+        console.warn("[apiFetch] refreshSession bypassed (missing or invalid refresh token):", e.message || e);
+      } else {
+        console.error("[apiFetch] refreshSession failed:", e.message || e);
+      }
       return null;
     } finally {
       activeRefreshPromise = null;
@@ -1088,12 +1102,43 @@ async function apiFetchImpl(url: string, options: any = {}) {
         }
       }
 
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Erro ${response.status}: ${response.statusText}`);
+        let errMessage = `Erro ${response.status}: ${response.statusText}`;
+        if (isJson) {
+          try {
+            const errData = await response.json();
+            errMessage = errData.error || errMessage;
+          } catch (e) {}
+        } else {
+          try {
+            const textHeader = await response.text();
+            if (textHeader.length < 200) {
+              errMessage = `${errMessage} - ${textHeader}`;
+            }
+          } catch (e) {}
+        }
+        throw new Error(errMessage);
       }
 
-      return await response.json();
+      const rawText = await response.text();
+      const isHtmlResponse = rawText.trim().startsWith('<!doctype') || 
+                             rawText.trim().startsWith('<html') || 
+                             rawText.trim().startsWith('<!DOCTYPE') ||
+                             rawText.trim().startsWith('<div') ||
+                             rawText.trim().startsWith('{"error"'); // Just in case, keep as json but handle parser below
+
+      if (!isJson && isHtmlResponse && !rawText.trim().startsWith('{"error"')) {
+        throw new Error(`Resposta do servidor inválida (HTML recebido em vez de JSON) para ${url}`);
+      }
+
+      try {
+        return JSON.parse(rawText);
+      } catch (jsonErr: any) {
+        throw new Error(`Erro ao decodificar JSON de ${url}: ${jsonErr.message}`);
+      }
     } catch (err: any) {
       if (typeof window !== 'undefined' && (isPageUnloading || window.closed)) {
         console.log(`[apiFetch] Page is unloading or tab is closing. Silencing fetch error for ${url}.`);

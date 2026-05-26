@@ -367,6 +367,70 @@ export function InteractiveGuideModal({ isOpen, onClose, initialTab = "dashboard
       )
     },
     {
+      id: "temperature",
+      title: "Temperatura do Lead",
+      icon: Users,
+      subtitle: "Qualificação e Priorização Dinâmica de Leads",
+      description: "Classifique seus clientes pelo nível de engajamento operacional recente. A classificação de temperatura do lead orienta a rotina de atendimento estruturado do corretor e auxilia na conversão.",
+      hotspots: [
+        {
+          id: 1,
+          top: "50%",
+          left: "20%",
+          badge: "Quente",
+          title: "🔥 Leads Quentes",
+          description: "Representa compradores com altíssima intenção de compra, visitas agendadas ou propostas ativas em negociação direta. Atendimento crítico recomendado em até 2 horas. Apresenta comportamento pulsante no painel."
+        },
+        {
+          id: 2,
+          top: "50%",
+          left: "50%",
+          badge: "Morno",
+          title: "⚡ Leads Mornos",
+          description: "Clientes em estágio intermediário de qualificação. Possuem contato regular estabelecido, mas ainda estão na fase de estudo de perfil de imóvel ou aprovação de financiamento bancário. Cadência recomendada de contato: a cada 48h."
+        },
+        {
+          id: 3,
+          top: "50%",
+          left: "80%",
+          badge: "Frio",
+          title: "❄️ Leads Frios",
+          description: "Contatos com nenhuma interação recente, recusaram propostas antigas ou estão sem resposta no WhatsApp há mais de 10 dias. Perfeitos para campanhas de reativação por e-mail marketing ou disparos sazonais estruturados."
+        }
+      ] as Hotspot[],
+      visualMarkup: (
+        <div className="w-full h-full rounded-2xl bg-slate-900 border border-slate-800 p-4 relative text-white text-[10px] overflow-hidden select-none font-sans flex flex-col justify-between">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-2 mb-2 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-red-500 animate-pulse" />
+              <span className="font-bold text-slate-200">Painel de Qualificação de Lead em Tempo Real</span>
+            </div>
+            <span className="text-[7px] text-slate-500 font-mono">Guia de Conversão</span>
+          </div>
+
+          <div className="flex-1 flex gap-2.5 min-h-0 items-center justify-between py-2">
+            <div className="flex-1 bg-slate-950 p-2 text-center rounded-lg border border-red-500/20 relative flex flex-col gap-1 items-center h-full justify-center">
+              <span className="text-[12px] animate-pulse">🔥</span>
+              <span className="text-[8px] font-extrabold text-red-500 uppercase tracking-widest mt-0.5">Quente</span>
+              <span className="text-[7px] text-slate-400 mt-1 font-mono">Ação Imediata</span>
+            </div>
+
+            <div className="flex-1 bg-slate-950 p-2 text-center rounded-lg border border-amber-500/10 relative flex flex-col gap-1 items-center h-full justify-center">
+              <span className="text-[12px]">⚡</span>
+              <span className="text-[8px] font-extrabold text-amber-500 uppercase tracking-widest mt-0.5">Morno</span>
+              <span className="text-[7px] text-slate-400 mt-1 font-mono">Nutrição Rápida</span>
+            </div>
+
+            <div className="flex-1 bg-slate-950 p-2 text-center rounded-lg border border-indigo-500/10 relative flex flex-col gap-1 items-center h-full justify-center">
+              <span className="text-[12px]">❄️</span>
+              <span className="text-[8px] font-extrabold text-indigo-400 uppercase tracking-widest mt-0.5">Frio</span>
+              <span className="text-[7px] text-slate-400 mt-1 font-mono">Reengajamento</span>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: "sec_saas",
       title: "Isolamento SaaS",
       icon: ShieldCheck,

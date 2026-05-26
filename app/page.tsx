@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 /**
  * SalesScore CRM - Versão Estável Sincronizada
  * Build: 2026-05-10 v0.2.0 - Novo Leads corrigido para 1
@@ -172,7 +174,23 @@ function DashboardContent() {
     }
   }, [user, profile, refreshData, deals.length, contacts.length]);
 
-  const generateAIInsights = useCallback(async () => {
+  const generateAIInsights = useCallback(async (bypassCache = false) => {
+    if (!bypassCache) {
+      const cached = localStorage.getItem("dashboard_ai_insights");
+      if (cached) {
+        try {
+          const { text, timestamp } = JSON.parse(cached);
+          const age = Date.now() - timestamp;
+          if (age < 3600000) { // 1 hour
+            setAiInsights(text);
+            return;
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+    }
+
     setLoadingAI(true);
     const currentMonthStr = format(new Date(), "yyyy-MM");
     const currentGoal = goals.find(g => g.month === currentMonthStr && g.ownerId === user?.id) || 
@@ -219,12 +237,20 @@ function DashboardContent() {
 
     const result = await safeAiCall(prompt, "Não foi possível gerar os insights agora. Tente novamente em alguns minutos.");
     setAiInsights(result.text);
+    try {
+      localStorage.setItem("dashboard_ai_insights", JSON.stringify({
+        text: result.text,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      // ignore
+    }
     setLoadingAI(false);
   }, [goals, deals, customProbabilities, user?.id]);
 
   useEffect(() => {
     if (activeTab === 'Previsões' && deals.length > 0 && !aiInsights && !loadingAI) {
-      generateAIInsights();
+      generateAIInsights(false);
     }
   }, [activeTab, deals.length, aiInsights, loadingAI, generateAIInsights]);
 
@@ -849,7 +875,7 @@ function DashboardContent() {
                 customProbabilities={customProbabilities}
                 aiInsights={aiInsights}
                 loadingAI={loadingAI}
-                onRefreshAI={generateAIInsights}
+                onRefreshAI={() => generateAIInsights(true)}
                 currentGoal={currentGoal}
               />
             )}

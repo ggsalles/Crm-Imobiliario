@@ -12,11 +12,19 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function check() {
   try {
-    const { data, error } = await supabase.from('tenants').select('*').limit(1);
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data, error } = await supabase.from('contacts').insert([
+      {
+        name: 'Test Contact Temp',
+        type: 'cliente',
+        owner_id: '11111111-1111-1111-1111-111111111111', // Dummy profile or similar
+        temperature: 'quente'
+      }
+    ]).select();
     if (error) {
-      console.log('Error fetching from tenants:', error.message);
+      console.log('Error inserting with temperature:', error.message);
     } else {
-      console.log('Tenants keys:', data && data.length > 0 ? Object.keys(data[0]) : 'No rows');
+      console.log('Success!', data);
     }
   } catch (err) {
     console.log('Catch error:', err);
