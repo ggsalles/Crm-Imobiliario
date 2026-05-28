@@ -999,7 +999,14 @@ async function getRefreshedSession() {
     try {
       console.log("[apiFetch] Performing single-coalesced refreshSession...");
       // Check if we even have a session/refresh token before calling refreshSession
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+      } catch (sessErr: any) {
+        console.warn("[apiFetch] Fail to get session in getRefreshedSession:", sessErr?.message || sessErr);
+      }
+      
       if (!session || !session.refresh_token) {
         console.info("[apiFetch] No active session or refresh token found. Skipping refreshSession.");
         return null;
@@ -1009,10 +1016,16 @@ async function getRefreshedSession() {
       if (error) throw error;
       return data.session;
     } catch (e: any) {
-      if (e.message?.includes("Refresh Token Not Found") || e.message?.includes("invalid_grant")) {
-        console.warn("[apiFetch] refreshSession bypassed (missing or invalid refresh token):", e.message || e);
+      const errMsg = (e?.message || e?.error_description || (typeof e === 'string' ? e : '') || "").toString();
+      if (
+        errMsg.toLowerCase().includes("refresh") || 
+        errMsg.toLowerCase().includes("token") || 
+        errMsg.toLowerCase().includes("grant") || 
+        errMsg.toLowerCase().includes("session")
+      ) {
+        console.warn("[apiFetch] refreshSession bypassed (normal/expired session state):", errMsg);
       } else {
-        console.error("[apiFetch] refreshSession failed:", e.message || e);
+        console.error("[apiFetch] refreshSession failed:", errMsg);
       }
       return null;
     } finally {

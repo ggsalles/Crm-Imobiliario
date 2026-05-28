@@ -60,6 +60,14 @@ const STAGES = [
   { id: "closed", title: "Vendido / Alugado", color: "bg-emerald-500" },
 ];
 
+const BADGE_COLORS: Record<string, string> = {
+  lead: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
+  qualification: "bg-purple-500/10 text-purple-500 border border-purple-500/20",
+  proposal: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
+  negotiation: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
+  closed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
+};
+
 export default function PipelinePage() {
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -77,8 +85,42 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [displayValue, setDisplayValue] = useState("");
   const [displayGoals, setDisplayGoals] = useState<{ [key: string]: string }>({});
+  const [probabilities, setProbabilities] = useState<Record<string, number>>({
+    lead: 20,
+    qualification: 40,
+    proposal: 60,
+    negotiation: 80,
+    closed: 100
+  });
 
   const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
+
+  useEffect(() => {
+    const loadProbabilities = () => {
+      const saved = localStorage.getItem("pipeline_probabilities");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setProbabilities(prev => ({ ...prev, ...parsed }));
+        } catch (e) {
+          console.error("Error parsing pipeline probabilities:", e);
+        }
+      } else {
+        const defaults = STAGES.reduce((acc, stage, idx) => {
+          acc[stage.id] = (idx + 1) * 20;
+          return acc;
+        }, {} as Record<string, number>);
+        setProbabilities(defaults);
+      }
+    };
+
+    loadProbabilities();
+
+    window.addEventListener("storage_probabilities_updated", loadProbabilities);
+    return () => {
+      window.removeEventListener("storage_probabilities_updated", loadProbabilities);
+    };
+  }, []);
 
   useEffect(() => {
     if (deleteConfirmId) {
@@ -416,7 +458,12 @@ export default function PipelinePage() {
                             {stageDeals.length}
                           </span>
                         </div>
-                        <button className="text-muted-foreground hover:text-foreground transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
+                        <span className={cn(
+                          "text-[10px] font-extrabold px-2 py-0.5 rounded-full border shadow-sm tracking-wider uppercase backdrop-blur-sm transition-all duration-300",
+                          BADGE_COLORS[stage.id] || "bg-muted text-muted-foreground border-border"
+                        )}>
+                          {probabilities[stage.id] ?? 0}%
+                        </span>
                       </div>
                       
                       {/* Stage Mini Progress */}
