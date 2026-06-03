@@ -37,6 +37,68 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const ownerId = searchParams.get('ownerId');
+    const id = searchParams.get('id');
+
+    // If id is provided, fetch single property
+    if (id && id !== 'undefined' && id !== 'null') {
+      const { data: property, error: propError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (propError) throw propError;
+      if (!property) return NextResponse.json(null);
+
+      // Fetch images for this property
+      const { data: images, error: imagesError } = await supabase
+        .from('property_images')
+        .select('url')
+        .eq('property_id', id);
+
+      if (imagesError) {
+        console.warn("[API/Properties] Erro ao carregar fotos:", imagesError);
+      }
+
+      let urls: string[] = (images || []).map((img: any) => String(img.url));
+      
+      if (urls.length === 0 && property.image_url) {
+        try {
+          const parsed = typeof property.image_url === 'string' ? JSON.parse(property.image_url) : property.image_url;
+          urls = Array.isArray(parsed) ? parsed : [String(property.image_url)];
+        } catch {
+          urls = [String(property.image_url)];
+        }
+      }
+
+      return NextResponse.json({
+        id: property.id,
+        title: String(property.title || "Sem título"),
+        type: property.type,
+        status: property.status,
+        price: Number(property.price || 0),
+        location: String(property.location || ""),
+        cep: String(property.cep || ""),
+        street: String(property.street || ""),
+        neighborhood: String(property.neighborhood || ""),
+        city: String(property.city || ""),
+        state: String(property.state || ""),
+        number: String(property.number || ""),
+        complement: property.complement ? String(property.complement) : null,
+        area: Number(property.area || 0),
+        bedrooms: Number(property.bedrooms || 0),
+        bathrooms: Number(property.bathrooms || 0),
+        parkingSpots: Number(property.parking_spots || 0),
+        acceptsFinancing: Boolean(property.accepts_financing),
+        notes: property.notes ? String(property.notes) : null,
+        description: property.description ? String(property.description) : null,
+        imageUrls: urls,
+        ownerId: property.owner_id,
+        tenantId: property.tenant_id,
+        createdAt: property.created_at,
+        updatedAt: property.updated_at
+      });
+    }
 
     // Fetch active tenant from profile as a software isolation safeguard
     const { data: { user } } = await supabase.auth.getUser();

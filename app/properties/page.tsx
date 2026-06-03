@@ -91,6 +91,10 @@ export default function PropertiesPage() {
       photosText = "\n📸 *Fotos do Imóvel:*\n" + property.imageUrls.map((url, i) => `Imagem ${i+1}: ${url}`).join("\n");
     }
 
+    const publicUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/p/${property.id}`
+      : `https://sales-score-crm.com/p/${property.id}`;
+
     return `✨ *OPORTUNIDADE IMOBILIÁRIA* ✨
 🏡 *${property.title}*
 
@@ -107,6 +111,9 @@ export default function PropertiesPage() {
 📄 *Descrição do Imóvel:*
 ${property.description || "Consulte-nos para mais detalhes!"}
 ${photosText}
+
+🔗 *Link Público de Captura (Instagram/Bio):*
+${publicUrl}
 
 ---
 Estou à disposição para agendarmos uma visita e simularmos as melhores condições! 🚀`;
@@ -1202,6 +1209,21 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                 >
                   Cancelar
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sharingProperty) {
+                      const publicUrl = `${window.location.origin}/p/${sharingProperty.id}`;
+                      navigator.clipboard.writeText(publicUrl);
+                      toast.success("Link público de captura copiado!");
+                    }
+                  }}
+                  className="px-6 py-3 bg-primary hover:bg-opacity-95 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/25 cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-white" />
+                  Copiar Link p/ Instagram
+                </button>
                 
                 <button
                   type="button"
@@ -1212,7 +1234,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
                 >
                   <Copy className="w-4 h-4 text-white fill-white" />
-                  Copiar Texto
+                  Copiar Ficha WhatsApp
                 </button>
               </div>
             </motion.div>
