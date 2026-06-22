@@ -124,6 +124,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       console.log("AuthProvider: Handling initial session", !!session);
       if (session) {
+        const email = session.user?.email?.toLowerCase();
+        if (email && email !== 'ggsalles@gmail.com') {
+          console.warn(`[AuthProvider] Acesso negado para o e-mail: ${email}`);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          clearTimeout(timeout);
+          toast.error("Acesso indisponível. Cadastros e logins estão restritos exclusivamente ao administrador ggsalles@gmail.com.");
+          // Executa sign out em background para invalidar definitivamente a sessão e cookie
+          setTimeout(() => supabase.auth.signOut(), 100);
+          return;
+        }
         setUser(session.user);
         await syncProfile(session.user);
       } else {
@@ -157,6 +169,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (session) {
+        const email = session.user?.email?.toLowerCase();
+        if (email && email !== 'ggsalles@gmail.com') {
+          console.warn(`[AuthProvider] Acesso restrito acionado durante evento de sessão para: ${email}`);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          toast.error("Este sistema é privado de ggsalles@gmail.com.");
+          setTimeout(() => supabase.auth.signOut(), 100);
+          return;
+        }
+
         if (!authInitializedRef.current) {
           await handleInitialSession(session);
           return;
@@ -358,6 +381,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, router]);
 
   const syncProfile = async (user: User) => {
+    const userEmail = user.email?.toLowerCase();
+    if (userEmail && userEmail !== 'ggsalles@gmail.com') {
+      console.warn("[AuthProvider] syncProfile barrado para e-mail não-administrador:", userEmail);
+      setUser(null);
+      setProfile(null);
+      setTimeout(() => supabase.auth.signOut(), 100);
+      return;
+    }
+
     // Evitar sincronizações duplicadas ou concorrentes rápidas para o mesmo usuário
     const nowTime = Date.now();
     
@@ -688,6 +720,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail !== 'ggsalles@gmail.com') {
+      throw new Error("Acesso indisponível. Cadastros e logins estão restritos exclusivamente ao administrador ggsalles@gmail.com.");
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
@@ -766,10 +802,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (email: string, password: string, name: string, companyName?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail !== 'ggsalles@gmail.com') {
+      throw new Error("Cadastro indisponível. O registro de usuários está restrito exclusivamente ao administrador ggsalles@gmail.com.");
+    }
+
     if (password.length < 6) {
       throw new Error("A senha deve ter pelo menos 6 caracteres.");
     }
-    const cleanEmail = email.trim().toLowerCase();
 
     let resolvedTenantId = "11111111-1111-1111-1111-111111111111";
     try {

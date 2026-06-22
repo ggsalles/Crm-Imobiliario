@@ -129,6 +129,10 @@ export default function UsersPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPlatformAdmin) {
+      toast.error("Apenas o administrador ggsalles@gmail.com possui permissão para cadastrar novos usuários.");
+      return;
+    }
     setIsCreating(true);
     try {
       await createUserProfile(newUserData);
@@ -232,7 +236,7 @@ export default function UsersPage() {
               </button>
             )}
 
-            {isAdmin && (
+            {isPlatformAdmin && (
               <button 
                 onClick={() => setShowAddModal(true)}
                 className="px-4 py-2.5 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95 shrink-0"
