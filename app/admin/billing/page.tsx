@@ -33,7 +33,7 @@ interface TenantItem {
   isBlocked: boolean;
 }
 
-// Generate the last 5 months for the manual billing ledger
+// Generate the last 5 months plus the upcoming month for the manual billing ledger
 function getRecentMonths() {
   const list: { key: string; label: string }[] = [];
   const MONTHS_NAMES = [
@@ -42,7 +42,9 @@ function getRecentMonths() {
   ];
   
   const today = new Date();
-  for (let i = 4; i >= 0; i--) {
+  // Loop from 4 (months past) down to -1 (upcoming month)
+  // This always displays the upcoming month (e.g., July when we are in June)
+  for (let i = 4; i >= -1; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = `${MONTHS_NAMES[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
