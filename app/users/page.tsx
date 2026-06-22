@@ -130,7 +130,7 @@ export default function UsersPage() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isPlatformAdmin) {
-      toast.error("Apenas o administrador ggsalles@gmail.com possui permissão para cadastrar novos usuários.");
+      toast.error("Alerta de Segurança: Você não possui autoridade para cadastrar novos usuários. Somente o administrador geral (ggsalles@gmail.com) está autorizado.");
       return;
     }
     setIsCreating(true);
