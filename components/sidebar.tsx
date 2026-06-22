@@ -61,7 +61,7 @@ export function Sidebar() {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-card h-screen sticky top-0 shrink-0 border-r border-border z-[100]">
+      <aside className="hidden md:flex w-64 bg-card h-screen sticky top-0 shrink-0 border-r border-border z-[10]">
         <Suspense fallback={<div className="w-64 bg-card h-full" />}>
           <SidebarContent 
             pathname={pathname} 
