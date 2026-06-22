@@ -16,6 +16,7 @@ export const supabase = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storageKey: 'crm-imob-session-v4', 
+      storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
     },
     realtime: {
       params: {
