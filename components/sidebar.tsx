@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { subscribeToTotalUnreadMessages, getTenants, updateUserProfile } from "@/lib/db";
 import { toast } from "sonner";
@@ -118,6 +118,24 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
   const { billingStatus, billingSuspensionDate } = useAuth();
+
+  const navRef = useRef<HTMLElement>(null);
+
+  // Restore the scroll position of the sidebar when navigating
+  useEffect(() => {
+    const savedScrollPos = sessionStorage.getItem('sidebar-scroll');
+    if (savedScrollPos && navRef.current) {
+      const target = navRef.current;
+      const scrollPos = Number(savedScrollPos);
+      // Wait a fraction of a frame for navigation rendering to complete
+      const timer = setTimeout(() => {
+        if (target) {
+          target.scrollTop = scrollPos;
+        }
+      }, 30);
+      return () => clearTimeout(timer);
+    }
+  }, [pathname, currentTab]);
 
   useEffect(() => {
     const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
@@ -233,7 +251,13 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         </div>
       )}
 
-      <nav className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide">
+      <nav 
+        ref={navRef}
+        onScroll={(e) => {
+          sessionStorage.setItem('sidebar-scroll', String(e.currentTarget.scrollTop));
+        }}
+        className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide"
+      >
         {navItems.map((item) => {
           const isActive = item.href.includes('?') 
             ? pathname === item.href.split('?')[0] && currentTab === item.href.split('=')[1]
