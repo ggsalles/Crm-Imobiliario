@@ -27,14 +27,20 @@ export default function ResetPasswordPage() {
     // Check if we are in a recovery flow
     // Supabase handles the session from the URL hash automatically
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // If no session, they might have landed here without a valid token
-        // Usually Supabase sets the session if the token in hash is valid
+      try {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+        if (!session) {
+          // If no session, they might have landed here without a valid token
+          // Usually Supabase sets the session if the token in hash is valid
+          toast.error("Link de redefinição inválido ou expirado.");
+          router.push("/login");
+        } else {
+          setIsReady(true);
+        }
+      } catch {
         toast.error("Link de redefinição inválido ou expirado.");
         router.push("/login");
-      } else {
-        setIsReady(true);
       }
     };
 

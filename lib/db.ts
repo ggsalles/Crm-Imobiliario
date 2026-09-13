@@ -1,4 +1,39 @@
-import { supabase } from './supabase';
+import { supabase, clearAuthSession } from './supabase';
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME } from './constants';
+
+export async function getSafeSession() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      const errMsg = (error.message || '').toLowerCase();
+      if (
+        errMsg.includes('invalid refresh token') ||
+        errMsg.includes('refresh token not found') ||
+        errMsg.includes('refresh_token_not_found')
+      ) {
+        clearAuthSession();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('app-session-expired'));
+        }
+      }
+      return null;
+    }
+    return data?.session || null;
+  } catch (err: any) {
+    const errMsg = (err?.message || (typeof err === 'string' ? err : '') || '').toLowerCase();
+    if (
+      errMsg.includes('invalid refresh token') ||
+      errMsg.includes('refresh token not found') ||
+      errMsg.includes('refresh_token_not_found')
+    ) {
+      clearAuthSession();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-session-expired'));
+      }
+    }
+    return null;
+  }
+}
 
 export interface Company {
   id: string;
@@ -157,8 +192,19 @@ export interface UserProfile {
 }
 
 // Constants
-const POLL_INTERVAL = 45000; // 45 seconds for better responsiveness
+const POLL_INTERVAL = 90000; // 90 seconds fallback (WebSocket handles live changes; polling is a low-frequency reconciliation)
 const RESYNC_EVENT = 'db-force-resync';
+
+// Polling consciente de visibilidade da aba para economizar requisições do plano gratuito
+function createVisibilityAwarePoll(callback: () => void, intervalMs = POLL_INTERVAL) {
+  return setInterval(() => {
+    // Não consome requisições se a aba estiver em segundo plano ou minimizada
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return;
+    }
+    callback();
+  }, intervalMs);
+}
 
 // Cache global para evitar que dados sumam durante re-subscriptions ou hibernação
 const dataCache: Record<string, any> = {};
@@ -199,25 +245,44 @@ function createRealtimeChannel(tableName: string, callback: () => void, filter?:
     window.addEventListener(RESYNC_EVENT, callback);
   }
 
-  const channel = supabase
-    .channel(channelName)
-    .on('postgres_changes', { event: '*', schema: 'public', table: tableName, filter }, () => {
-      console.log(`[Realtime] Mudança detectada em ${tableName}${filter ? ` (${filter})` : ''}, atualizando...`);
-      callback();
-    })
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}), tentando reconectar...`);
-        if (typeof window !== 'undefined') {
-          setTimeout(() => channel.subscribe(), 3000);
+  let retryCount = 0;
+  const maxRetries = 2;
+  let retryTimeout: NodeJS.Timeout | null = null;
+
+  let channel: any;
+  try {
+    channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName, filter }, () => {
+        console.log(`[Realtime] Mudança detectada em ${tableName}${filter ? ` (${filter})` : ''}, atualizando...`);
+        callback();
+      })
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          retryCount = 0;
+          console.log(`[Realtime] Inscrito com sucesso em ${tableName} (${channelName})`);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Realtime] Erro/Timeout em ${tableName} (${status}):`, err?.message || err);
+          if (typeof window !== 'undefined' && retryCount < maxRetries) {
+            retryCount++;
+            retryTimeout = setTimeout(() => {
+              try {
+                channel?.subscribe();
+              } catch (retryErr) {
+                console.warn(`[Realtime] Falha ao reconectar ${tableName}:`, retryErr);
+              }
+            }, 6000 * retryCount);
+          }
         }
-      }
-    });
+      });
+  } catch (initErr) {
+    console.warn(`[Realtime] Não foi possível inicializar canal para ${tableName}:`, initErr);
+    channel = { state: 'closed' };
+  }
 
   // Attach a cleanup method if needed (not standard for Supabase channel but useful for us)
-  (channel as any)._customCleanup = () => {
+  channel._customCleanup = () => {
+    if (retryTimeout) clearTimeout(retryTimeout);
     if (typeof window !== 'undefined') {
       window.removeEventListener(RESYNC_EVENT, callback);
     }
@@ -264,7 +329,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
 
   fetchContacts();
   const subscription = createRealtimeChannel('contacts', fetchContacts);
-  const poll = setInterval(fetchContacts, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchContacts, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -274,7 +339,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
 }
 
 export async function createContact(data: any) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
@@ -379,7 +444,7 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
 
   fetchCompanies();
   const subscription = createRealtimeChannel('companies', fetchCompanies);
-  const poll = setInterval(fetchCompanies, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchCompanies, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -389,7 +454,7 @@ export function subscribeToCompanies(callback: (companies: Company[]) => void, o
 }
 
 export async function createCompany(data: any) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
@@ -488,7 +553,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
 
   fetchDeals();
   const subscription = createRealtimeChannel('deals', fetchDeals);
-  const poll = setInterval(fetchDeals, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchDeals, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -498,7 +563,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
 }
 
 export async function createDeal(data: any) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
@@ -607,7 +672,7 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
 
   fetchGoals();
   const subscription = createRealtimeChannel('goals', fetchGoals);
-  const poll = setInterval(fetchGoals, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchGoals, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -617,7 +682,7 @@ export function subscribeToGoals(callback: (goals: Goal[]) => void, ownerId?: st
 }
 
 export async function setGoal(month: string, stageGoals: { [stageId: string]: number }) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
@@ -678,7 +743,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
 
   fetchUsers();
   const subscription = createRealtimeChannel('profiles', fetchUsers);
-  const poll = setInterval(fetchUsers, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchUsers, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -767,7 +832,7 @@ export async function createUserProfile(data: { displayName: string; email: stri
     user_type: data.userType,
     is_admin: data.role === 'Admin',
     tenant_id: data.tenantId || null,
-    tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : ["11111111-1111-1111-1111-111111111111"])
+    tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : [DEFAULT_TENANT_ID])
   };
 
   try {
@@ -822,7 +887,7 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
 
   fetchActivities();
   const subscription = createRealtimeChannel('activities', fetchActivities);
-  const poll = setInterval(fetchActivities, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchActivities, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -832,7 +897,8 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
 }
 
 export async function createActivity(data: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSafeSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const activityData = {
@@ -917,7 +983,7 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
 
   fetchEvents();
   const subscription = createRealtimeChannel('timeline', fetchEvents, `related_id=eq.${relatedId}`);
-  const poll = setInterval(fetchEvents, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchEvents, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -927,7 +993,7 @@ export function subscribeToTimeline(category: string, relatedId: string, callbac
 }
 
 export async function createTimelineEvent(data: any) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
@@ -1001,20 +1067,26 @@ async function getRefreshedSession() {
       // Check if we even have a session/refresh token before calling refreshSession
       let session = null;
       try {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
+        session = await getSafeSession();
       } catch (sessErr: any) {
         console.warn("[apiFetch] Fail to get session in getRefreshedSession:", sessErr?.message || sessErr);
       }
       
       if (!session || !session.refresh_token) {
         console.info("[apiFetch] No active session or refresh token found. Skipping refreshSession.");
+        clearAuthSession();
         return null;
       }
       
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error) throw error;
-      return data.session;
+      const { data, error } = await supabase.auth.refreshSession().catch((err: any) => ({
+        data: { session: null },
+        error: err
+      }));
+      if (error) {
+        clearAuthSession();
+        throw error;
+      }
+      return data?.session || null;
     } catch (e: any) {
       const errMsg = (e?.message || e?.error_description || (typeof e === 'string' ? e : '') || "").toString();
       if (
@@ -1023,6 +1095,7 @@ async function getRefreshedSession() {
         errMsg.toLowerCase().includes("grant") || 
         errMsg.toLowerCase().includes("session")
       ) {
+        clearAuthSession();
         console.warn("[apiFetch] refreshSession bypassed (normal/expired session state):", errMsg);
       } else {
         console.error("[apiFetch] refreshSession failed:", errMsg);
@@ -1075,7 +1148,7 @@ async function apiFetchImpl(url: string, options: any = {}) {
       // Sessão rápida
       let token = null;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await getSafeSession();
         token = session?.access_token;
       } catch (e) {
         console.warn("[apiFetch] Erro ao recuperar sessão:", e);
@@ -1133,7 +1206,25 @@ async function apiFetchImpl(url: string, options: any = {}) {
             }
           } catch (e) {}
         }
+
+        // Detecta se o Supabase está em pausa ou fora do ar e notifica a aplicação
+        if (typeof window !== 'undefined') {
+          const isPaused = response.status === 503 || /paused|inactive|database error or timeout/i.test(errMessage);
+          if (isPaused) {
+            window.dispatchEvent(new CustomEvent('supabase-status-change', {
+              detail: { isPaused: true, message: errMessage }
+            }));
+          }
+        }
+
         throw new Error(errMessage);
+      }
+
+      // Se a requisição obteve sucesso, garante que o alerta de pausa seja desativado
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('supabase-status-change', {
+          detail: { isPaused: false }
+        }));
       }
 
       const rawText = await response.text();
@@ -1217,7 +1308,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 
   fetchProperties();
   const subscription = createRealtimeChannel('properties', fetchProperties);
-  const poll = setInterval(fetchProperties, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchProperties, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1408,7 +1499,7 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 
   fetchConversations();
   const subscription = createRealtimeChannel('conversations', fetchConversations);
-  const poll = setInterval(fetchConversations, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchConversations, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1447,7 +1538,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 
   fetchMessages();
   const subscription = createRealtimeChannel('messages', fetchMessages, `conversation_id=eq.${conversationId}`);
-  const poll = setInterval(fetchMessages, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchMessages, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1457,7 +1548,8 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 }
 
 export async function sendChatMessage(conversationId: string, content: string, type: 'text' | 'image' | 'file' = 'text', fileData?: { name?: string, url?: string }) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSafeSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const messageData = {
@@ -1507,7 +1599,8 @@ export async function sendChatMessage(conversationId: string, content: string, t
 }
 
 export async function markAsRead(conversationId: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSafeSession();
+  const user = session?.user;
   if (!user) return;
 
   try {
@@ -1530,7 +1623,8 @@ export async function markAsRead(conversationId: string) {
 export function subscribeToTotalUnreadMessages(callback: (count: number) => void) {
   const fetchTotalUnread = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const session = await getSafeSession();
+      const user = session?.user;
       if (!user) {
         callback(0);
         return;
@@ -1551,7 +1645,7 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
 
   fetchTotalUnread();
   const subscription = createRealtimeChannel('conversations', fetchTotalUnread);
-  const poll = setInterval(fetchTotalUnread, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchTotalUnread, POLL_INTERVAL);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1561,7 +1655,8 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
 }
 
 export async function createConversation(participants: string[], category: 'client' | 'team', details: Record<string, any>) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSafeSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   const conversationData = {
@@ -1616,13 +1711,11 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
     let userId = bypassUserId;
 
     if (!userId) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getSafeSession();
       userId = session?.user?.id;
       
       if (!userId) {
-        console.warn("[Storage] No session found, trying getUser() as fallback...");
-        const { data: { user: verifiedUser } } = await supabase.auth.getUser();
-        userId = verifiedUser?.id;
+        userId = "anonymous";
       }
     }
 
@@ -1635,7 +1728,7 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
     
     let token: string | null = null;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getSafeSession();
       token = session?.access_token || null;
     } catch (e) {
       console.warn("[Storage Client] Erro ao obter session token para upload:", e);
@@ -1695,7 +1788,8 @@ export async function downloadFile(url: string, fileName: string) {
 }
 
 export async function findOrCreateConversation(participantId: string, category: 'client' | 'team', partnerDetails: any) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSafeSession();
+  const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
   // Check if conversation already exists
@@ -1744,8 +1838,8 @@ export async function getTenants() {
     const data = await apiFetch('/api/tenants');
     const tenantsList = (data || []) as Tenant[];
     return tenantsList.map((t: any) => {
-      if (t && t.id === "11111111-1111-1111-1111-111111111111") {
-        return { ...t, name: "SalesScore" };
+      if (t && t.id === DEFAULT_TENANT_ID) {
+        return { ...t, name: DEFAULT_TENANT_NAME };
       }
       return t;
     });

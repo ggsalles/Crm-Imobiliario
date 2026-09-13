@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { isPlatformAdmin } from "@/lib/constants";
 
 export default function LoginPage() {
   const { user, profile, login, register, resetPassword, loading: authLoading, changeTenant, logout } = useAuth();
@@ -73,7 +74,8 @@ export default function LoginPage() {
           setIsLoadingUserTenants(true);
 
           // Get fresh session token to satisfy RLS rules
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          const session = data?.session;
           const headers: Record<string, string> = {};
           if (session?.access_token) {
             headers["Authorization"] = `Bearer ${session.access_token}`;
@@ -94,7 +96,7 @@ export default function LoginPage() {
           if (res.ok) {
             const allTenants = await res.json();
             if (Array.isArray(allTenants)) {
-              const isAdmin = targetProfile.role?.toLowerCase() === 'admin' || targetProfile.isAdmin || targetProfile.email?.toLowerCase() === 'ggsalles@gmail.com';
+              const isAdmin = targetProfile.role?.toLowerCase() === 'admin' || targetProfile.isAdmin || isPlatformAdmin(targetProfile.email);
               const userTenantIds = Array.from(new Set([...(targetProfile.tenantIds || []), targetProfile.tenantId].filter(Boolean)));
               const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
               

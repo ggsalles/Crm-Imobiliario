@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/db";
 import Link from "next/link";
 import { SaaSAdminConfig } from "@/lib/billing";
+import { isPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "@/lib/constants";
 
 interface TenantItem {
   id: string;
@@ -72,7 +73,7 @@ export default function AdminBillingPage() {
 
   // Security Lock check
   useEffect(() => {
-    if (!authLoading && (!profile || profile.email?.toLowerCase() !== 'ggsalles@gmail.com')) {
+    if (!authLoading && (!profile || !isPlatformAdmin(profile.email))) {
       toast.error("Acesso restrito apenas ao Administrador do Sistema.");
       router.push("/");
     }
@@ -103,7 +104,7 @@ export default function AdminBillingPage() {
   }
 
   useEffect(() => {
-    if (profile && profile.email?.toLowerCase() === 'ggsalles@gmail.com') {
+    if (profile && isPlatformAdmin(profile.email)) {
       loadAllData();
     }
   }, [profile]);
@@ -681,7 +682,7 @@ export default function AdminBillingPage() {
               <br />
               2. <strong>Ação de Bloqueio Direto:</strong> Ao identificar inadimplência no histórico, clique no botão <strong>Master Bloqueio</strong> para alternar o status para <strong>Bloqueado</strong>. O bloqueio entrará em vigor instantaneamente para todos os usuários daquela imobiliária.
               <br />
-              3. <strong>Bypass Administrativo:</strong> O usuário administrador supremo do sistema (<code>ggsalles@gmail.com</code>) possui bypass garantido. Você poderá navegar por todo o CRM, visualizar relatórios e carregar esta tela de controle de faturamento livremente, independentemente de haver inquilinos bloqueados ou ativos no momento.
+              3. <strong>Bypass Administrativo:</strong> O usuário administrador supremo do sistema (<code>{PLATFORM_ADMIN_EMAIL}</code>) possui bypass garantido. Você poderá navegar por todo o CRM, visualizar relatórios e carregar esta tela de controle de faturamento livremente, independentemente de haver inquilinos bloqueados ou ativos no momento.
             </p>
           </div>
         </div>

@@ -36,6 +36,7 @@ import {
 } from "@/lib/db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin as checkPlatformAdmin } from "@/lib/constants";
 
 export default function UsersPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -61,12 +62,12 @@ export default function UsersPage() {
     email: "",
     role: "Membro" as "Membro" | "Admin",
     userType: "funcionário" as "funcionário" | "cliente",
-    tenantId: "11111111-1111-1111-1111-111111111111",
-    tenantIds: ["11111111-1111-1111-1111-111111111111"]
+    tenantId: DEFAULT_TENANT_ID,
+    tenantIds: [DEFAULT_TENANT_ID]
   });
 
   const isAdmin = profile?.role === 'Admin';
-  const isPlatformAdmin = profile?.email === 'ggsalles@gmail.com';
+  const isPlatformAdmin = checkPlatformAdmin(profile?.email);
 
   const fetchTenants = async () => {
     try {
@@ -112,8 +113,8 @@ export default function UsersPage() {
       displayName: u.displayName,
       role: u.role,
       userType: u.userType || 'funcionário',
-      tenantId: u.tenantId || "11111111-1111-1111-1111-111111111111",
-      tenantIds: u.tenantIds || [u.tenantId || "11111111-1111-1111-1111-111111111111"]
+      tenantId: u.tenantId || DEFAULT_TENANT_ID,
+      tenantIds: u.tenantIds || [u.tenantId || DEFAULT_TENANT_ID]
     });
   };
 
@@ -130,7 +131,7 @@ export default function UsersPage() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isPlatformAdmin) {
-      toast.error("Alerta de Segurança: Você não possui autoridade para cadastrar novos usuários. Somente o administrador geral (ggsalles@gmail.com) está autorizado.");
+      toast.error(`Alerta de Segurança: Você não possui autoridade para cadastrar novos usuários. Somente o administrador geral (${PLATFORM_ADMIN_EMAIL}) está autorizado.`);
       return;
     }
     setIsCreating(true);
@@ -142,8 +143,8 @@ export default function UsersPage() {
         email: "", 
         role: "Membro", 
         userType: "funcionário",
-        tenantId: "11111111-1111-1111-1111-111111111111",
-        tenantIds: ["11111111-1111-1111-1111-111111111111"]
+        tenantId: DEFAULT_TENANT_ID,
+        tenantIds: [DEFAULT_TENANT_ID]
       });
       toast.success("Usuário cadastrado com sucesso. Ele agora pode fazer login.");
     } catch (error: any) {
@@ -310,11 +311,11 @@ export default function UsersPage() {
                           <span className="font-bold text-sm text-foreground leading-tight tracking-tight truncate">{t.name}</span>
                           <span className={cn(
                             "text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0",
-                            t.id === '11111111-1111-1111-1111-111111111111' 
+                            t.id === DEFAULT_TENANT_ID 
                               ? "bg-primary/10 text-primary" 
                               : "bg-muted text-muted-foreground border border-border"
                           )}>
-                            {t.id === '11111111-1111-1111-1111-111111111111' ? 'Padrão' : 'SaaS'}
+                            {t.id === DEFAULT_TENANT_ID ? 'Padrão' : 'SaaS'}
                           </span>
                         </div>
                         <p className="text-[10px] text-muted-foreground font-mono truncate mb-3 select-all">slug: {t.slug || 'default'}</p>
@@ -652,7 +653,7 @@ export default function UsersPage() {
                                     <Edit3 className="w-4 h-4" />
                                   </button>
                                 )}
-                                {isAdmin && u.email !== 'ggsalles@gmail.com' && (
+                                {isAdmin && !checkPlatformAdmin(u.email) && (
                                   <button 
                                     onClick={() => handleDeleteUser(u.id)}
                                     className={cn(

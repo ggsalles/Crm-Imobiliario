@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 
-export default function ErrorPage({
+export default function Error({
   error,
   reset,
 }: {
@@ -19,7 +19,7 @@ export default function ErrorPage({
       <div className="max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
         <h2 className="text-2xl font-bold mb-4">Algo deu errado</h2>
         <p className="text-sm text-slate-400 mb-6 text-left whitespace-pre-wrap max-h-40 overflow-y-auto bg-slate-950 p-3 rounded-lg font-mono">
-          {error.message || "Ocorreu um erro inesperado no aplicativo."}
+          {error?.message || "Ocorreu um erro inesperado no aplicativo."}
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button

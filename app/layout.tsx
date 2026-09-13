@@ -4,12 +4,13 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/providers/auth-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
+import { DatabaseStatusBanner } from "@/components/DatabaseStatusBanner";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SalesScore CRM",
-  description: "Gestão inteligente de clientes e equipe",
+  title: "SalesScore",
+  description: "CRM mobiliário de elite com inteligência preditiva e resiliência de dados em tempo real.",
 };
 
 export default function RootLayout({
@@ -18,10 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
-      <body className={inter.className}>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
+            <DatabaseStatusBanner />
             {children}
             <Toaster position="top-right" />
           </AuthProvider>
@@ -30,3 +32,4 @@ export default function RootLayout({
     </html>
   );
 }
+

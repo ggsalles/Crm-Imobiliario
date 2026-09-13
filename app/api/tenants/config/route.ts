@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getSaaSConfig, saveSaaSConfig } from '@/lib/billing';
+import { isPlatformAdmin } from '@/lib/constants';
+import { getAuthenticatedUser } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-async function verifyIsPlatformAdmin(req: NextRequest): Promise<boolean> {
-  // Extract user from token
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return false;
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false }
-  });
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return false;
-
-  return user.email?.toLowerCase() === 'ggsalles@gmail.com';
+function verifyIsPlatformAdmin(req: NextRequest): boolean {
+  const user = getAuthenticatedUser(req);
+  if (!user || !user.email) return false;
+  return isPlatformAdmin(user.email);
 }
 
 export async function GET(req: NextRequest) {

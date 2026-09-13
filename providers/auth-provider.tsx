@@ -11,6 +11,69 @@ if (typeof window !== "undefined") {
       isPageUnloading = false;
     }, 2000);
   });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    const msg = (
+      reason?.message ||
+      reason?.error_description ||
+      (typeof reason === "string" ? reason : "") ||
+      ""
+    ).toLowerCase();
+
+    if (
+      msg.includes("invalid refresh token") ||
+      msg.includes("refresh token not found") ||
+      msg.includes("refresh_token_not_found")
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado erro de refresh token expirado:", reason);
+      try {
+        window.localStorage.removeItem('crm-imob-session-v4');
+      } catch {}
+      return;
+    }
+
+    // Intercepta e silencia rejeições de eventos DOM puros (ex: WebSockets do Supabase pausado, imagens, etc.)
+    // que causam {"isTrusted": true} no coletor de erros do navegador
+    if (
+      reason instanceof Event ||
+      (reason && typeof reason === "object" && ("isTrusted" in reason || !("message" in reason)))
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado evento assíncrono não capturado:", reason);
+    }
+  });
+
+  window.addEventListener("error", (event) => {
+    const error = event.error || event.message;
+    const msg = (
+      error?.message ||
+      (typeof error === "string" ? error : "") ||
+      ""
+    ).toLowerCase();
+
+    if (
+      msg.includes("invalid refresh token") ||
+      msg.includes("refresh token not found") ||
+      msg.includes("refresh_token_not_found")
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado erro de refresh token em window.onerror:", error);
+      try {
+        window.localStorage.removeItem('crm-imob-session-v4');
+      } catch {}
+      return;
+    }
+
+    if (
+      event.error instanceof Event ||
+      (event.error && typeof event.error === "object" && "isTrusted" in event.error && !("message" in event.error))
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado erro de evento DOM não capturado:", event.error);
+    }
+  });
 }
 
 // Module-scoped globals to protect against React Strict Mode unmount/remount
@@ -20,10 +83,11 @@ let globalLastSyncTime = 0;
 const globalActiveSyncPromises: Record<string, Promise<any>> = {};
 
 import { useRouter, usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase, clearAuthSession } from "@/lib/supabase";
 import { toast } from "sonner";
 import { UserProfile, updateUserProfile, clearLocalCache } from "@/lib/db";
 import { User } from "@supabase/supabase-js";
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin } from "@/lib/constants";
 
 interface AuthContextType {
   user: User | null;
@@ -97,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("AuthProvider: App is online.");
       toast.success("Conexão restabelecida", { id: 'network-status' });
       // Force session refresh when coming back online
-      supabase.auth.getSession();
+      supabase.auth.getSession().catch((e) => console.warn("getSession on online error:", e?.message));
     };
 
     const handleOffline = () => {
@@ -134,9 +198,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
     };
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) console.warn("Initial auth getSession error:", error.message);
-      handleInitialSession(session);
+    supabase.auth.getSession().then(({ data, error }: any) => {
+      if (error) {
+        console.warn("Initial auth getSession error:", error.message);
+        const errStr = (error.message || '').toLowerCase();
+        if (
+          errStr.includes('invalid refresh token') ||
+          errStr.includes('refresh token not found') ||
+          errStr.includes('refresh_token_not_found')
+        ) {
+          clearAuthSession();
+          supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        }
+      }
+      handleInitialSession(data?.session || null);
+    }).catch((err: any) => {
+      console.warn("Initial auth getSession catch:", err?.message || err);
+      clearAuthSession();
+      handleInitialSession(null);
     });
 
     // Listen for auth changes
@@ -175,21 +254,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Keep-alive heartbeat for Supabase Realtime
-    // This helps prevent connection drops in proxy-heavy environments when idle
-    const heartbeatChannel = supabase.channel('realtime-heartbeat');
-    heartbeatChannel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log("AuthProvider: Realtime heartbeat channel subscribed.");
-      }
-    });
-
+    // Validação suave de sessão do usuário a cada 60s
     const heartbeatInterval = setInterval(async () => {
-      // Proactive session validation to keep connection "warm"
+      // Pula verificação se a aba estiver oculta para economizar requisições
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      // Proactive session validation
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("AuthProvider: Heartbeat session error:", error.message);
+          const errStr = (error.message || '').toLowerCase();
+          if (
+            errStr.includes('invalid refresh token') ||
+            errStr.includes('refresh token not found') ||
+            errStr.includes('refresh_token_not_found')
+          ) {
+            clearAuthSession();
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+            setUser(null);
+            setProfile(null);
+            return;
+          }
+        }
+
+        const session = data?.session;
         
-        // Se tínhamos um usuário mas agora a sessão sumiu, ou houve um erro crítico de sessão
+        // Se tínhamos um usuário mas agora a sessão sumiu
         if (user && !session) {
           console.warn("AuthProvider: Session lost during heartbeat. Logging out...");
           setUser(null);
@@ -200,28 +292,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session) {
           console.log("AuthProvider: Session validated via heartbeat.");
         }
-      } catch (err) {
-        console.warn("AuthProvider: Heartbeat session validation error:", err);
+      } catch (err: any) {
+        console.warn("AuthProvider: Heartbeat session validation error:", err?.message || err);
       }
-
-      if (heartbeatChannel.state === 'joined') {
-        heartbeatChannel.send({
-          type: 'broadcast',
-          event: 'heartbeat',
-          payload: { timestamp: new Date().toISOString() }
-        });
-      } else if (heartbeatChannel.state === 'errored' || heartbeatChannel.state === 'closed') {
-        console.log("AuthProvider: Heartbeat channel in bad state, retrying subscription...");
-        const state = heartbeatChannel.state as string;
-        if (state !== 'joining' && state !== 'joined') {
-          heartbeatChannel.subscribe();
-        }
-      }
-    }, 15000); 
+    }, 60000); 
 
     // Handle global session expiry events from apiFetch
     const handleSessionExpired = () => {
       console.warn("AuthProvider: Session expired event received.");
+      clearAuthSession();
       setUser(null);
       setProfile(null);
       toast.error("Sua sessão expirou. Por favor, faça login novamente.");
@@ -234,7 +313,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('app-session-expired', handleSessionExpired);
       subscription.unsubscribe();
-      supabase.removeChannel(heartbeatChannel);
       clearInterval(heartbeatInterval);
       clearTimeout(timeout);
     };
@@ -253,8 +331,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // Never block platform admin ggsalles@gmail.com
-      if (profile.email?.toLowerCase() === 'ggsalles@gmail.com') {
+      // Never block platform admin
+      if (isPlatformAdmin(profile.email)) {
         if (active) {
           setIsTenantBlocked(false);
           setBillingStatus('regular');
@@ -296,16 +374,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check immediately on profile change
     checkTenantBlock();
 
-    // Check periodically every 15 seconds for robust real-time block and to recover from failed transitional calls
+    // Check periodically every 90 seconds for robust real-time block and to recover from failed transitional calls
     intervalKey = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
       checkTenantBlock();
-    }, 15000);
+    }, 90000);
 
     return () => {
       active = false;
       clearInterval(intervalKey);
     };
-  }, [profile, pathname]);
+  }, [profile?.tenantId, profile?.email]);
 
   useEffect(() => {
     if (!user) {
@@ -334,7 +415,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isEnabled && elapsed >= timeoutMs) {
         console.warn(`AuthProvider: Recurso de inatividade detectado por ${minutes} minutos. Desconectando...`);
         
-        supabase.auth.signOut().then(() => {
+        supabase.auth.signOut({ scope: 'local' }).catch(() => {}).finally(() => {
+          clearAuthSession();
           setUser(null);
           setProfile(null);
           toast.warning(`Sua sessão expirou devido a ${minutes} minutos de inatividade. Por favor, entre novamente.`);
@@ -392,11 +474,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       displayName: user.user_metadata?.display_name || user.email?.split('@')[0] || "Usuário",
       email: user.email || "",
       photoURL: user.user_metadata?.avatar_url || "",
-      role: user.email === 'ggsalles@gmail.com' ? 'Admin' : 'Membro',
+      role: isPlatformAdmin(user.email) ? 'Admin' : 'Membro',
       userType: 'funcionário',
-      isAdmin: user.email === 'ggsalles@gmail.com',
-      tenantId: chosenTenantId || user.user_metadata?.tenant_id || "11111111-1111-1111-1111-111111111111", // Default/selected tenant
-      tenantIds: user.user_metadata?.tenant_ids || [chosenTenantId || user.user_metadata?.tenant_id || "11111111-1111-1111-1111-111111111111"]
+      isAdmin: isPlatformAdmin(user.email),
+      tenantId: chosenTenantId || user.user_metadata?.tenant_id || DEFAULT_TENANT_ID, // Default/selected tenant
+      tenantIds: user.user_metadata?.tenant_ids || [chosenTenantId || user.user_metadata?.tenant_id || DEFAULT_TENANT_ID]
     };
 
     if (typeof window !== 'undefined') {
@@ -417,9 +499,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (chosenTenantId) {
       fallbackProfile.tenantId = chosenTenantId;
       if (!fallbackProfile.tenantIds.includes(chosenTenantId)) {
-        fallbackProfile.tenantIds = [chosenTenantId, ...fallbackProfile.tenantIds.filter(id => id !== "11111111-1111-1111-1111-111111111111")];
+        fallbackProfile.tenantIds = [chosenTenantId, ...fallbackProfile.tenantIds.filter(id => id !== DEFAULT_TENANT_ID)];
       }
-    } else if (user.user_metadata?.tenant_id && fallbackProfile.tenantId === "11111111-1111-1111-1111-111111111111") {
+    } else if (user.user_metadata?.tenant_id && fallbackProfile.tenantId === DEFAULT_TENANT_ID) {
       // Se o user_metadata do Supabase Auth tiver o tenant correto e o fallbackProfile estiver com o padrão de segurança, prioritize o metadata do GoTrue Auth
       fallbackProfile.tenantId = user.user_metadata.tenant_id;
       fallbackProfile.tenantIds = user.user_metadata.tenant_ids || [user.user_metadata.tenant_id];
@@ -432,7 +514,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined" && isPageUnloading) return;
       // 1. Tentar primeiro via API Proxy (mais estável, roda server-side, passa imune a loops de RLS do cliente local)
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        const session = data?.session;
         const headers: Record<string, string> = {};
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -510,7 +593,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const finalTenantIds = tenantIds.length > 0 
         ? tenantIds 
-        : [profileData?.tenant_id || "11111111-1111-1111-1111-111111111111"];
+        : [profileData?.tenant_id || DEFAULT_TENANT_ID];
 
       if (profileData) {
         // Garantir que priorizamos o tenantId ativo do cache se aplicável
@@ -583,7 +666,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const updatedTenantIds = tenantIds.length > 0 
           ? tenantIds 
-          : [finalTenantId || "11111111-1111-1111-1111-111111111111"];
+          : [finalTenantId || DEFAULT_TENANT_ID];
 
         setProfile({
           id: newId,
@@ -599,11 +682,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // If no profile exists at all, check if user is allowed to create one (only ggsalles@gmail.com can auto-create, any other must be pre-registered)
-      if (user.email?.toLowerCase() !== 'ggsalles@gmail.com') {
+      // If no profile exists at all, check if user is allowed to create one (only platform admin can auto-create, any other must be pre-registered)
+      if (!isPlatformAdmin(user.email)) {
         console.warn("[Guardião Silencioso] Bloqueio de auto-criação de perfil para usuário não autorizado:", user.email);
         toast.error("Acesso restrito. Este é um sistema privado. Por favor, entre em contato com o administrador para solicitar permissão.");
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        clearAuthSession();
         setUser(null);
         setProfile(null);
         setLoading(false);
@@ -615,10 +699,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: user.id,
         display_name: user.user_metadata?.display_name || user.email?.split('@')[0],
         email: user.email?.toLowerCase(),
-        role: user.email === 'ggsalles@gmail.com' ? 'Admin' : 'Membro',
+        role: isPlatformAdmin(user.email) ? 'Admin' : 'Membro',
         user_type: 'funcionário',
-        is_admin: user.email === 'ggsalles@gmail.com',
-        tenant_id: chosenTenantId || user.user_metadata?.tenant_id || "11111111-1111-1111-1111-111111111111"
+        is_admin: isPlatformAdmin(user.email),
+        tenant_id: chosenTenantId || user.user_metadata?.tenant_id || DEFAULT_TENANT_ID
       };
 
       const { data: createdData, error: createError } = await supabase
@@ -643,8 +727,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: finalCheck.role,
             userType: finalCheck.user_type,
             isAdmin: finalCheck.is_admin,
-            tenantId: finalCheck.tenant_id || tenantIds[0] || "11111111-1111-1111-1111-111111111111",
-            tenantIds: tenantIds.length > 0 ? tenantIds : [finalCheck.tenant_id || "11111111-1111-1111-1111-111111111111"]
+            tenantId: finalCheck.tenant_id || tenantIds[0] || DEFAULT_TENANT_ID,
+            tenantIds: tenantIds.length > 0 ? tenantIds : [finalCheck.tenant_id || DEFAULT_TENANT_ID]
           });
         } else {
           console.warn("AuthProvider: Criando perfil local temporário devido a falha no banco.");
@@ -658,8 +742,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: createdData.role,
           userType: createdData.user_type,
           isAdmin: createdData.is_admin,
-          tenantId: createdData.tenant_id || tenantIds[0] || "11111111-1111-1111-1111-111111111111",
-          tenantIds: tenantIds.length > 0 ? tenantIds : [createdData.tenant_id || "11111111-1111-1111-1111-111111111111"]
+          tenantId: createdData.tenant_id || tenantIds[0] || DEFAULT_TENANT_ID,
+          tenantIds: tenantIds.length > 0 ? tenantIds : [createdData.tenant_id || DEFAULT_TENANT_ID]
         });
       } else {
         setProfile(fallbackProfile);
@@ -699,15 +783,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail !== 'ggsalles@gmail.com') {
+    if (!isPlatformAdmin(cleanEmail)) {
       let preRegisteredUser = null;
+      let isDbUnavailable = false;
       try {
         const response = await fetch(`/api/profiles?email=${encodeURIComponent(cleanEmail)}`);
         if (response.ok) {
           preRegisteredUser = await response.json();
+        } else if (response.status === 503 || response.status >= 500) {
+          isDbUnavailable = true;
         }
       } catch (err) {
         console.warn("Erro ao validar pré-registro por API:", err);
+        isDbUnavailable = true;
+      }
+
+      if (isDbUnavailable) {
+        throw new Error("Conexão com o banco de dados Supabase indisponível. Se o projeto estiver pausado por inatividade no plano free, reative-o no painel do Supabase ('Restore Project').");
       }
 
       if (!preRegisteredUser) {
@@ -724,6 +816,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error.message.includes('rate limit')) {
         throw new Error("Limite de tentativas excedido. Por favor, aguarde alguns minutos.");
       }
+      if (error.message.includes('Failed to fetch') || error.message.includes('timeout') || error.message.includes('503')) {
+        throw new Error("Não foi possível conectar ao banco de dados Supabase. Se o projeto estiver em pausa, reative-o no painel do Supabase ('Restore Project').");
+      }
       throw error;
     }
   };
@@ -731,7 +826,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resolveOrCreateTenant = async (email: string, companyName: string): Promise<string> => {
     const cleanEmail = email.trim().toLowerCase();
     const domain = cleanEmail.split("@")[1];
-    if (!domain) return "11111111-1111-1111-1111-111111111111";
+    if (!domain) return DEFAULT_TENANT_ID;
 
     const genericDomains = [
       "gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "live.com", 
@@ -751,7 +846,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       if (!targetName) {
-        return "11111111-1111-1111-1111-111111111111";
+        return DEFAULT_TENANT_ID;
       }
       targetSlug = targetName
         .toLowerCase()
@@ -789,19 +884,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("[resolveOrCreateTenant] Error resolving/creating tenant:", err);
     }
 
-    return "11111111-1111-1111-1111-111111111111";
+    return DEFAULT_TENANT_ID;
   };
 
   const register = async (email: string, password: string, name: string, companyName?: string) => {
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail !== 'ggsalles@gmail.com') {
-      throw new Error("Cadastro público suspenso. Apenas o e-mail administrativo principal (ggsalles@gmail.com) possui permissão para registrar novas contas.");
+    if (!isPlatformAdmin(cleanEmail)) {
+      throw new Error(`Cadastro público suspenso. Apenas o e-mail administrativo principal (${PLATFORM_ADMIN_EMAIL}) possui permissão para registrar novas contas.`);
     }
     if (password.length < 6) {
       throw new Error("A senha deve ter pelo menos 6 caracteres.");
     }
 
-    let resolvedTenantId = "11111111-1111-1111-1111-111111111111";
+    let resolvedTenantId = DEFAULT_TENANT_ID;
     try {
       resolvedTenantId = await resolveOrCreateTenant(cleanEmail, companyName || "");
     } catch (err) {
@@ -837,7 +932,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      console.warn("Erro ao deslogar:", e);
+    } finally {
+      clearAuthSession();
+      setUser(null);
+      setProfile(null);
+    }
   };
 
   const changeTenant = async (tenantId: string) => {
@@ -930,13 +1033,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-4 max-w-sm mx-auto">
               <a
-                href={`mailto:ggsalles@gmail.com?subject=Ativacao%20de%20Acesso%20-%20Imobiliaria%20${encodeURIComponent(blockedTenantName)}`}
+                href={`mailto:${PLATFORM_ADMIN_EMAIL}?subject=Ativacao%20de%20Acesso%20-%20Imobiliaria%20${encodeURIComponent(blockedTenantName)}`}
                 className="w-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-all text-sm"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                Contatar Financeiro (ggsalles)
+                Contatar Suporte Financeiro
               </a>
 
               {/* Multi-tenant switching list */}
@@ -1020,7 +1123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               </button>
 
               <a
-                href="mailto:ggsalles@gmail.com?subject=Segunda%20Via%20CRM%20SalesScore"
+                href={`mailto:${PLATFORM_ADMIN_EMAIL}?subject=Segunda%20Via%20CRM%20SalesScore`}
                 className="block text-[11px] text-amber-400 hover:text-amber-300 font-bold transition-colors uppercase tracking-wider py-1"
               >
                 Solicitar link do Boleto / PIX

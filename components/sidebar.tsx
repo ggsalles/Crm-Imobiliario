@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
+import { isPlatformAdmin, DEFAULT_TENANT_NAME } from "@/lib/constants";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { subscribeToTotalUnreadMessages, getTenants, updateUserProfile } from "@/lib/db";
@@ -147,10 +148,10 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
       try {
         const allTenants = await getTenants();
         if (profile) {
-          const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || profile.email?.toLowerCase() === 'ggsalles@gmail.com';
+          const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || isPlatformAdmin(profile.email);
           const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
           const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
-          const active = allTenants.find((t: any) => t.id === profile.tenantId) || { id: profile.tenantId, name: "SalesScore" };
+          const active = allTenants.find((t: any) => t.id === profile.tenantId) || { id: profile.tenantId, name: DEFAULT_TENANT_NAME };
           
           setTenants(filtered.length > 0 ? filtered : [active]);
           setActiveTenant(active);
@@ -301,7 +302,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           Configurações
         </Link>
 
-        {profile?.email?.toLowerCase() === 'ggsalles@gmail.com' && (
+        {isPlatformAdmin(profile?.email) && (
           <Link
             href="/admin/billing"
             onClick={() => setIsMobileMenuOpen(false)}
@@ -311,7 +312,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             )}
           >
             <CreditCard className={cn("w-5 h-5 text-indigo-400 group-hover:text-indigo-300")} />
-            Financeiro SaaS (ggsalles)
+            Administração SaaS
           </Link>
         )}
       </nav>

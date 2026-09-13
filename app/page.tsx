@@ -119,6 +119,7 @@ function DashboardContent() {
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState<'weekly' | 'monthly'>('monthly');
 
   useEffect(() => {
     // Pequeno delay para garantir que containers Recharts tenham largura calculada
@@ -460,23 +461,53 @@ function DashboardContent() {
   // Properties Available
   const activeProperties = properties.filter(p => p.status === 'disponível').length;
 
-  // Chart Data (Last 6 months)
-  const chartData = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    const mStr = format(d, "yyyy-MM");
-    const mLabel = format(d, "MMM").toUpperCase();
-    
-    const monthlyActual = deals
-      .filter(deal => deal.stage === 'closed' && deal.updatedAt?.startsWith(mStr))
-      .reduce((acc, deal) => acc + deal.value, 0);
-    
-    // Projected could be from Goal
-    const monthGoals = goals.filter(g => g.month === mStr);
-    const monthGoal = monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
-    const monthlyProjected = monthGoal?.stageGoals?.['closed'] || 0;
+  // Chart Data (Last 6 months/weeks)
+  const chartData = chartPeriod === 'monthly'
+    ? Array.from({ length: 6 }).map((_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        const mStr = format(d, "yyyy-MM");
+        const mLabel = format(d, "MMM", { locale: ptBR }).replace('.', '').toUpperCase();
+        
+        const monthlyActual = deals
+          .filter(deal => deal.stage === 'closed' && deal.updatedAt?.startsWith(mStr))
+          .reduce((acc, deal) => acc + deal.value, 0);
+        
+        // Projected could be from Goal
+        const monthGoals = goals.filter(g => g.month === mStr);
+        const monthGoal = monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
+        const monthlyProjected = monthGoal?.stageGoals?.['closed'] || 0;
 
-    return { name: mLabel, actual: monthlyActual, projected: monthlyProjected };
-  });
+        return { name: mLabel, actual: monthlyActual, projected: monthlyProjected };
+      })
+    : Array.from({ length: 6 }).map((_, i) => {
+        // Weekly view: Last 6 calendar weeks (Monday to Sunday)
+        const currentDay = now.getDay(); // 0 Sunday, 1 Monday, etc.
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0, 0);
+
+        // Go back (5 - i) weeks
+        const weekStart = new Date(startOfCurrentWeek.getTime() - (5 - i) * 7 * 24 * 60 * 60 * 1000);
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000 + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000);
+        
+        const weekLabel = `Sem ${format(weekStart, "dd/MM")}`;
+
+        const weeklyActual = deals
+          .filter(deal => {
+            if (deal.stage !== 'closed' || !deal.updatedAt) return false;
+            const dealDate = new Date(deal.updatedAt);
+            return dealDate >= weekStart && dealDate <= weekEnd;
+          })
+          .reduce((acc, deal) => acc + deal.value, 0);
+
+        // Weekly projected is roughly monthly goal divided by 4
+        const mStr = format(weekStart, "yyyy-MM");
+        const monthGoals = goals.filter(g => g.month === mStr);
+        const monthGoal = monthGoals.find(g => g.ownerId === user?.id) || monthGoals[0];
+        const monthlyProjected = monthGoal?.stageGoals?.['closed'] || 0;
+        const weeklyProjected = monthlyProjected / 4;
+
+        return { name: weekLabel, actual: weeklyActual, projected: Math.round(weeklyProjected) };
+      });
 
   // Recent Deals (limit 4)
   const displayRecentDeals = [...deals]
@@ -491,7 +522,7 @@ function DashboardContent() {
         value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(d.value) || 0),
         stage: stage?.title || d.stage,
         color: stage?.color || 'slate',
-        date: d.updatedAt ? format(new Date(d.updatedAt), "MMM dd, yyyy") : '-',
+        date: d.updatedAt ? format(new Date(d.updatedAt), "dd/MM/yyyy") : '-',
         probability: customProbabilities[d.stage] ?? (d.stage === 'closed' ? 100 : (STAGES.findIndex(s => s.id === d.stage) + 1) * 20)
       };
     });
@@ -664,8 +695,28 @@ function DashboardContent() {
                         <p className="text-xs md:text-sm text-muted-foreground mt-1 md:mt-2">Vendas e previsões atuais.</p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button className="px-3 md:px-4 py-2 bg-muted text-[10px] font-bold uppercase tracking-widest text-muted-foreground rounded-xl hover:bg-muted/80 transition-colors">Semanal</button>
-                        <button className="px-3 md:px-4 py-2 bg-primary/10 text-[10px] font-bold uppercase tracking-widest text-primary rounded-xl">Mensal</button>
+                        <button 
+                          onClick={() => setChartPeriod('weekly')}
+                          className={cn(
+                            "px-3 md:px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors",
+                            chartPeriod === 'weekly' 
+                              ? "bg-primary/10 text-primary" 
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          )}
+                        >
+                          Semanal
+                        </button>
+                        <button 
+                          onClick={() => setChartPeriod('monthly')}
+                          className={cn(
+                            "px-3 md:px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors",
+                            chartPeriod === 'monthly' 
+                              ? "bg-primary/10 text-primary" 
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          )}
+                        >
+                          Mensal
+                        </button>
                       </div>
                     </div>
                     
@@ -1319,7 +1370,7 @@ function ReportsView({ deals, contacts, progressPercentage }: { deals: Deal[], c
     const months = Array.from({ length: 6 }).map((_, i) => {
       const d = subMonths(new Date(), 5 - i);
       return {
-        name: format(d, "MMM", { locale: ptBR }).replace(/^./, (str) => str.toUpperCase()),
+        name: format(d, "MMM", { locale: ptBR }).replace('.', '').replace(/^./, (str) => str.toUpperCase()),
         monthKey: format(d, "yyyy-MM"),
         revenue: 0,
         deals: 0

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getBlockedTenantIds, setTenantBlocked, getSaaSConfig, getTenantBillingStatus } from '@/lib/billing';
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,12 +49,12 @@ export async function GET(req: NextRequest) {
       if (!data) return NextResponse.json(null);
 
       const billingResult = getTenantBillingStatus(config, data.id);
-      const isBlocked = data.id !== '11111111-1111-1111-1111-111111111111' && 
+      const isBlocked = data.id !== DEFAULT_TENANT_ID && 
                         (blockedIds.includes(data.id) || billingResult.status === 'bloqueado');
 
       return NextResponse.json({
         id: data.id,
-        name: data.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : data.name,
+        name: data.id === DEFAULT_TENANT_ID ? DEFAULT_TENANT_NAME : data.name,
         slug: data.slug,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
@@ -77,16 +78,16 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
     
-    // Garantir que o tenant padrão "SalesScore" está sempre presente na lista para multi-inquilinato correto
+    // Garantir que o tenant padrão está sempre presente na lista para multi-inquilinato correto
     // E filtrar o tenant de configuração interna para não vazar na listagem
     const rawTenants = tenants ? [...tenants] : [];
     const finalTenants = rawTenants.filter((t: any) => t.id !== '99999999-9999-9999-9999-999999999999');
     
-    const hasDefault = finalTenants.some((t: any) => t.id === '11111111-1111-1111-1111-111111111111');
+    const hasDefault = finalTenants.some((t: any) => t.id === DEFAULT_TENANT_ID);
     if (!hasDefault) {
       finalTenants.unshift({
-        id: '11111111-1111-1111-1111-111111111111',
-        name: 'SalesScore',
+        id: DEFAULT_TENANT_ID,
+        name: DEFAULT_TENANT_NAME,
         slug: 'default',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -95,12 +96,12 @@ export async function GET(req: NextRequest) {
 
     const items = finalTenants.map((item: any) => {
       const billingResult = getTenantBillingStatus(config, item.id);
-      const isBlocked = item.id !== '11111111-1111-1111-1111-111111111111' && 
+      const isBlocked = item.id !== DEFAULT_TENANT_ID && 
                         (blockedIds.includes(item.id) || billingResult.status === 'bloqueado');
 
       return {
         id: item.id,
-        name: item.id === '11111111-1111-1111-1111-111111111111' ? 'SalesScore' : item.name,
+        name: item.id === DEFAULT_TENANT_ID ? DEFAULT_TENANT_NAME : item.name,
         slug: item.slug,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
@@ -201,7 +202,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Protection to prevent deleting the default tenant
-    if (id === '11111111-1111-1111-1111-111111111111') {
+    if (id === DEFAULT_TENANT_ID) {
       return NextResponse.json({ error: "The default tenant cannot be deleted." }, { status: 400 });
     }
 

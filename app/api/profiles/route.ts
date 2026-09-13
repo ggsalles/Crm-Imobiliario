@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_TENANT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -208,7 +209,7 @@ export async function GET(req: NextRequest) {
 
       if (!data) return NextResponse.json(null);
 
-      let tenantIds = [data.tenant_id || "11111111-1111-1111-1111-111111111111"];
+      let tenantIds = [data.tenant_id || DEFAULT_TENANT_ID];
       try {
         let assoc = null;
         let assocError = null;
@@ -328,7 +329,7 @@ export async function GET(req: NextRequest) {
       userType: item.user_type,
       isAdmin: item.is_admin,
       tenantId: item.tenant_id,
-      tenantIds: associationsMap[item.id] || [item.tenant_id || "11111111-1111-1111-1111-111111111111"]
+      tenantIds: associationsMap[item.id] || [item.tenant_id || DEFAULT_TENANT_ID]
     }));
 
     return NextResponse.json(items);
@@ -364,7 +365,7 @@ export async function POST(req: NextRequest) {
       if (!existingUser.display_name && profileData.display_name) {
         updatePayload.display_name = profileData.display_name;
       }
-      if ((existingUser.tenant_id === '11111111-1111-1111-1111-111111111111' || !existingUser.tenant_id) && profileData.tenant_id && profileData.tenant_id !== '11111111-1111-1111-1111-111111111111') {
+      if ((existingUser.tenant_id === DEFAULT_TENANT_ID || !existingUser.tenant_id) && profileData.tenant_id && profileData.tenant_id !== DEFAULT_TENANT_ID) {
         updatePayload.tenant_id = profileData.tenant_id;
       }
 
@@ -401,7 +402,7 @@ export async function POST(req: NextRequest) {
 
     const resolvedTenantIds = Array.isArray(tenantIds) && tenantIds.length > 0
       ? tenantIds
-      : [profileData.tenant_id || "11111111-1111-1111-1111-111111111111"];
+      : [profileData.tenant_id || DEFAULT_TENANT_ID];
 
     try {
       const associationRows = resolvedTenantIds.map((tid: string) => ({

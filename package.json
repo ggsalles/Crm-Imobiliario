@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_ENV=production next build && rm -rf dist && cp -r .next dist && cp .next/server/app/index.html dist/index.html 2>/dev/null || true",
     "start": "next start",
     "lint": "next lint"
   },
