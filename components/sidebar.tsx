@@ -191,7 +191,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   return (
     <div className="w-64 bg-card h-full flex flex-col text-muted-foreground transition-colors duration-500">
       <div className="p-6 md:p-8 flex items-center justify-between md:block">
-        <Link href="/" className="group">
+        <Link href="/" prefetch={true} className="group">
           <h1 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">SalesScore</h1>
           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Enterprise Management</p>
         </Link>
@@ -268,6 +268,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               onClick={() => setIsMobileMenuOpen(false)}
               className={cn(
                 "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group",
@@ -292,6 +293,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         
         <Link
           href="/settings"
+          prefetch={true}
           onClick={() => setIsMobileMenuOpen(false)}
           className={cn(
             "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-2",
@@ -305,6 +307,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         {isPlatformAdmin(profile?.email) && (
           <Link
             href="/admin/billing"
+            prefetch={true}
             onClick={() => setIsMobileMenuOpen(false)}
             className={cn(
               "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-1 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",

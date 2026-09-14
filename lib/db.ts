@@ -1,10 +1,24 @@
 import { supabase, clearAuthSession } from './supabase';
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME } from './constants';
 
+let cachedSession: any = null;
+let cachedSessionTime = 0;
+const SESSION_CACHE_TTL = 4000; // 4 seconds in-memory cache
+
+export function invalidateSessionCache() {
+  cachedSession = null;
+  cachedSessionTime = 0;
+}
+
 export async function getSafeSession() {
+  const now = Date.now();
+  if (cachedSession && now - cachedSessionTime < SESSION_CACHE_TTL) {
+    return cachedSession;
+  }
   try {
     const { data, error } = await supabase.auth.getSession();
     if (error) {
+      cachedSession = null;
       const errMsg = (error.message || '').toLowerCase();
       if (
         errMsg.includes('invalid refresh token') ||
@@ -18,8 +32,11 @@ export async function getSafeSession() {
       }
       return null;
     }
-    return data?.session || null;
+    cachedSession = data?.session || null;
+    cachedSessionTime = now;
+    return cachedSession;
   } catch (err: any) {
+    cachedSession = null;
     const errMsg = (err?.message || (typeof err === 'string' ? err : '') || '').toLowerCase();
     if (
       errMsg.includes('invalid refresh token') ||
@@ -1620,12 +1637,20 @@ export async function markAsRead(conversationId: string) {
   }
 }
 
+let cachedTotalUnread: number | null = null;
+
 export function subscribeToTotalUnreadMessages(callback: (count: number) => void) {
+  // If we already have a cached unread count in memory, notify callback immediately to avoid UI delay/flicker
+  if (cachedTotalUnread !== null) {
+    callback(cachedTotalUnread);
+  }
+
   const fetchTotalUnread = async () => {
     try {
       const session = await getSafeSession();
       const user = session?.user;
       if (!user) {
+        cachedTotalUnread = 0;
         callback(0);
         return;
       }
@@ -1635,6 +1660,7 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
         const total = data.reduce((acc, conv) => {
           return acc + (conv.unread_count?.[user.id] || 0);
         }, 0);
+        cachedTotalUnread = total;
         callback(total);
       }
     } catch (err) {
@@ -1833,19 +1859,35 @@ export async function findOrCreateConversation(participantId: string, category: 
 // TENANT MANAGEMENT DB HELPERS
 // ==========================================
 
-export async function getTenants() {
+let cachedTenants: Tenant[] | null = null;
+let cachedTenantsTime = 0;
+const TENANTS_CACHE_TTL = 30000; // 30 seconds
+
+export function invalidateTenantsCache() {
+  cachedTenants = null;
+  cachedTenantsTime = 0;
+}
+
+export async function getTenants(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedTenants && (now - cachedTenantsTime < TENANTS_CACHE_TTL)) {
+    return cachedTenants;
+  }
   try {
     const data = await apiFetch('/api/tenants');
     const tenantsList = (data || []) as Tenant[];
-    return tenantsList.map((t: any) => {
+    const result = tenantsList.map((t: any) => {
       if (t && t.id === DEFAULT_TENANT_ID) {
         return { ...t, name: DEFAULT_TENANT_NAME };
       }
       return t;
     });
+    cachedTenants = result;
+    cachedTenantsTime = now;
+    return result;
   } catch (err) {
     console.error("[lib/db] getTenants FATAL:", err);
-    return [];
+    return cachedTenants || [];
   }
 }
 
@@ -1855,6 +1897,7 @@ export async function createTenant(data: { name: string; slug?: string }) {
       method: 'POST',
       body: JSON.stringify(data)
     });
+    invalidateTenantsCache();
     forceDataResync();
     return result as Tenant;
   } catch (err) {
@@ -1869,6 +1912,7 @@ export async function updateTenant(id: string, data: Partial<Tenant>) {
       method: 'PATCH',
       body: JSON.stringify(data)
     });
+    invalidateTenantsCache();
     forceDataResync();
     return true;
   } catch (err) {
@@ -1882,6 +1926,7 @@ export async function deleteTenant(id: string) {
     await apiFetch(`/api/tenants?id=${id}`, {
       method: 'DELETE'
     });
+    invalidateTenantsCache();
     forceDataResync();
     return true;
   } catch (err) {

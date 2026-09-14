@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { isPlatformAdmin } from "@/lib/constants";
+import { getTenants } from "@/lib/db";
 
 export default function LoginPage() {
   const { user, profile, login, register, resetPassword, loading: authLoading, changeTenant, logout } = useAuth();
@@ -66,66 +67,51 @@ export default function LoginPage() {
     }
   };
 
-  // 1. Fetch available tenants for multi-tenant users on login success
+  // 1. Check and handle tenant selection for multi-tenant users on login success
   useEffect(() => {
     async function checkAndLoadUserTenants() {
       if (user && profile && !authLoading && !hasConfirmedTenant) {
+        const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || isPlatformAdmin(profile.email);
+        const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
+
+        // Fast Path: Single tenant users bypass network waterfalls and navigate immediately
+        if (!isAdmin && userTenantIds.length <= 1) {
+          setHasConfirmedTenant(true);
+          router.push("/");
+          return;
+        }
+
         try {
           setIsLoadingUserTenants(true);
-
-          // Get fresh session token to satisfy RLS rules
-          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-          const session = data?.session;
-          const headers: Record<string, string> = {};
-          if (session?.access_token) {
-            headers["Authorization"] = `Bearer ${session.access_token}`;
-          }
-
-          // Fetch the REAL database-level profile to guarantee authentic role & tenantIds
-          const profileRes = await fetch(`/api/profiles?id=${user.id}`, { headers });
-          let targetProfile = profile;
-          if (profileRes.ok) {
-            const apiProfile = await profileRes.json();
-            if (apiProfile && apiProfile.id) {
-              targetProfile = apiProfile;
-            }
-          }
-
-          // Fetch all active tenants
-          const res = await fetch("/api/tenants", { headers });
-          if (res.ok) {
-            const allTenants = await res.json();
-            if (Array.isArray(allTenants)) {
-              const isAdmin = targetProfile.role?.toLowerCase() === 'admin' || targetProfile.isAdmin || isPlatformAdmin(targetProfile.email);
-              const userTenantIds = Array.from(new Set([...(targetProfile.tenantIds || []), targetProfile.tenantId].filter(Boolean)));
-              const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
-              
-              if (filtered.length > 1) {
-                // User owns or acts for multiple tenants, show modal selector
-                setUserTenants(filtered);
-                // Pre-select current profile's tenant
-                setSelectedTenantId(targetProfile.tenantId || filtered[0]?.id || null);
-                setShowTenantModal(true);
-              } else {
-                // Single tenant user, proceed directly
-                setHasConfirmedTenant(true);
-              }
+          const allTenants = await getTenants();
+          if (Array.isArray(allTenants)) {
+            const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
+            
+            if (filtered.length > 1) {
+              // User owns or acts for multiple tenants, show modal selector
+              setUserTenants(filtered);
+              setSelectedTenantId(profile.tenantId || filtered[0]?.id || null);
+              setShowTenantModal(true);
             } else {
+              // Single tenant user, proceed directly
               setHasConfirmedTenant(true);
+              router.push("/");
             }
           } else {
             setHasConfirmedTenant(true);
+            router.push("/");
           }
         } catch (err) {
           console.error("Erro ao carregar imobiliárias do usuário:", err);
           setHasConfirmedTenant(true); // Fallback to avoid deadlocks
+          router.push("/");
         } finally {
           setIsLoadingUserTenants(false);
         }
       }
     }
     checkAndLoadUserTenants();
-  }, [user, profile, authLoading, hasConfirmedTenant]);
+  }, [user, profile, authLoading, hasConfirmedTenant, router]);
 
   // 2. Navigation redirect when tenant selection is secure and completed
   useEffect(() => {
@@ -148,9 +134,8 @@ export default function LoginPage() {
       if (selectedTenantId !== profile?.tenantId) {
         await changeTenant(selectedTenantId);
       }
-      // O perfil agora está atualizado com o tenantId correto. Definimos a confirmação
-      // para disparar a navegação client-side limpa para "/" através do useEffect.
       setHasConfirmedTenant(true);
+      router.push("/");
     } catch (err) {
       console.error("Error switching tenant during login:", err);
       toast.error("Erro ao selecionar imobiliária.");
@@ -167,6 +152,7 @@ export default function LoginPage() {
     if (mode === "login") {
       setIsLoggingIn(true);
       try {
+        router.prefetch("/");
         await login(cleanEmail, password);
       } catch (error: any) {
         toast.error(error.message || "Erro ao fazer login");

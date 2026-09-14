@@ -556,6 +556,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (typeof window !== 'undefined') {
               localStorage.removeItem('login-chosen-tenant-id');
               localStorage.setItem(`active-tenant-id:${user.id}`, apiProfile.tenantId);
+              try {
+                localStorage.setItem(`local-profile:${user.id}`, JSON.stringify(apiProfile));
+              } catch {}
             }
 
             setProfile(apiProfile);
@@ -783,36 +786,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!isPlatformAdmin(cleanEmail)) {
-      let preRegisteredUser = null;
-      let isDbUnavailable = false;
-      try {
-        const response = await fetch(`/api/profiles?email=${encodeURIComponent(cleanEmail)}`);
-        if (response.ok) {
-          preRegisteredUser = await response.json();
-        } else if (response.status === 503 || response.status >= 500) {
-          isDbUnavailable = true;
-        }
-      } catch (err) {
-        console.warn("Erro ao validar pré-registro por API:", err);
-        isDbUnavailable = true;
-      }
 
-      if (isDbUnavailable) {
-        throw new Error("Conexão com o banco de dados Supabase indisponível. Se o projeto estiver pausado por inatividade no plano free, reative-o no painel do Supabase ('Restore Project').");
-      }
-
-      if (!preRegisteredUser) {
-        throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
-      }
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({
+    // Parallelize Supabase signIn and Pre-registration check to cut login latency in half
+    const authPromise = supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,
     });
 
-    if (error) {
+    const preRegPromise = isPlatformAdmin(cleanEmail)
+      ? Promise.resolve({ ok: true, preRegisteredUser: { id: 'admin' }, isDbUnavailable: false })
+      : fetch(`/api/profiles?email=${encodeURIComponent(cleanEmail)}`)
+          .then(async (response) => {
+            if (response.ok) {
+              const data = await response.json();
+              return { ok: !!data, preRegisteredUser: data, isDbUnavailable: false };
+            }
+            if (response.status === 503 || response.status >= 500) {
+              return { ok: false, preRegisteredUser: null, isDbUnavailable: true };
+            }
+            return { ok: false, preRegisteredUser: null, isDbUnavailable: false };
+          })
+          .catch((err) => {
+            console.warn("Erro ao validar pré-registro por API:", err);
+            return { ok: false, preRegisteredUser: null, isDbUnavailable: true };
+          });
+
+    const [authResult, preRegResult] = await Promise.all([authPromise, preRegPromise]);
+
+    if (authResult.error) {
+      const error = authResult.error;
       if (error.message.includes('rate limit')) {
         throw new Error("Limite de tentativas excedido. Por favor, aguarde alguns minutos.");
       }
@@ -820,6 +822,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Não foi possível conectar ao banco de dados Supabase. Se o projeto estiver em pausa, reative-o no painel do Supabase ('Restore Project').");
       }
       throw error;
+    }
+
+    if (preRegResult.isDbUnavailable) {
+      console.warn("[AuthProvider] DB validation returned unavailable during login.");
+    } else if (!preRegResult.ok) {
+      // Revert session if not pre-registered
+      await supabase.auth.signOut({ scope: 'local' });
+      throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
     }
   };
 
