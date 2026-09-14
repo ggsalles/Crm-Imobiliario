@@ -1380,78 +1380,86 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
           </div>
         </div>
 
-        <div className="mt-auto pt-5 border-t border-border flex items-center justify-between gap-2">
-          <div className="min-w-0 pr-1">
-            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Valor Venda</p>
-            <p className="text-base sm:text-lg font-black text-foreground tracking-tight whitespace-nowrap">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
-            </p>
+        <div className="mt-auto pt-4 border-t border-border flex flex-col gap-3">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Valor Venda</p>
+              <p className="text-lg sm:text-xl font-black text-foreground tracking-tight">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }} 
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all shrink-0"
-              title="Editar imóvel"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log(`[PropertyCard] Clique no botão lixeira. Estado confirmDelete: ${confirmDelete}`);
-                if (confirmDelete) {
-                  console.log("[PropertyCard] Segunda confirmação recebida. Chamando onDelete...");
-                  onDelete();
-                  setConfirmDelete(false);
-                } else {
-                  console.log("[PropertyCard] Primeira confirmação. Ativando estado de confirmação.");
-                  setConfirmDelete(true);
-                }
-              }} 
-              className={cn(
-                "w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer z-20 relative border shrink-0",
-                confirmDelete 
-                  ? "bg-red-500 text-white border-red-600 scale-105 shadow-lg shadow-red-500/20" 
-                  : "bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
-              )}
-              title={confirmDelete ? "Clique novamente para confirmar" : "Excluir imóvel"}
-            >
-              {confirmDelete ? (
-                <Trash2 className="w-4 h-4 animate-pulse pointer-events-none" />
-              ) : (
-                <Trash2 className="w-4 h-4 pointer-events-none" />
-              )}
-            </button>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onShare();
-              }}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer shrink-0"
-              title="Gerar ficha para WhatsApp"
-            >
-              <Share2 className="w-4 h-4 pointer-events-none" />
-            </button>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onShowMap();
-              }}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm cursor-pointer shrink-0"
-              title="Visualizar mapa"
-            >
-              <MapPin className="w-4 h-4 pointer-events-none" />
-            </button>
+
+          <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/40">
+            <div className="flex items-center gap-1.5">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }} 
+                className="w-9 h-9 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
+                title="Editar imóvel"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log(`[PropertyCard] Clique no botão lixeira. Estado confirmDelete: ${confirmDelete}`);
+                  if (confirmDelete) {
+                    console.log("[PropertyCard] Segunda confirmação recebida. Chamando onDelete...");
+                    onDelete();
+                    setConfirmDelete(false);
+                  } else {
+                    console.log("[PropertyCard] Primeira confirmação. Ativando estado de confirmação.");
+                    setConfirmDelete(true);
+                  }
+                }} 
+                className={cn(
+                  "w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer z-20 relative border",
+                  confirmDelete 
+                    ? "bg-red-500 text-white border-red-600 scale-105 shadow-lg shadow-red-500/20" 
+                    : "bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
+                )}
+                title={confirmDelete ? "Clique novamente para confirmar" : "Excluir imóvel"}
+              >
+                {confirmDelete ? (
+                  <Trash2 className="w-4 h-4 animate-pulse pointer-events-none" />
+                ) : (
+                  <Trash2 className="w-4 h-4 pointer-events-none" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShare();
+                }}
+                className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer"
+                title="Gerar ficha para WhatsApp"
+              >
+                <Share2 className="w-4 h-4 pointer-events-none" />
+              </button>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onShowMap();
+                }}
+                className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm cursor-pointer"
+                title="Visualizar mapa"
+              >
+                <MapPin className="w-4 h-4 pointer-events-none" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
