@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   ChevronDown,
   CreditCard,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -48,6 +50,30 @@ export function Sidebar() {
   const pathname = usePathname();
   const { profile, logout, changeTenant } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sidebar-collapsed");
+      if (saved !== null) {
+        setIsCollapsed(saved === "true");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   return (
     <>
@@ -62,14 +88,19 @@ export function Sidebar() {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-card h-screen sticky top-0 shrink-0 border-r border-border z-[10]">
-        <Suspense fallback={<div className="w-64 bg-card h-full" />}>
+      <aside className={cn(
+        "hidden md:flex bg-card h-screen sticky top-0 shrink-0 border-r border-border z-[10] transition-all duration-300",
+        isCollapsed ? "w-16" : "w-52 lg:w-56"
+      )}>
+        <Suspense fallback={<div className={isCollapsed ? "w-16 bg-card h-full" : "w-52 lg:w-56 bg-card h-full"} />}>
           <SidebarContent 
             pathname={pathname} 
             setIsMobileMenuOpen={setIsMobileMenuOpen} 
             logout={logout}
             profile={profile}
             changeTenant={changeTenant}
+            isCollapsed={isCollapsed}
+            toggleCollapse={toggleCollapse}
           />
         </Suspense>
       </aside>
@@ -109,7 +140,7 @@ export function Sidebar() {
   );
 }
 
-function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, changeTenant }: any) {
+function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, changeTenant, isCollapsed = false, toggleCollapse }: any) {
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab');
   const router = useRouter();
@@ -189,65 +220,103 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   };
 
   return (
-    <div className="w-64 bg-card h-full flex flex-col text-muted-foreground transition-colors duration-500">
-      <div className="p-6 md:p-8 flex items-center justify-between md:block">
-        <Link href="/" prefetch={true} className="group">
-          <h1 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">SalesScore</h1>
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Enterprise Management</p>
-        </Link>
-        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-2 text-muted-foreground hover:text-foreground">
-          <X className="w-6 h-6" />
-        </button>
+    <div className={cn(
+      "bg-card h-full flex flex-col text-muted-foreground transition-all duration-300",
+      isCollapsed ? "w-16" : "w-52 lg:w-56"
+    )}>
+      <div className={cn(
+        "p-3 md:px-3.5 md:py-2.5 flex items-center border-b border-border/40",
+        isCollapsed ? "justify-center" : "justify-between"
+      )}>
+        {!isCollapsed ? (
+          <>
+            <Link href="/" prefetch={true} className="group min-w-0">
+              <h1 className="text-base font-bold text-foreground tracking-tight group-hover:text-primary transition-colors truncate">SalesScore</h1>
+              <p className="text-[8.5px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5 truncate">Enterprise</p>
+            </Link>
+            <div className="flex items-center gap-0.5">
+              {toggleCollapse && (
+                <button 
+                  onClick={toggleCollapse} 
+                  className="hidden md:flex p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-all"
+                  title="Recolher menu lateral"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-1.5 text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-1.5 py-0.5">
+            <Link href="/" prefetch={true} className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center font-black text-xs text-primary shadow-sm hover:bg-primary hover:text-white transition-all" title="SalesScore">
+              SS
+            </Link>
+            {toggleCollapse && (
+              <button 
+                onClick={toggleCollapse} 
+                className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-all"
+                title="Expandir menu lateral"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tenant Indicator (Static Display Only) */}
       {profile && (
-        <div className="px-4 mb-4 select-none relative z-50">
-          <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 px-1 flex justify-between items-center">
-            <span>Imobiliária Ativa</span>
-          </div>
-          
-          <div
-            className="w-full flex items-center gap-3 px-3.5 py-3 bg-[#1e293b]/30 border border-slate-800/80 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none"
-          >
-            {/* Elegant glowing background highlight */}
-            <div className="absolute top-0 right-0 w-20 h-20 bg-primary/5 rounded-full blur-xl pointer-events-none" />
-            
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20 shadow-sm relative z-10">
-              {activeTenant ? (
-                activeTenant.name?.[0]?.toUpperCase() || "I"
-              ) : (
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-              )}
+        <div className="px-2 mb-1 select-none relative z-50">
+          {!isCollapsed ? (
+            <>
+              <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5 px-1 flex justify-between items-center">
+                <span>Imobiliária</span>
+              </div>
+              
+              <div
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-[#1e293b]/30 border border-slate-800/80 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none"
+                title={activeTenant?.name || "Imobiliária Ativa"}
+              >
+                <div className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20 shadow-sm relative z-10">
+                  {activeTenant ? (
+                    activeTenant.name?.[0]?.toUpperCase() || "I"
+                  ) : (
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+                  )}
+                </div>
+                
+                <div className="min-w-0 flex-1 relative z-10">
+                  <span className="text-xs font-bold text-foreground truncate block select-none">
+                    {activeTenant?.name || "Carregando..."}
+                  </span>
+                  <span className="text-[7.5px] text-muted-foreground/60 block uppercase font-bold tracking-wider select-none font-mono">
+                    Autorizado
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div 
+              className="w-8 h-8 mx-auto rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20 shadow-sm cursor-default"
+              title={`Imobiliária Ativa: ${activeTenant?.name || ''}`}
+            >
+              {activeTenant ? activeTenant.name?.[0]?.toUpperCase() || "I" : "..."}
             </div>
-            
-            <div className="min-w-0 flex-1 relative z-10">
-              {activeTenant ? (
-                <span className="text-xs font-bold text-foreground truncate block select-none">
-                  {activeTenant.name}
-                </span>
-              ) : (
-                <span className="text-xs font-medium text-muted-foreground truncate block animate-pulse">
-                  Carregando...
-                </span>
-              )}
-              <span className="text-[9px] text-muted-foreground/60 block uppercase font-bold tracking-wider mt-0.5 select-none font-mono">
-                Acesso Autorizado
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {billingStatus === 'aviso_sutil' && (
-        <div className="mx-4 mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-lg pointer-events-none" />
-          <span className="text-[9px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
+      {billingStatus === 'aviso_sutil' && !isCollapsed && (
+        <div className="mx-2 mb-1.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
+          <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            Pendência Financeira
+            Pendência
           </span>
-          <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed font-semibold">
-            Identificamos um atraso na sua fatura. Por favor, regularize para evitar a suspensão do serviço até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
+          <p className="text-[8.5px] text-muted-foreground mt-0.5 leading-snug font-semibold">
+            Fatura pendente até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
           </p>
         </div>
       )}
@@ -257,7 +326,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         onScroll={(e) => {
           sessionStorage.setItem('sidebar-scroll', String(e.currentTarget.scrollTop));
         }}
-        className="flex-1 px-4 space-y-1 mt-2 overflow-y-auto scrollbar-hide"
+        className="flex-1 px-1.5 space-y-0.5 mt-0.5 overflow-y-auto scrollbar-thin"
       >
         {navItems.map((item) => {
           const isActive = item.href.includes('?') 
@@ -270,22 +339,28 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
               href={item.href}
               prefetch={true}
               onClick={() => setIsMobileMenuOpen(false)}
+              title={isCollapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group",
+                "flex items-center rounded-lg text-xs font-medium transition-all group relative",
+                isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
                 isActive 
-                  ? "bg-primary/10 text-primary" 
+                  ? "bg-primary/10 text-primary font-semibold" 
                   : "hover:bg-muted/80 hover:text-foreground"
               )}
             >
               <item.icon className={cn(
-                "w-5 h-5",
+                "w-4 h-4 shrink-0",
                 isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
               )} />
-              {item.label}
+              {!isCollapsed && <span className="truncate">{item.label}</span>}
               {item.label === "Mensagens" && unreadCount > 0 && (
-                <span className="ml-auto flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-lg shadow-red-500/30 animate-pulse">
-                  {unreadCount}
-                </span>
+                isCollapsed ? (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                ) : (
+                  <span className="ml-auto flex h-3.5 min-w-[16px] px-1 items-center justify-center rounded-full bg-red-500 text-[8.5px] font-black text-white shadow-lg shadow-red-500/30 animate-pulse">
+                    {unreadCount}
+                  </span>
+                )
               )}
             </Link>
           );
@@ -295,13 +370,15 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           href="/settings"
           prefetch={true}
           onClick={() => setIsMobileMenuOpen(false)}
+          title={isCollapsed ? "Configurações" : undefined}
           className={cn(
-            "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-2",
-            pathname === "/settings" ? "bg-primary/10 text-primary" : "hover:bg-muted/80 hover:text-foreground"
+            "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5",
+            isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
+            pathname === "/settings" ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/80 hover:text-foreground"
           )}
         >
-          <Settings className={cn("w-5 h-5", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-          Configurações
+          <Settings className={cn("w-4 h-4 shrink-0", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+          {!isCollapsed && <span className="truncate">Configurações</span>}
         </Link>
 
         {isPlatformAdmin(profile?.email) && (
@@ -309,54 +386,75 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             href="/admin/billing"
             prefetch={true}
             onClick={() => setIsMobileMenuOpen(false)}
+            title={isCollapsed ? "Administração SaaS" : undefined}
             className={cn(
-              "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all group mt-1 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
+              "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
+              isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
               pathname === "/admin/billing" ? "bg-indigo-500/15 text-indigo-300" : ""
             )}
           >
-            <CreditCard className={cn("w-5 h-5 text-indigo-400 group-hover:text-indigo-300")} />
-            Administração SaaS
+            <CreditCard className={cn("w-4 h-4 shrink-0 text-indigo-400 group-hover:text-indigo-300")} />
+            {!isCollapsed && <span className="truncate">Admin SaaS</span>}
           </Link>
         )}
       </nav>
 
-      <div className="mt-auto flex flex-col">
+      <div className="mt-auto flex flex-col pt-1">
         {/* User Profile in Sidebar */}
-        <div className="px-4 py-4 border-t border-border">
-          <div className="bg-background/50 rounded-2xl p-4 flex items-center gap-3 border border-border">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-lg shadow-primary/40 border border-border">
-              <Image 
-                src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
-                alt="User" 
-                fill 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer"
-                unoptimized
-              />
+        <div className="px-1.5 py-1 border-t border-border">
+          {!isCollapsed ? (
+            <div className="bg-background/50 rounded-xl p-1.5 flex items-center gap-2 border border-border">
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-md shadow-primary/30 border border-border shrink-0">
+                <Image 
+                  src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
+                  alt="User" 
+                  fill 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  unoptimized
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-foreground truncate leading-tight">{profile?.displayName || "Usuário"}</p>
+                <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider truncate mt-0.5">{profile?.role || "Membro"}</p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-foreground truncate">{profile?.displayName || "Usuário"}</p>
-              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest truncate">{profile?.role || "Membro"}</p>
+          ) : (
+            <div className="flex justify-center" title={`${profile?.displayName || "Usuário"} (${profile?.role || "Membro"})`}>
+              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center font-bold text-white text-xs overflow-hidden relative shadow-md shadow-primary/30 border border-border shrink-0">
+                <Image 
+                  src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
+                  alt="User" 
+                  fill 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  unoptimized
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="px-6 pb-6 mt-2">
-          <button 
-            onClick={() => router.push("/pipeline?new=true")}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all mb-3"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Oportunidade
-          </button>
-          
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-red-400 transition-colors w-full"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </button>
+        <div className="px-1.5 pb-2 pt-1">
+          {!isCollapsed ? (
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors w-full rounded-lg"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sair
+            </button>
+          ) : (
+            <div className="flex flex-col items-center">
+              <button 
+                onClick={handleLogout}
+                className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                title="Sair"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

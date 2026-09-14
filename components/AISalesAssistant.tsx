@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Sparkles, Brain, Loader2, Target, TrendingUp, Lightbulb } from "lucide-react";
 import { Deal, Contact, Company } from "@/lib/db";
 import { safeAiCall } from "@/lib/ai";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

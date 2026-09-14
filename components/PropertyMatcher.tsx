@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Building2, Home, MapPin, DollarSign, Sparkles, MoveRight, Loader2, CheckCircle2 } from "lucide-react";
 import { Property, Deal, Contact, getProperties, updateDeal } from "@/lib/db";
 import { safeAiCall } from "@/lib/ai";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { toast } from "sonner";

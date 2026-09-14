@@ -366,23 +366,23 @@ export default function PipelinePage() {
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="p-4 md:p-8 pb-4 pt-20 md:pt-8 bg-card/15 border-b border-border/50">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
+        <header className="px-4 py-3 md:px-6 md:py-3.5 bg-card/15 border-b border-border/50">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2.5 gap-3">
             <div>
-              <h1 className="text-3xl font-black tracking-tight">Pipeline de Vendas</h1>
-              <p className="text-muted-foreground mt-1 text-sm font-semibold">Visualize e gerencie seus negócios em andamento.</p>
+              <h1 className="text-xl md:text-2xl font-black tracking-tight">Pipeline de Vendas</h1>
+              <p className="text-muted-foreground text-xs font-medium">Visualize e gerencie seus negócios em andamento.</p>
             </div>
-            <div className="w-full lg:w-auto flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-4 shadow-sm bg-muted/25 p-4 rounded-2xl border border-border/40 lg:bg-transparent lg:p-0 lg:border-0 lg:shadow-none">
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-muted/20 p-2.5 rounded-xl border border-border/40 lg:bg-transparent lg:p-0 lg:border-0">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button 
                   onClick={() => setIsGoalModalOpen(true)}
-                  className="bg-card border border-primary/35 px-5 py-2.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 group w-full sm:w-auto"
+                  className="bg-card border border-primary/35 px-3.5 py-1.5 rounded-xl font-bold text-foreground shadow-sm hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 group flex-1 sm:flex-initial"
                   title="Clique para definir ou alterar suas metas mensais"
                 >
-                  <Target className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
+                  <Target className="w-4 h-4 text-primary group-hover:text-white transition-colors shrink-0" />
                   <div className="text-left">
-                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-1 font-black">Definir Meta</p>
-                    <p className="leading-none text-xs">{formatCurrencyBRL(goalValue)}</p>
+                    <p className="text-[8.5px] uppercase tracking-widest text-muted-foreground group-hover:text-white/80 leading-none mb-0.5 font-black">Definir Meta</p>
+                    <p className="leading-none text-xs font-bold">{formatCurrencyBRL(goalValue)}</p>
                   </div>
                 </button>
                 <button 
@@ -390,20 +390,20 @@ export default function PipelinePage() {
                     setEditingDeal(null);
                     setIsModalOpen(true);
                   }}
-                  className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 w-full sm:w-auto text-xs whitespace-nowrap"
+                  className="bg-primary text-white px-3.5 py-2 rounded-xl font-bold shadow-md shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-1.5 text-xs whitespace-nowrap flex-1 sm:flex-initial"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   Novo Negócio
                 </button>
               </div>
               
               {/* Goal Progress Bar */}
-              <div className="w-full sm:w-64 space-y-2 mt-2 sm:mt-0">
-                <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <div className="w-full sm:w-48 space-y-1">
+                <div className="flex justify-between text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
                   <span>Progresso (Fechado)</span>
                   <span>{Math.round(progressPercentage)}%</span>
                 </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden border border-border/30">
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden border border-border/30">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${progressPercentage}%` }}
@@ -413,34 +413,34 @@ export default function PipelinePage() {
                     )}
                   />
                 </div>
-                <div className="text-[10px] text-right font-black text-muted-foreground uppercase tracking-wider">
+                <div className="text-[9px] text-right font-bold text-muted-foreground uppercase tracking-wider">
                   {formatCurrencyBRL(totalClosed)} / {formatCurrencyBRL(goalValue)}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2.5">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
                 type="text" 
                 placeholder="Pesquisar negócios..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-card border border-border rounded-2xl focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm shadow-sm"
+                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-xs md:text-sm shadow-sm"
               />
             </div>
-            <button className="flex items-center gap-2 px-4 py-3 bg-card border border-border rounded-2xl text-sm font-semibold text-muted-foreground hover:bg-muted transition-all">
-              <Filter className="w-4 h-4" />
+            <button className="flex items-center gap-1.5 px-3.5 py-2 bg-card border border-border rounded-xl text-xs font-semibold text-muted-foreground hover:bg-muted transition-all shrink-0">
+              <Filter className="w-3.5 h-3.5" />
               Filtros
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-x-auto p-8 pt-0">
+        <div className="flex-1 overflow-x-auto px-2.5 md:px-3.5 py-2.5">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="flex h-full gap-6 min-w-[1280px]">
+            <div className="flex h-full gap-2 md:gap-2.5 w-full min-w-[850px] pb-1">
               {STAGES.map((stage) => {
                 const stageDeals = filteredDeals.filter(d => d.stage === stage.id);
                 const stageTotal = stageDeals.reduce((acc, d) => acc + d.value, 0);
@@ -448,18 +448,20 @@ export default function PipelinePage() {
                 const stageProgress = stageGoalValue > 0 ? Math.min((stageTotal / stageGoalValue) * 100, 100) : 0;
 
                 return (
-                  <div key={stage.id} className="w-[300px] flex flex-col">
-                    <div className="mb-4 px-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${stage.color}`} />
-                          <h3 className="font-bold text-foreground text-sm uppercase tracking-wider">{stage.title}</h3>
-                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-md font-bold text-muted-foreground">
+                  <div key={stage.id} className="flex-1 min-w-[160px] flex flex-col">
+                    <div className="mb-2 px-1 space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${stage.color}`} />
+                          <h3 className="font-bold text-foreground text-[11px] uppercase tracking-wider truncate" title={stage.title}>
+                            {stage.title}
+                          </h3>
+                          <span className="text-[9px] bg-muted px-1.5 py-0.2 rounded font-bold text-muted-foreground shrink-0">
                             {stageDeals.length}
                           </span>
                         </div>
                         <span className={cn(
-                          "text-[10px] font-extrabold px-2 py-0.5 rounded-full border shadow-sm tracking-wider uppercase backdrop-blur-sm transition-all duration-300",
+                          "text-[8.5px] font-extrabold px-1.5 py-0.5 rounded-full border shadow-sm tracking-wider uppercase backdrop-blur-sm shrink-0",
                           BADGE_COLORS[stage.id] || "bg-muted text-muted-foreground border-border"
                         )}>
                           {probabilities[stage.id] ?? 0}%
@@ -467,10 +469,10 @@ export default function PipelinePage() {
                       </div>
                       
                       {/* Stage Mini Progress */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] font-bold">
-                          <span className="text-muted-foreground uppercase">Meta: {formatCurrencyBRL(stageGoalValue)}</span>
-                          <span className={cn(stageProgress >= 100 ? "text-emerald-500" : "text-primary")}>{Math.round(stageProgress)}%</span>
+                      <div className="space-y-0.5">
+                        <div className="flex justify-between items-center text-[8.5px] font-bold">
+                          <span className="text-muted-foreground uppercase truncate">Meta: {formatCurrencyBRL(stageGoalValue)}</span>
+                          <span className={cn("shrink-0", stageProgress >= 100 ? "text-emerald-500" : "text-primary")}>{Math.round(stageProgress)}%</span>
                         </div>
                         <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
                           <div 
@@ -486,7 +488,7 @@ export default function PipelinePage() {
                         <div 
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className="flex-1 bg-muted/20 rounded-2xl p-3 space-y-3 border border-dashed border-border"
+                          className="flex-1 bg-muted/20 rounded-xl p-2 space-y-2 border border-dashed border-border"
                         >
                           {stageDeals.map((deal, index) => (
                             <Draggable key={deal.id} draggableId={deal.id} index={index}>
@@ -495,14 +497,14 @@ export default function PipelinePage() {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className="bg-card p-4 rounded-xl border border-border shadow-sm group hover:border-primary/30 hover:shadow-md transition-all active:scale-[0.98]"
+                                className="bg-card p-2.5 rounded-xl border border-border shadow-sm group hover:border-primary/30 hover:shadow-md transition-all active:scale-[0.98]"
                               >
-                                <div className="flex justify-between items-start mb-3">
+                                <div className="flex justify-between items-start mb-1.5">
                                   <div className="flex gap-1">
-                                    <Link href={`/deals/${deal.id}`} className="p-1 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
+                                    <Link href={`/deals/${deal.id}`} className="p-0.5 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
                                       <ExternalLink className="w-3 h-3" />
                                     </Link>
-                                    <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-1 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
+                                    <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-0.5 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
                                     <button 
                                       onClick={() => {
                                         if (deleteConfirmId === deal.id) {
@@ -512,7 +514,7 @@ export default function PipelinePage() {
                                         }
                                       }} 
                                       className={cn(
-                                        "p-1 rounded-md transition-all",
+                                        "p-0.5 rounded-md transition-all",
                                         deleteConfirmId === deal.id 
                                           ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
                                           : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
@@ -522,27 +524,27 @@ export default function PipelinePage() {
                                       <Trash2 className={cn("w-3 h-3", deleteConfirmId === deal.id && "animate-pulse")} />
                                     </button>
                                   </div>
-                                  <div className="flex -space-x-2">
-                                    <div className="w-6 h-6 rounded-full border-2 border-card bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary uppercase">
+                                  <div className="flex -space-x-1.5">
+                                    <div className="w-5 h-5 rounded-full border border-card bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary uppercase">
                                       {contacts.find(c => c.id === deal.contactId)?.name.charAt(0) || '?'}
                                     </div>
                                   </div>
                                 </div>
                                 <Link href={`/deals/${deal.id}`} className="block hover:text-primary transition-colors">
-                                  <h4 className="font-bold text-foreground text-sm mb-1">{deal.title}</h4>
+                                  <h4 className="font-bold text-foreground text-xs mb-0.5 line-clamp-2 leading-tight" title={deal.title}>{deal.title}</h4>
                                 </Link>
-                                <p className="text-xs text-muted-foreground mb-4 truncate flex items-center gap-1">
-                                  <Building2 className="w-3 h-3" />
-                                  {companies.find(c => c.id === deal.companyId)?.name || 'Empresa não vinculada'}
+                                <p className="text-[10.5px] text-muted-foreground mb-2 truncate flex items-center gap-1">
+                                  <Building2 className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{companies.find(c => c.id === deal.companyId)?.name || 'Empresa não vinculada'}</span>
                                 </p>
                                 
-                                <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                                  <span className="text-sm font-bold text-foreground">
+                                <div className="flex flex-wrap items-center justify-between gap-1 pt-1.5 border-t border-border/50">
+                                  <span className="text-xs font-bold text-foreground">
                                     {formatCurrencyBRL(deal.value)}
                                   </span>
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
-                                    <Clock className="w-3 h-3" />
-                                    {deal.updatedAt ? new Date(deal.updatedAt).toLocaleDateString() : '-'}
+                                  <div className="flex items-center gap-1 text-[9px] font-semibold text-muted-foreground">
+                                    <Clock className="w-2.5 h-2.5 shrink-0" />
+                                    <span>{deal.updatedAt ? new Date(deal.updatedAt).toLocaleDateString() : '-'}</span>
                                   </div>
                                 </div>
                               </div>
@@ -555,9 +557,9 @@ export default function PipelinePage() {
                             setEditingDeal({ stage: stage.id } as Deal);
                             setIsModalOpen(true);
                           }}
-                          className="w-full py-3 border-2 border-dashed border-border rounded-xl flex items-center justify-center text-muted-foreground hover:border-primary/50 hover:text-primary transition-all group"
+                          className="w-full py-1.5 border border-dashed border-border rounded-xl flex items-center justify-center text-muted-foreground hover:border-primary/50 hover:text-primary transition-all group"
                         >
-                          <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                          <Plus className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                         </button>
                       </div>
                     )}

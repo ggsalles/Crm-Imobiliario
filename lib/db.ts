@@ -1070,6 +1070,21 @@ if (typeof window !== 'undefined') {
 }
 
 const inFlightRequests = new Map<string, Promise<any>>();
+const apiGetCache = new Map<string, { data: any; timestamp: number }>();
+const API_GET_CACHE_TTL = 4000; // 4s TTL deduplica rajadas concorrentes de múltiplos hooks e componentes
+
+export function invalidateApiCache(pattern?: string) {
+  if (!pattern) {
+    apiGetCache.clear();
+    return;
+  }
+  for (const key of apiGetCache.keys()) {
+    if (key.includes(pattern)) {
+      apiGetCache.delete(key);
+    }
+  }
+}
+
 let activeRefreshPromise: Promise<any> | null = null;
 
 async function getRefreshedSession() {
@@ -1130,17 +1145,40 @@ export async function apiFetch(url: string, options: any = {}): Promise<any> {
   const isServer = typeof window === 'undefined';
   const method = (options.method || 'GET').toUpperCase();
   
-  // Deduplicate client-side concurrent GET requests to avoid HTTP 429 and timeouts
+  // Limpa cache nas mutações
+  if (!isServer && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
+    const basePath = url.split('?')[0];
+    invalidateApiCache(basePath);
+  }
+
+  // Deduplica e faz cache de GETs no cliente para evitar rajadas e HTTP 429
   if (method === 'GET' && !isServer) {
     const cacheKey = url;
+    
+    // 1. Retorna do cache se válido e não solicitado bypass
+    if (!options.bypassCache && !options.noCache) {
+      const cached = apiGetCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < API_GET_CACHE_TTL) {
+        return cached.data;
+      }
+    }
+    
+    // 2. Coalesce requisições idênticas em voo
     if (inFlightRequests.has(cacheKey)) {
       console.log(`[apiFetch] Concurrent GET merged for url: ${url}`);
       return inFlightRequests.get(cacheKey)!;
     }
     
-    const promise = apiFetchImpl(url, options).finally(() => {
-      inFlightRequests.delete(cacheKey);
-    });
+    const promise = apiFetchImpl(url, options)
+      .then((data) => {
+        if (data !== undefined && data !== null) {
+          apiGetCache.set(cacheKey, { data, timestamp: Date.now() });
+        }
+        return data;
+      })
+      .finally(() => {
+        inFlightRequests.delete(cacheKey);
+      });
     
     inFlightRequests.set(cacheKey, promise);
     return promise;
@@ -1152,13 +1190,14 @@ export async function apiFetch(url: string, options: any = {}): Promise<any> {
 async function apiFetchImpl(url: string, options: any = {}) {
   const isServer = typeof window === 'undefined';
   const timestamp = new Date().toISOString();
+  const method = (options.method || 'GET').toUpperCase();
   
   const fullUrl = url;
   
-  console.log(`[apiFetch] [${timestamp}] ${options.method || 'GET'} ${url}`);
+  console.log(`[apiFetch] [${timestamp}] ${method} ${url}`);
   
   let lastError: any;
-  const maxRetries = 1; // Only 1 retry to fail fast and prevent browser freeze appearance
+  const maxRetries = 2; // Até 2 retentativas com backoff para rate limits e falhas transitórias
   
   for (let i = 0; i <= maxRetries; i++) {
     try {
@@ -1181,7 +1220,7 @@ async function apiFetchImpl(url: string, options: any = {}) {
       }
  
       const controller = new AbortController();
-      const timeoutValue = options.timeout || 10000; // 10s timeout instead of 30s
+      const timeoutValue = options.timeout || 10000; // 10s timeout
       const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
  
       const response = await fetch(fullUrl, {
@@ -1234,7 +1273,9 @@ async function apiFetchImpl(url: string, options: any = {}) {
           }
         }
 
-        throw new Error(errMessage);
+        const httpErr = new Error(errMessage) as any;
+        httpErr.status = response.status;
+        throw httpErr;
       }
 
       // Se a requisição obteve sucesso, garante que o alerta de pausa seja desativado
@@ -1249,7 +1290,7 @@ async function apiFetchImpl(url: string, options: any = {}) {
                              rawText.trim().startsWith('<html') || 
                              rawText.trim().startsWith('<!DOCTYPE') ||
                              rawText.trim().startsWith('<div') ||
-                             rawText.trim().startsWith('{"error"'); // Just in case, keep as json but handle parser below
+                             rawText.trim().startsWith('{"error"');
 
       if (!isJson && isHtmlResponse && !rawText.trim().startsWith('{"error"')) {
         throw new Error(`Resposta do servidor inválida (HTML recebido em vez de JSON) para ${url}`);
@@ -1269,13 +1310,23 @@ async function apiFetchImpl(url: string, options: any = {}) {
       
       const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError';
       const isTimeout = err.name === 'AbortError';
+      const isRateLimit = err.status === 429 || /429|rate exceeded|too many requests/i.test(err.message || '');
 
-      if ((isNetworkError || isTimeout) && i < maxRetries) {
-        console.warn(`[apiFetch] Falha na tentativa ${i+1} para ${url}: ${err.message}. Retentando em 1s...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if ((isNetworkError || isTimeout || isRateLimit) && i < maxRetries) {
+        const backoffMs = isRateLimit 
+          ? (800 * (i + 1)) + Math.floor(Math.random() * 400)
+          : 1000;
+        console.warn(`[apiFetch] Falha na tentativa ${i+1} para ${url}: ${err.message}. Retentando em ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
       
+      // Fallback para cache prévio no cliente se disponível
+      if (!isServer && method === 'GET' && apiGetCache.has(url)) {
+        console.warn(`[apiFetch] Retornando cache anterior para ${url} após falha: ${err.message}`);
+        return apiGetCache.get(url)!.data;
+      }
+
       console.error(`[apiFetch] Erro fatal em ${url}:`, err);
       throw err;
     }
@@ -1285,6 +1336,7 @@ async function apiFetchImpl(url: string, options: any = {}) {
 
 export async function getProperties(ownerId?: string) {
   const startTime = Date.now();
+  const cacheKey = `properties:${ownerId || 'all'}`;
   console.log("[lib/db] getProperties: Buscando imóveis via API Proxy...");
   
   try {
@@ -1292,11 +1344,18 @@ export async function getProperties(ownerId?: string) {
     if (ownerId) url += `?ownerId=${ownerId}`;
     
     const data = await apiFetch(url);
+    if (Array.isArray(data)) {
+      dataCache[cacheKey] = data;
+    }
     console.log(`[lib/db] getProperties concluído em ${Date.now() - startTime}ms`);
-    return data as Property[];
+    return (data || []) as Property[];
   } catch (err: any) {
-    console.error("[lib/db] getProperties FATAL:", err);
-    throw err;
+    console.warn("[lib/db] getProperties aviso ao buscar imóveis:", err?.message || err);
+    if (dataCache[cacheKey] && Array.isArray(dataCache[cacheKey]) && dataCache[cacheKey].length > 0) {
+      console.log("[lib/db] getProperties: Retornando dados em cache.");
+      return dataCache[cacheKey] as Property[];
+    }
+    return [];
   }
 }
 

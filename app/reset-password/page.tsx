@@ -13,7 +13,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");

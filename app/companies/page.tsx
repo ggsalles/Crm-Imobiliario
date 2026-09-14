@@ -26,7 +26,7 @@ import {
   deleteCompany 
 } from "@/lib/db";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 
 export default function CompaniesPage() {
   const { user, profile, loading: authLoading } = useAuth();

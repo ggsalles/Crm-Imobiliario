@@ -636,10 +636,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 bg-muted/5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-muted/5">
           {view === 'list' ? (
-            <div className="space-y-8">
-              <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide">
+            <div className="space-y-6 md:space-y-8">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pb-1">
                 {[
                   { id: "all", label: "Todos", icon: Home },
                   { id: "casa", label: "Casas", icon: Home },
@@ -652,21 +652,36 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   { id: "chácara", label: "Chácaras", icon: TreePine },
                   { id: "fazenda", label: "Fazendas", icon: TreePine },
                   { id: "outros", label: "Outros", icon: Plus },
-                ].map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setFilterType(type.id)}
-                    className={cn(
-                      "flex items-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0",
-                      filterType === type.id 
-                        ? "bg-foreground text-background border-foreground shadow-lg" 
-                        : "bg-card text-muted-foreground border-border hover:border-primary/50"
-                    )}
-                  >
-                    <type.icon className="w-4 h-4" />
-                    {type.label}
-                  </button>
-                ))}
+                ].map(type => {
+                  const count = type.id === "all" 
+                    ? properties.length 
+                    : properties.filter(p => p.type === type.id).length;
+                  const isActive = filterType === type.id;
+
+                  return (
+                    <button
+                      key={type.id}
+                      onClick={() => setFilterType(type.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all",
+                        isActive 
+                          ? "bg-foreground text-background border-foreground shadow-md" 
+                          : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                      )}
+                    >
+                      <type.icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{type.label}</span>
+                      <span className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded-md font-black shrink-0 transition-colors",
+                        isActive 
+                          ? "bg-background/20 text-background" 
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               {loading && (

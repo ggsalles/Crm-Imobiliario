@@ -34,7 +34,7 @@ import {
   X,
   Check
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";

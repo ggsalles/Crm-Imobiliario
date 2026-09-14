@@ -18,7 +18,7 @@ import {
   Github
 } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { isPlatformAdmin } from "@/lib/constants";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Sparkles, Loader2, Wand2, X } from "lucide-react";
 import { safeAiCall } from "@/lib/ai";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
 import { toast } from "sonner";

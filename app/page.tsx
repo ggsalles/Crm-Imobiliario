@@ -148,30 +148,36 @@ function DashboardContent() {
     try {
       const ownerId = profile.role === 'Admin' ? undefined : user.id;
       
-      const [dealsData, contactsData, propertiesData, goalsData] = await Promise.all([
+      const results = await Promise.allSettled([
         getDeals(ownerId),
         getContacts(ownerId),
         getProperties(ownerId),
         getGoals(ownerId)
       ]);
       
-      setDeals(dealsData);
-      setContacts(contactsData);
-      setProperties(propertiesData);
-      setGoals(goalsData);
+      if (results[0].status === 'fulfilled' && Array.isArray(results[0].value)) setDeals(results[0].value);
+      if (results[1].status === 'fulfilled' && Array.isArray(results[1].value)) setContacts(results[1].value);
+      if (results[2].status === 'fulfilled' && Array.isArray(results[2].value)) setProperties(results[2].value);
+      if (results[3].status === 'fulfilled' && Array.isArray(results[3].value)) setGoals(results[3].value);
     } catch (err: any) {
       console.error("[Dashboard] Refresh error:", err);
-      setErrorStatus(err.message || "Erro ao carregar dados.");
+      if (deals.length === 0 && contacts.length === 0) {
+        setErrorStatus(err.message || "Erro ao carregar dados.");
+      }
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [user, profile]);
+  }, [user, profile, deals.length, contacts.length]);
 
   useEffect(() => {
-    // Only call refreshData if we don't have data yet to avoid redundant loads
-    // since the subscriptions will also fetch data initially.
+    // Only call refreshData if data remains empty after subscriptions have had a chance to connect
     if (user && profile && deals.length === 0 && contacts.length === 0) {
-      refreshData(true);
+      const timer = setTimeout(() => {
+        if (deals.length === 0 && contacts.length === 0) {
+          refreshData(false);
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
     }
   }, [user, profile, refreshData, deals.length, contacts.length]);
 

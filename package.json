@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NODE_ENV=production next build && rm -rf dist && cp -r .next dist && cp .next/server/app/index.html dist/index.html 2>/dev/null || true",
+    "build": "rm -rf .next && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -16,10 +16,8 @@
     "@tailwindcss/postcss": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "clsx": "^2.1.1",
-    "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "firebase": "^11.0.1",
-    "framer-motion": "^11.0.0",
     "lucide-react": "^0.446.0",
     "motion": "^11.11.17",
     "next": "15.1.11",

@@ -12,7 +12,7 @@ import {
   Loader2,
   AlertCircle
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { TimelineEvent, subscribeToTimeline, createTimelineEvent } from "@/lib/db";
 import { formatDistanceToNow } from "date-fns";
