@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { Sidebar } from "@/components/sidebar";
 import { useTheme } from "@/providers/theme-provider";
 import { InteractiveGuideModal } from "@/components/InteractiveGuideModal";

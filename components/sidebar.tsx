@@ -51,6 +51,12 @@ export function Sidebar() {
   const { profile, logout, changeTenant } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
+    return unsub;
+  }, []);
 
   useEffect(() => {
     try {
@@ -81,9 +87,15 @@ export function Sidebar() {
       <div className="fixed top-4 left-4 z-40 md:hidden">
         <button 
           onClick={() => setIsMobileMenuOpen(true)}
-          className="p-3 bg-[#0f172a] text-white rounded-xl shadow-xl border border-white/10"
+          className="p-3 bg-[#0f172a] text-white rounded-xl shadow-xl border border-white/10 relative"
+          aria-label="Abrir menu de navegação"
         >
           <Menu className="w-6 h-6" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-lg shadow-red-500/50 animate-pulse border-2 border-[#0f172a]">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -101,6 +113,7 @@ export function Sidebar() {
             changeTenant={changeTenant}
             isCollapsed={isCollapsed}
             toggleCollapse={toggleCollapse}
+            unreadCount={unreadCount}
           />
         </Suspense>
       </aside>
@@ -130,6 +143,7 @@ export function Sidebar() {
                   logout={logout}
                   profile={profile}
                   changeTenant={changeTenant}
+                  unreadCount={unreadCount}
                 />
               </Suspense>
             </motion.aside>
@@ -140,11 +154,10 @@ export function Sidebar() {
   );
 }
 
-function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, changeTenant, isCollapsed = false, toggleCollapse }: any) {
+function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, changeTenant, isCollapsed = false, toggleCollapse, unreadCount = 0 }: any) {
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab');
   const router = useRouter();
-  const [unreadCount, setUnreadCount] = useState(0);
   const [tenants, setTenants] = useState<any[]>([]);
   const [activeTenant, setActiveTenant] = useState<any | null>(null);
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
@@ -168,11 +181,6 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
       return () => clearTimeout(timer);
     }
   }, [pathname, currentTab]);
-
-  useEffect(() => {
-    const unsub = subscribeToTotalUnreadMessages(setUnreadCount);
-    return unsub;
-  }, []);
 
   useEffect(() => {
     async function loadTenants() {
@@ -356,10 +364,10 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
               {!isCollapsed && <span className="truncate">{item.label}</span>}
               {item.label === "Mensagens" && unreadCount > 0 && (
                 isCollapsed ? (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-card" />
                 ) : (
-                  <span className="ml-auto flex h-3.5 min-w-[16px] px-1 items-center justify-center rounded-full bg-red-500 text-[8.5px] font-black text-white shadow-lg shadow-red-500/30 animate-pulse">
-                    {unreadCount}
+                  <span className="ml-auto flex h-4 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-sm animate-pulse">
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )
               )}

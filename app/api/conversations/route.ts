@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (ownerId && ownerId !== 'undefined') {
-      query = query.eq('owner_id', ownerId);
+      query = query.or(`owner_id.eq.${ownerId}`);
     }
 
     if (category && category !== 'all') {
