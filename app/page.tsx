@@ -1328,11 +1328,20 @@ function ForecastView({
 
 const CustomRevenueTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    const revenueVal = Number(payload[0].value) || 0;
+    const dealsCount = payload[0].payload?.deals || 0;
     return (
-      <div className="bg-white dark:bg-[#0c1020] text-foreground px-4 py-2.5 border border-[#e2e8f0] dark:border-[#1e293b] rounded-2xl shadow-2xl relative z-50">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{label}</p>
-        <p className="text-sm font-bold text-foreground mt-1">
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(payload[0].value)}
+      <div className="bg-slate-900 border border-slate-700/80 px-4 py-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] relative z-50 min-w-[140px] text-left">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-1.5 mb-1.5">
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest font-mono">{label}</p>
+          {dealsCount > 0 && (
+            <span className="text-[9px] font-bold bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 font-mono">
+              {dealsCount} {dealsCount === 1 ? 'venda' : 'vendas'}
+            </span>
+          )}
+        </div>
+        <p className="text-sm font-black text-white tracking-tight font-mono">
+          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(revenueVal)}
         </p>
       </div>
     );
@@ -1344,14 +1353,15 @@ const CustomPieTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-[#0c1020] border border-[#e2e8f0] dark:border-[#1e293b] text-foreground md:min-w-[150px] shadow-2xl p-2.5 rounded-2xl flex flex-col gap-1 relative z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
-          <span className="text-xs font-bold text-foreground tracking-wider uppercase">{data.name}</span>
+      <div className="bg-slate-900 border border-slate-700/80 px-3.5 py-2.5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col gap-1 relative z-50 min-w-[150px] text-left">
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 mb-0.5">
+          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: data.color }} />
+          <span className="text-[11px] font-bold text-slate-200 tracking-wider uppercase font-mono">{data.name}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Negócios: <span className="font-bold text-foreground">{data.value}</span>
-        </p>
+        <div className="flex items-center justify-between text-xs pt-0.5">
+          <span className="text-slate-400 font-medium">Negócios:</span>
+          <span className="font-bold text-white font-mono">{data.value}</span>
+        </div>
       </div>
     );
   }
