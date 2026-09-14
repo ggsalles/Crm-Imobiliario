@@ -52,7 +52,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (ownerId && ownerId !== 'undefined') {
-      query = query.or(`owner_id.eq.${ownerId}`);
+      const sanitizedOwnerId = ownerId.replace(/[^a-zA-Z0-9-]/g, '');
+      query = query.or(`owner_id.eq.${sanitizedOwnerId},participants.cs.{"${sanitizedOwnerId}"}`);
     }
 
     if (category && category !== 'all') {

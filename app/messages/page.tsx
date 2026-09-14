@@ -18,6 +18,7 @@ import {
   Smile,
   Check,
   CheckCheck,
+  Clock,
   Loader2,
   Edit3,
   Mail,
@@ -168,7 +169,10 @@ function MessagesContent() {
     markAsRead(selectedConv.id);
 
     const unsub = subscribeToMessages(selectedConv.id, (data) => {
-      setMessages(data);
+      setMessages(prev => {
+        const pending = prev.filter(m => m.id.startsWith('temp-') && !data.some(d => d.content === m.content && d.senderId === m.senderId));
+        return [...data, ...pending];
+      });
       // Also mark as read when new messages are received while viewing the conversation
       markAsRead(selectedConv.id);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -178,16 +182,33 @@ function MessagesContent() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConv || isSubmitting) return;
+    if (!newMessage.trim() || !selectedConv || isSubmitting || !user) return;
 
+    const messageText = newMessage.trim();
     setIsSubmitting(true);
+    setNewMessage("");
+
+    // Optimistically show message immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      conversationId: selectedConv.id,
+      senderId: user.id,
+      content: messageText,
+      type: 'text',
+      createdAt: new Date().toISOString(),
+      ownerId: user.id
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
     try {
-      await sendChatMessage(selectedConv.id, newMessage);
-      setNewMessage("");
-      // Scroll behavior is handled in the messages subscriber
+      await sendChatMessage(selectedConv.id, messageText);
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Erro ao enviar mensagem");
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setNewMessage(messageText);
     } finally {
       setIsSubmitting(false);
     }
@@ -244,8 +265,20 @@ function MessagesContent() {
         }
       };
       const newId = await createConversation([user.id, contact.id], activeTab, details);
+      const newConv: Conversation = {
+        id: newId,
+        participants: [user.id, contact.id],
+        participantDetails: details,
+        lastMessage: "",
+        lastMessageAt: new Date().toISOString(),
+        type: 'direct',
+        category: activeTab,
+        ownerId: user.id,
+        unreadCount: {}
+      };
+      setConversations(prev => [newConv, ...prev.filter(c => c.id !== newId)]);
+      setSelectedConv(newConv);
       setIsNewChatModalOpen(false);
-      // Selection will happen automatically via subscribeToConversations
     } catch (error) {
       console.error("Error creating conversation:", error);
     }
@@ -669,7 +702,21 @@ function MessagesContent() {
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                                   {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
                                 </span>
-                                {isOwn && <CheckCheck className="w-3.5 h-3.5 text-primary" />}
+                                {isOwn && (
+                                  (() => {
+                                    if (msg.id.startsWith('temp-')) {
+                                      return <Clock className="w-3.5 h-3.5 text-muted-foreground animate-pulse" title="Enviando..." />;
+                                    }
+                                    const partnerId = selectedConv?.participants?.find(p => p !== user?.id);
+                                    const partnerUnread = partnerId && selectedConv?.unreadCount ? (selectedConv.unreadCount[partnerId] || 0) : 0;
+                                    const isRead = partnerUnread === 0;
+
+                                    if (isRead) {
+                                      return <CheckCheck className="w-3.5 h-3.5 text-primary" title="Lida" />;
+                                    }
+                                    return <CheckCheck className="w-3.5 h-3.5 text-muted-foreground/60" title="Entregue (Ainda não lida)" />;
+                                  })()
+                                )}
                               </div>
                             </div>
                           </div>

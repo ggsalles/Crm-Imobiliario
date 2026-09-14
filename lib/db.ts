@@ -1551,7 +1551,7 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
     try {
       let url = `/api/conversations?category=${category}`;
       if (ownerId) url += `&ownerId=${ownerId}`;
-      const data = await apiFetch(url);
+      const data = await apiFetch(url, { bypassCache: true });
       if (data && Array.isArray(data)) {
         const mapped = data.map((item: any) => ({
           id: item.id,
@@ -1577,7 +1577,7 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 
   fetchConversations();
   const subscription = createRealtimeChannel('conversations', fetchConversations);
-  const poll = createVisibilityAwarePoll(fetchConversations, POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(fetchConversations, 5000);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1592,7 +1592,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 
   const fetchMessages = async () => {
     try {
-      const data = await apiFetch(`/api/messages?conversationId=${conversationId}`);
+      const data = await apiFetch(`/api/messages?conversationId=${conversationId}`, { bypassCache: true });
       if (data && Array.isArray(data)) {
         const mapped = data.map((item: any) => ({
           id: item.id,
@@ -1616,7 +1616,8 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 
   fetchMessages();
   const subscription = createRealtimeChannel('messages', fetchMessages, `conversation_id=eq.${conversationId}`);
-  const poll = createVisibilityAwarePoll(fetchMessages, POLL_INTERVAL);
+  // Active chat: 3 second reconciliation poll for ultra-responsive message exchange
+  const poll = createVisibilityAwarePoll(fetchMessages, 3000);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -1670,6 +1671,12 @@ export async function sendChatMessage(conversationId: string, content: string, t
       body: JSON.stringify(updateData)
     });
 
+    // Invalidate caches and force instant resync across all subscribers
+    invalidateApiCache('/api/messages');
+    invalidateApiCache('/api/conversations');
+    delete dataCache[`messages:${conversationId}`];
+    forceDataResync();
+
     return result.id;
   } catch (err) {
     console.error("[lib/db] sendChatMessage FATAL:", err);
@@ -1694,6 +1701,9 @@ export async function markAsRead(conversationId: string) {
         method: "PATCH",
         body: JSON.stringify({ unread_count: newUnreadCount })
       });
+
+      invalidateApiCache('/api/conversations');
+      forceDataResync();
     }
   } catch (err) {
     console.error("[lib/db] markAsRead error:", err);
