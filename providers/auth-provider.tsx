@@ -331,15 +331,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       
-      // Never block platform admin
-      if (isPlatformAdmin(profile.email)) {
-        if (active) {
-          setIsTenantBlocked(false);
-          setBillingStatus('regular');
-        }
-        return;
-      }
-
       try {
         const res = await fetch(`/api/tenants?id=${profile.tenantId}&t=${Date.now()}`, { 
           cache: 'no-store',
@@ -355,6 +346,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setBillingStatus(tenantData.billingStatus || 'regular');
             setBillingSuspensionDate(tenantData.billingSuspensionDate || '');
             setDueDay(tenantData.dueDay !== undefined ? tenantData.dueDay : 10);
+
+            // Platform admin never gets locked out of the CRM
+            if (isPlatformAdmin(profile.email)) {
+              setIsTenantBlocked(false);
+              return;
+            }
 
             if (tenantData.isBlocked) {
               setIsTenantBlocked(true);

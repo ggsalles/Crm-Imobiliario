@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       if (error) throw error;
       if (!data) return NextResponse.json(null);
 
-      const billingResult = getTenantBillingStatus(config, data.id);
+      const billingResult = getTenantBillingStatus(config, data.id, new Date(), data.created_at);
       const isBlocked = data.id !== DEFAULT_TENANT_ID && 
                         (blockedIds.includes(data.id) || billingResult.status === 'bloqueado');
 
@@ -61,7 +61,10 @@ export async function GET(req: NextRequest) {
         isBlocked,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: billingResult.dueDay
+        dueDay: billingResult.dueDay,
+        diffDays: billingResult.diffDays,
+        overdueCount: billingResult.overdueCount || 0,
+        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || ''
       }, {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -95,7 +98,7 @@ export async function GET(req: NextRequest) {
     }
 
     const items = finalTenants.map((item: any) => {
-      const billingResult = getTenantBillingStatus(config, item.id);
+      const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at);
       const isBlocked = item.id !== DEFAULT_TENANT_ID && 
                         (blockedIds.includes(item.id) || billingResult.status === 'bloqueado');
 
@@ -108,7 +111,10 @@ export async function GET(req: NextRequest) {
         isBlocked,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: billingResult.dueDay
+        dueDay: billingResult.dueDay,
+        diffDays: billingResult.diffDays,
+        overdueCount: billingResult.overdueCount || 0,
+        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || ''
       };
     });
 

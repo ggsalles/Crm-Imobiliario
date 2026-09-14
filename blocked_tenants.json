@@ -1,0 +1,27 @@
+{
+  "blockedTenantIds": [],
+  "payments": {
+    "c177f8cd-71b6-4bdc-a26d-4d26af076b4f": {
+      "2026-05": "pago",
+      "2026-04": "pago",
+      "2026-03": "pago",
+      "2026-02": "pago",
+      "2026-01": "pago",
+      "2026-06": "pago"
+    },
+    "11111111-1111-1111-1111-111111111111": {
+      "2026-01": "pago",
+      "2026-02": "pago",
+      "2026-03": "pago",
+      "2026-04": "pago",
+      "2026-05": "pago",
+      "2026-06": "pago"
+    }
+  },
+  "dueDays": {
+    "c177f8cd-71b6-4bdc-a26d-4d26af076b4f": 20
+  },
+  "suttleStart": 1,
+  "criticalStart": 5,
+  "blockStart": 7
+}
