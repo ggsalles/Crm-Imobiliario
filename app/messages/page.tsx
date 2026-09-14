@@ -19,6 +19,7 @@ import {
   Check,
   CheckCheck,
   Clock,
+  Copy,
   Loader2,
   Edit3,
   Mail,
@@ -820,7 +821,7 @@ function MessagesContent() {
             {!selectedConv ? (
               <div className="p-12 text-center text-muted-foreground mt-20">
                 <Target className="w-10 h-10 mx-auto mb-4 opacity-10" />
-                <p className="text-xs font-medium">Contexto do contato aparecerá aqui</p>
+                <p className="text-xs font-medium">Selecione uma conversa para ver os detalhes</p>
               </div>
             ) : (
               <div className="p-8 space-y-10">
@@ -852,36 +853,32 @@ function MessagesContent() {
                 </div>
 
                 {/* Contact Info */}
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest border-b border-border pb-2">Informações de Contato</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 text-muted-foreground hover:text-foreground transition-colors group">
-                      <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center">
+                  <div className="p-4 bg-muted/40 rounded-2xl border border-border/60 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center shrink-0 text-muted-foreground">
                         <Mail className="w-5 h-5" />
                       </div>
-                      <span className="text-sm font-bold truncate">{getPartner(selectedConv)?.email || 'Sem e-mail'}</span>
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground block tracking-wider">E-mail</span>
+                        <span className="text-sm font-bold truncate block text-foreground">
+                          {getPartner(selectedConv)?.email || 'Sem e-mail'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Recent Activities Shortcut */}
-                <div className="space-y-6">
-                  <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest border-b border-border pb-2">Atalhos</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link 
-                      href={getPartner(selectedConv)?.type === 'client' 
-                        ? `/contacts/${getPartner(selectedConv)?.id}` 
-                        : `/users`
-                      }
-                      className="flex flex-col items-center justify-center p-4 bg-muted rounded-2xl hover:bg-primary/10 hover:text-primary transition-all border border-border"
-                    >
-                      <User className="w-5 h-5 mb-2" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Ver Perfil</span>
-                    </Link>
-                    <button className="flex flex-col items-center justify-center p-4 bg-muted rounded-2xl hover:bg-primary/10 hover:text-primary transition-all border border-border">
-                      <Target className="w-5 h-5 mb-2" />
-                      <span className="text-[10px] font-black uppercase tracking-wider">Novo Negócio</span>
-                    </button>
+                    {getPartner(selectedConv)?.email && (
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(getPartner(selectedConv)?.email || '');
+                          toast.success("E-mail copiado!");
+                        }}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-xl transition-colors shrink-0"
+                        title="Copiar e-mail"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
