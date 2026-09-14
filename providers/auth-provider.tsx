@@ -29,6 +29,7 @@ if (typeof window !== "undefined") {
       event.preventDefault();
       console.warn("[AuthProvider] Silenciado erro de refresh token expirado:", reason);
       try {
+        window.sessionStorage.removeItem('crm-imob-session-v5');
         window.localStorage.removeItem('crm-imob-session-v4');
       } catch {}
       return;
@@ -61,6 +62,7 @@ if (typeof window !== "undefined") {
       event.preventDefault();
       console.warn("[AuthProvider] Silenciado erro de refresh token em window.onerror:", error);
       try {
+        window.sessionStorage.removeItem('crm-imob-session-v5');
         window.localStorage.removeItem('crm-imob-session-v4');
       } catch {}
       return;
@@ -126,16 +128,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profileRef.current = p;
     if (p && typeof window !== 'undefined') {
       try {
-        // Garantir consistência absoluta entre o tenant ativamente selecionado e o perfil renderizado
-        const storedActiveTenant = localStorage.getItem(`active-tenant-id:${p.id}`);
+        // Garantir consistência absoluta entre o tenant ativamente selecionado e o perfil renderizado (escopo da sessão)
+        const storedActiveTenant = sessionStorage.getItem(`active-tenant-id:${p.id}`);
         if (storedActiveTenant && p.tenantId !== storedActiveTenant) {
-          console.log(`[setProfile] Priorizando tenantId ativo do localStorage para ${p.id}: ${storedActiveTenant} em vez de ${p.tenantId}`);
+          console.log(`[setProfile] Priorizando tenantId ativo do sessionStorage para ${p.id}: ${storedActiveTenant} em vez de ${p.tenantId}`);
           p.tenantId = storedActiveTenant;
         } else if (p.tenantId) {
-          localStorage.setItem(`active-tenant-id:${p.id}`, p.tenantId);
+          sessionStorage.setItem(`active-tenant-id:${p.id}`, p.tenantId);
         }
 
-        localStorage.setItem(`local-profile:${p.id}`, JSON.stringify(p));
+        sessionStorage.setItem(`local-profile:${p.id}`, JSON.stringify(p));
       } catch (e) {
         console.warn("Erro ao salvar cache de perfil local:", e);
       }
@@ -459,10 +461,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     lastSyncedUserIdRef.current = user.id;
     lastSyncTimeRef.current = nowTime;
 
-    // Ler o tenant escolhido no login/cadastro se houver
+    // Ler o tenant escolhido no login/cadastro se houver (sessão atual)
     let chosenTenantId: string | null = null;
     if (typeof window !== "undefined") {
-      chosenTenantId = localStorage.getItem("login-chosen-tenant-id");
+      chosenTenantId = sessionStorage.getItem("login-chosen-tenant-id");
     }
 
     // Definimos um perfil provisório/imediato como fallback de segurança
@@ -480,7 +482,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem(`local-profile:${user.id}`);
+        const cached = sessionStorage.getItem(`local-profile:${user.id}`);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.id === user.id) {
@@ -538,12 +540,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (chosenTenantId) {
               apiProfile.tenantId = chosenTenantId;
             } else {
-              // Garantir que se tivermos um tenant ID mais recente que o usuário ativamente trocou (e salvou no cache local), use-o
-              const localCachedProfile = typeof window !== 'undefined' ? localStorage.getItem(`local-profile:${user.id}`) : null;
+              // Garantir que se tivermos um tenant ID mais recente que o usuário ativamente trocou (e salvou no cache de sessão), use-o
+              const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
               if (localCachedProfile) {
                 const parsed = JSON.parse(localCachedProfile);
                 if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantId !== parsed.tenantId) {
-                  console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache local em vez de ${apiProfile.tenantId}`);
+                  console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache de sessão em vez de ${apiProfile.tenantId}`);
                   apiProfile.tenantId = parsed.tenantId;
                 }
               }
@@ -551,10 +553,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             // Limpa o login-chosen-tenant-id de forma limpa após sucesso
             if (typeof window !== 'undefined') {
-              localStorage.removeItem('login-chosen-tenant-id');
-              localStorage.setItem(`active-tenant-id:${user.id}`, apiProfile.tenantId);
+              sessionStorage.removeItem('login-chosen-tenant-id');
+              sessionStorage.setItem(`active-tenant-id:${user.id}`, apiProfile.tenantId);
               try {
-                localStorage.setItem(`local-profile:${user.id}`, JSON.stringify(apiProfile));
+                sessionStorage.setItem(`local-profile:${user.id}`, JSON.stringify(apiProfile));
               } catch {}
             }
 
@@ -597,7 +599,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (profileData) {
         // Garantir que priorizamos o tenantId ativo do cache se aplicável
-        const localCachedProfile = typeof window !== 'undefined' ? localStorage.getItem(`local-profile:${user.id}`) : null;
+        const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
         let finalTenantId = profileData.tenant_id;
         if (localCachedProfile) {
           const parsed = JSON.parse(localCachedProfile);
@@ -655,7 +657,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const localCachedProfile = typeof window !== 'undefined' ? localStorage.getItem(`local-profile:${user.id}`) : null;
+        const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
         let finalTenantId = existingByEmail.tenant_id;
         if (localCachedProfile) {
           const parsed = JSON.parse(localCachedProfile);
@@ -911,7 +913,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("login-chosen-tenant-id", resolvedTenantId);
+      sessionStorage.setItem("login-chosen-tenant-id", resolvedTenantId);
     }
 
     const { error, data } = await supabase.auth.signUp({
@@ -945,6 +947,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn("Erro ao deslogar:", e);
     } finally {
       clearAuthSession();
+      if (typeof window !== "undefined") {
+        try { sessionStorage.clear(); } catch {}
+      }
       setUser(null);
       setProfile(null);
     }
@@ -954,9 +959,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!profile) return;
     setLoading(true);
     try {
-      // 0. Registrar imobiliária ativa síncronamente no localStorage para blindar a seleção contra concorrência
+      // 0. Registrar imobiliária ativa síncronamente no sessionStorage para blindar a seleção contra concorrência
       if (typeof window !== "undefined") {
-        localStorage.setItem(`active-tenant-id:${profile.id}`, tenantId);
+        sessionStorage.setItem(`active-tenant-id:${profile.id}`, tenantId);
       }
 
       // 1. Sincroniza e atualiza no banco de dados através da função updateUserProfile que faz o PATCH correto com skipResync=true

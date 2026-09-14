@@ -782,7 +782,7 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
   try {
     if (typeof window !== "undefined") {
       const cacheKey = `local-profile:${id}`;
-      const cached = localStorage.getItem(cacheKey);
+      const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -794,7 +794,7 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
             if (data.isAdmin !== undefined) parsed.isAdmin = data.isAdmin;
             if (data.tenantId !== undefined) parsed.tenantId = data.tenantId;
             if (data.tenantIds !== undefined) parsed.tenantIds = data.tenantIds;
-            localStorage.setItem(cacheKey, JSON.stringify(parsed));
+            sessionStorage.setItem(cacheKey, JSON.stringify(parsed));
           }
         } catch (e) {
           console.warn("[lib/db] Error updating local profile cache synchronously:", e);

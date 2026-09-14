@@ -7,13 +7,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("ERRO: NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY não estão definidos!");
 }
 
-export const AUTH_STORAGE_KEY = 'crm-imob-session-v4';
+export const AUTH_STORAGE_KEY = 'crm-imob-session-v5';
 
 export function clearAuthSession() {
   if (typeof window === 'undefined') return;
   try {
     const keysToRemove = [
       AUTH_STORAGE_KEY,
+      'crm-imob-session-v5',
+      'crm-imob-session-v4',
       'crm-imob-session-v3',
       'crm-imob-session-v2',
       'crm-imob-session-v1',
@@ -21,8 +23,38 @@ export function clearAuthSession() {
     ];
     keysToRemove.forEach((k) => {
       try { window.localStorage.removeItem(k); } catch {}
+      try { window.sessionStorage.removeItem(k); } catch {}
     });
 
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i);
+      if (key && (key.includes('crm-imob-session') || (key.startsWith('sb-') && key.endsWith('-auth-token')) || key.startsWith('active-tenant-id:') || key.startsWith('local-profile:'))) {
+        window.localStorage.removeItem(key);
+      }
+    }
+    for (let i = window.sessionStorage.length - 1; i >= 0; i--) {
+      const key = window.sessionStorage.key(i);
+      if (key && (key.includes('crm-imob-session') || (key.startsWith('sb-') && key.endsWith('-auth-token')) || key.startsWith('active-tenant-id:') || key.startsWith('local-profile:'))) {
+        window.sessionStorage.removeItem(key);
+      }
+    }
+  } catch {}
+}
+
+// Limpa tokens residuais antigos do localStorage na inicialização para garantir
+// que o navegador dependa exclusivamente do ciclo de vida do sessionStorage
+if (typeof window !== 'undefined') {
+  try {
+    const legacyKeys = [
+      'crm-imob-session-v4',
+      'crm-imob-session-v3',
+      'crm-imob-session-v2',
+      'crm-imob-session-v1',
+      'supabase.auth.token'
+    ];
+    legacyKeys.forEach((k) => {
+      try { window.localStorage.removeItem(k); } catch {}
+    });
     for (let i = window.localStorage.length - 1; i >= 0; i--) {
       const key = window.localStorage.key(i);
       if (key && (key.includes('crm-imob-session') || (key.startsWith('sb-') && key.endsWith('-auth-token')))) {
@@ -89,7 +121,7 @@ const safeStorage = {
   getItem: (key: string): string | null => {
     if (typeof window === 'undefined') return null;
     try {
-      return window.localStorage.getItem(key);
+      return window.sessionStorage.getItem(key);
     } catch {
       return null;
     }
@@ -97,13 +129,13 @@ const safeStorage = {
   setItem: (key: string, value: string): void => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(key, value);
+      window.sessionStorage.setItem(key, value);
     } catch {}
   },
   removeItem: (key: string): void => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
     } catch {}
   }
 };
