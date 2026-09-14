@@ -1555,14 +1555,16 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
       if (data && Array.isArray(data)) {
         const mapped = data.map((item: any) => ({
           id: item.id,
-          participants: item.participants,
-          participantDetails: item.participant_details,
-          lastMessage: item.last_message,
-          lastMessageAt: item.last_message_at,
-          type: item.type,
-          category: item.category,
-          ownerId: item.owner_id,
-          unreadCount: item.unread_count
+          participants: Array.isArray(item.participants) 
+            ? item.participants 
+            : (item.contactId ? [item.ownerId, item.contactId].filter(Boolean) : []),
+          participantDetails: item.participantDetails || item.participant_details || {},
+          lastMessage: item.lastMessage || item.last_message || "",
+          lastMessageAt: item.lastMessageAt || item.last_message_at || "",
+          type: item.type || 'direct',
+          category: item.category || 'client',
+          ownerId: item.ownerId || item.owner_id || "",
+          unreadCount: item.unreadCount || item.unread_count || {}
         })) as Conversation[];
         dataCache[cacheKey] = mapped;
         callback(mapped);
@@ -1653,8 +1655,9 @@ export async function sendChatMessage(conversationId: string, content: string, t
     };
 
     if (conv) {
-      const unreadCount = conv.unread_count || {};
-      conv.participants.forEach((pId: string) => {
+      const unreadCount = conv.unread_count || conv.unreadCount || {};
+      const participants = Array.isArray(conv.participants) ? conv.participants : [];
+      participants.forEach((pId: string) => {
         if (pId !== user.id) {
           unreadCount[pId] = (unreadCount[pId] || 0) + 1;
         }
@@ -1681,9 +1684,10 @@ export async function markAsRead(conversationId: string) {
 
   try {
     const conv = await apiFetch(`/api/conversations?id=${conversationId}`);
+    const unreadObj = conv?.unread_count || conv?.unreadCount;
     
-    if (conv && conv.unread_count && (conv.unread_count[user.id] || 0) > 0) {
-      const newUnreadCount = { ...conv.unread_count };
+    if (conv && unreadObj && (unreadObj[user.id] || 0) > 0) {
+      const newUnreadCount = { ...unreadObj };
       newUnreadCount[user.id] = 0;
 
       await apiFetch(`/api/conversations?id=${conversationId}`, {
@@ -1717,7 +1721,8 @@ export function subscribeToTotalUnreadMessages(callback: (count: number) => void
       const data = await apiFetch(`/api/conversations?ownerId=${user.id}`);
       if (data && Array.isArray(data)) {
         const total = data.reduce((acc, conv) => {
-          return acc + (conv.unread_count?.[user.id] || 0);
+          const unreadObj = conv?.unread_count || conv?.unreadCount || {};
+          return acc + (unreadObj[user.id] || 0);
         }, 0);
         cachedTotalUnread = total;
         callback(total);
@@ -1883,11 +1888,12 @@ export async function findOrCreateConversation(participantId: string, category: 
 
     if (existing && Array.isArray(existing) && existing.length > 0) {
       // Verify it's exactly these two for direct chat
-      const exactMatch = existing.find(c => 
-        c.participants.length === 2 && 
-        c.participants.includes(participantId) && 
-        c.participants.includes(user.id)
-      );
+      const exactMatch = existing.find(c => {
+        const parts = Array.isArray(c?.participants) ? c.participants : [];
+        return parts.length === 2 && 
+               parts.includes(participantId) && 
+               parts.includes(user.id);
+      });
       if (exactMatch) return exactMatch.id;
     }
 

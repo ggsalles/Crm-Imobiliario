@@ -179,10 +179,11 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
       try {
         const allTenants = await getTenants();
         if (profile) {
+          const safeTenants = Array.isArray(allTenants) ? allTenants : [];
           const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || isPlatformAdmin(profile.email);
           const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
-          const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
-          const active = allTenants.find((t: any) => t.id === profile.tenantId) || { id: profile.tenantId, name: DEFAULT_TENANT_NAME };
+          const filtered = isAdmin ? safeTenants : safeTenants.filter((t: any) => userTenantIds.includes(t.id));
+          const active = safeTenants.find((t: any) => t.id === profile.tenantId) || { id: profile.tenantId, name: DEFAULT_TENANT_NAME };
           
           setTenants(filtered.length > 0 ? filtered : [active]);
           setActiveTenant(active);

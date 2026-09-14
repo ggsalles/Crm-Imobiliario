@@ -24,9 +24,25 @@ export async function GET(req: NextRequest) {
       if (activeTenantId) {
         query = query.eq('tenant_id', activeTenantId);
       }
-      const { data, error } = await query.maybeSingle();
+      const { data: item, error } = await query.maybeSingle();
       if (error) throw error;
-      return NextResponse.json(data);
+      if (!item) return NextResponse.json(null);
+
+      const participants = Array.isArray(item.participants) 
+        ? item.participants 
+        : (item.contact_id ? [item.owner_id, item.contact_id].filter(Boolean) : []);
+      const participantDetails = item.participant_details || item.participantDetails || {};
+
+      return NextResponse.json({
+        ...item,
+        participants,
+        participant_details: participantDetails,
+        participantDetails,
+        lastMessage: item.last_message,
+        lastMessageAt: item.last_message_at,
+        unreadCount: item.unread_count || {},
+        unread_count: item.unread_count || {},
+      });
     }
 
     let query = supabase.from('conversations').select('*').order('last_message_at', { ascending: false });
@@ -46,21 +62,44 @@ export async function GET(req: NextRequest) {
     const { data: rawData, error } = await query;
     if (error) throw error;
 
-    const data = (rawData || []).map((item: any) => ({
-      id: item.id,
-      contactId: item.contact_id,
-      contactName: item.contact_name,
-      contactAvatar: item.contact_avatar,
-      lastMessage: item.last_message,
-      lastMessageAt: item.last_message_at,
-      unreadCount: item.unread_count || 0,
-      channel: item.channel,
-      category: item.category,
-      ownerId: item.owner_id,
-      tenantId: item.tenant_id,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
+    const data = (rawData || []).map((item: any) => {
+      const participants = Array.isArray(item.participants) 
+        ? item.participants 
+        : (item.contact_id ? [item.owner_id, item.contact_id].filter(Boolean) : []);
+      const participantDetails = item.participant_details || item.participantDetails || (item.contact_id ? {
+        [item.contact_id]: {
+          name: item.contact_name || "Contato",
+          photoURL: item.contact_avatar || null,
+          email: ""
+        }
+      } : {});
+
+      return {
+        id: item.id,
+        participants,
+        participant_details: participantDetails,
+        participantDetails,
+        contactId: item.contact_id,
+        contactName: item.contact_name,
+        contactAvatar: item.contact_avatar,
+        last_message: item.last_message,
+        lastMessage: item.last_message,
+        last_message_at: item.last_message_at,
+        lastMessageAt: item.last_message_at,
+        unread_count: item.unread_count || {},
+        unreadCount: item.unread_count || {},
+        type: item.type || (participants.length > 2 ? 'group' : 'direct'),
+        category: item.category || 'client',
+        owner_id: item.owner_id,
+        ownerId: item.owner_id,
+        tenant_id: item.tenant_id,
+        tenantId: item.tenant_id,
+        created_at: item.created_at,
+        createdAt: item.created_at,
+        updated_at: item.updated_at,
+        updatedAt: item.updated_at
+      };
+    });
 
     return NextResponse.json(data);
   } catch (error: any) {

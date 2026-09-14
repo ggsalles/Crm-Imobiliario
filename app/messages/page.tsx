@@ -119,11 +119,11 @@ function MessagesContent() {
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
 
     const unsub = subscribeToConversations(activeTab, (data) => {
-      setConversations(data);
+      setConversations(data || []);
       setLoading(false);
       
-      if (targetId) {
-        const found = data.find(c => c.id === targetId);
+      if (targetId && Array.isArray(data)) {
+        const found = data.find(c => c?.id === targetId);
         if (found) {
           setSelectedConv(found);
           return;
@@ -220,10 +220,10 @@ function MessagesContent() {
   };
 
   const startNewConversation = async (contact: any) => {
-    if (!user) return;
+    if (!user || !contact) return;
     
     // Check if conversation already exists
-    const existing = conversations.find(c => c.participants.includes(contact.id));
+    const existing = (conversations || []).find(c => Array.isArray(c?.participants) && c.participants.includes(contact.id));
     if (existing) {
       setSelectedConv(existing);
       setIsNewChatModalOpen(false);
@@ -251,40 +251,41 @@ function MessagesContent() {
     }
   };
 
-  const getPartner = (conv: Conversation) => {
-    const partnerId = conv.participants.find(p => p !== user?.id);
-    if (!partnerId) return null;
+  const getPartner = (conv: Conversation | null | undefined) => {
+    if (!conv) return null;
+    const participants = Array.isArray(conv.participants) ? conv.participants : [];
+    const partnerId = participants.find(p => p !== user?.id);
     
     // Try to get latest data from contacts/profiles if available
-    const latestContact = contacts.find(c => c.id === partnerId);
-    const latestProfile = profiles.find(p => p.id === partnerId);
+    const latestContact = partnerId ? (contacts || []).find(c => c?.id === partnerId) : null;
+    const latestProfile = partnerId ? (profiles || []).find(p => p?.id === partnerId) : null;
     
-    const details = conv.participantDetails[partnerId];
+    const details = partnerId && conv.participantDetails ? conv.participantDetails[partnerId] : null;
     
-    const name = latestContact?.name || latestProfile?.displayName || details?.name || "Usuário";
+    const name = latestContact?.name || latestProfile?.displayName || details?.name || (conv as any)?.contactName || "Usuário";
     const email = latestContact?.email || latestProfile?.email || details?.email || "";
-    const photoURL = latestContact?.photoURL || latestProfile?.photoURL || details?.photoURL || 
+    const photoURL = latestContact?.photoURL || latestProfile?.photoURL || details?.photoURL || (conv as any)?.contactAvatar || 
                     `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
     
     return { 
-      id: partnerId,
+      id: partnerId || (conv as any)?.contactId || conv.id,
       name, 
       email, 
       photoURL, 
-      type: latestProfile ? 'team' : (latestContact ? 'client' : 'unknown'),
+      type: latestProfile ? 'team' : (latestContact ? 'client' : (conv.category === 'team' ? 'team' : 'client')),
       role: latestProfile?.role || null
     };
   };
 
-  const filteredItems = profiles.filter(p => 
-        p.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredItems = (profiles || []).filter(p => 
+        (p?.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p?.email || "").toLowerCase().includes(searchQuery.toLowerCase())
       );
 
   const startNewConversationFromProfile = async (targetProfile: any) => {
-    if (!user) return;
+    if (!user || !targetProfile) return;
     
-    const existing = conversations.find(c => c.participants.includes(targetProfile.id));
+    const existing = (conversations || []).find(c => Array.isArray(c?.participants) && c.participants.includes(targetProfile.id));
     if (existing) {
       setSelectedConv(existing);
       setIsNewChatModalOpen(false);
@@ -382,8 +383,8 @@ function MessagesContent() {
                 conversations
                   .filter(conv => {
                     const partner = getPartner(conv);
-                    return partner?.name.toLowerCase().includes(convSearchQuery.toLowerCase()) ||
-                           conv.lastMessage?.toLowerCase().includes(convSearchQuery.toLowerCase());
+                    return (partner?.name || "").toLowerCase().includes(convSearchQuery.toLowerCase()) ||
+                           (conv.lastMessage || "").toLowerCase().includes(convSearchQuery.toLowerCase());
                   })
                   .map(conv => {
                     const partner = getPartner(conv);
@@ -552,7 +553,7 @@ function MessagesContent() {
                       const senderName = isOwn ? (profile?.displayName || "Você") : (partner?.name || "Usuário");
                       const senderPhoto = isOwn 
                         ? (profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=0D8ABC&color=fff`) 
-                        : partner?.photoURL;
+                        : (partner?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=0D8ABC&color=fff`);
 
                       return (
                         <motion.div
