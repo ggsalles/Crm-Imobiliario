@@ -1694,16 +1694,7 @@ function DashboardContent() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Floating Action Button */}
-        <button 
-          onClick={() => router.push("/pipeline")}
-          className="fixed bottom-6 right-6 md:bottom-12 md:right-12 bg-slate-900 text-white p-4 md:p-6 rounded-2xl md:rounded-[32px] shadow-2xl hover:scale-110 active:scale-95 transition-all z-30 flex items-center gap-3 md:gap-4 group ring-2 md:ring-4 ring-white"
-        >
-          <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-primary/40">
-            <Plus className="w-4 h-4 md:w-5 md:h-5" />
-          </div>
-          <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 font-bold uppercase tracking-widest text-[9px] md:text-[10px] whitespace-nowrap">Novo Lead</span>
-        </button>
+
       </main>
     </div>
   );
