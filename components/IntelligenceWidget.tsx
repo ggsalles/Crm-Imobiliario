@@ -32,21 +32,21 @@ export function IntelligenceWidget({ activities, deals, onToggle }: Intelligence
   }, [activities, deals]);
 
   return (
-    <div className="bg-card rounded-[32px] md:rounded-[40px] border border-border p-6 md:p-10 shadow-sm flex flex-col relative overflow-hidden card-hover">
-      <div className="flex justify-between items-center mb-8 md:mb-10">
+    <div className="bg-card rounded-2xl md:rounded-3xl border border-border p-4 sm:p-5 md:p-6 shadow-sm flex flex-col relative overflow-hidden card-hover">
+      <div className="flex justify-between items-center mb-4 md:mb-5">
         <div>
-          <h3 className="text-xl md:text-2xl font-bold text-foreground tracking-tight">Próximos Passos</h3>
-          <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-bold">Inteligência Prioritária</p>
+          <h3 className="text-lg md:text-xl font-bold text-foreground tracking-tight">Próximos Passos</h3>
+          <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Inteligência Prioritária</p>
         </div>
         <button 
           onClick={() => router.push("/activities")}
-          className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all text-muted-foreground"
+          className="w-8 h-8 md:w-9 md:h-9 bg-muted rounded-xl flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all text-muted-foreground"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="space-y-4 flex-1">
+      <div className="space-y-2.5 flex-1">
         {rankedActivities.length > 0 ? rankedActivities.map((activity, index) => (
           <motion.div 
             key={activity.id}
@@ -54,27 +54,27 @@ export function IntelligenceWidget({ activities, deals, onToggle }: Intelligence
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
             className={cn(
-              "group p-4 bg-muted/30 hover:bg-muted/50 rounded-2xl border border-transparent hover:border-border transition-all cursor-pointer flex items-center gap-4",
+              "group p-2.5 sm:p-3 bg-muted/30 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all cursor-pointer flex items-center gap-3",
               activity.isPriority && "bg-primary/5 border-primary/10 hover:border-primary/20"
             )}
             onClick={() => onToggle(activity)}
           >
             <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
               activity.isPriority 
-                ? "bg-primary text-white shadow-lg shadow-primary/20 animate-pulse" 
+                ? "bg-primary text-white shadow-md shadow-primary/20" 
                 : "bg-background text-muted-foreground"
             )}>
-              {activity.isPriority ? <Zap className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+              {activity.isPriority ? <Zap className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <h4 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <h4 className="text-xs sm:text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
                   {activity.title}
                 </h4>
                 {activity.isPriority && (
-                  <span className="px-1.5 py-0.5 bg-primary text-[8px] font-black uppercase text-white rounded-md tracking-tighter shadow-sm">
+                  <span className="px-1 py-0.2 bg-primary text-[7.5px] font-black uppercase text-white rounded tracking-tighter shadow-xs">
                     Zap!
                   </span>
                 )}

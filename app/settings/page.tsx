@@ -56,18 +56,18 @@ function DocItem({ title, icon: Icon, content, onExplore }: { title: string; ico
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="bg-background rounded-2xl border border-border overflow-hidden transition-all hover:border-primary/30 group">
+    <div className="bg-background rounded-xl border border-border overflow-hidden transition-all hover:border-primary/30 group">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 text-left font-sans"
+        className="w-full flex items-center justify-between p-3 text-left font-sans"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5 text-primary" />
           </div>
-          <span className="text-sm font-bold text-foreground">{title}</span>
+          <span className="text-xs font-bold text-foreground">{title}</span>
         </div>
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
       <AnimatePresence>
         {isOpen && (
@@ -77,8 +77,8 @@ function DocItem({ title, icon: Icon, content, onExplore }: { title: string; ico
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="px-4 pb-4 pt-0 flex flex-col gap-3">
-              <p className="text-xs text-muted-foreground leading-relaxed">
+            <div className="px-3 pb-3 pt-0 flex flex-col gap-2">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
                 {content}
               </p>
               {onExplore && (
@@ -88,9 +88,9 @@ function DocItem({ title, icon: Icon, content, onExplore }: { title: string; ico
                     e.stopPropagation();
                     onExplore();
                   }}
-                  className="w-fit flex items-center gap-1.5 px-3.5 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20 hover:border-primary rounded-xl text-[10px] font-bold transition-all cursor-pointer relative overflow-hidden select-none active:scale-95 mt-1"
+                  className="w-fit flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20 hover:border-primary rounded-lg text-[9px] font-bold transition-all cursor-pointer relative overflow-hidden select-none active:scale-95 mt-0.5"
                 >
-                  <Sparkles className="w-3 h-3 text-primary group-hover:text-white" />
+                  <Sparkles className="w-2.5 h-2.5 text-primary group-hover:text-white" />
                   Visualizar Guia Técnico HTML
                 </button>
               )}
@@ -163,29 +163,31 @@ export default function SettingsPage() {
   return (
     <div className="flex min-h-screen bg-background transition-colors duration-500">
       <Sidebar />
-      <main className="flex-1 p-4 md:p-8 lg:p-12 pt-20 md:pt-8">
-        <header className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-          <p className="text-muted-foreground mt-2">Personalize sua experiência e gerencie sua conta.</p>
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
+        <header className="h-14 md:h-16 bg-card/80 backdrop-blur-md border-b border-border/60 pl-14 md:pl-5 px-3 sm:px-4 md:px-5 flex items-center justify-between shrink-0 sticky top-0 z-10 transition-colors">
+          <div>
+            <h1 className="font-bold text-foreground text-sm sm:text-base tracking-tight">Configurações</h1>
+            <p className="text-[11px] text-muted-foreground hidden sm:block">Personalize sua experiência e gerencie sua conta.</p>
+          </div>
         </header>
 
-        <div className="max-w-4xl">
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1 p-3 sm:p-4 md:p-5 max-w-5xl w-full mx-auto space-y-3 sm:space-y-4">
+          <div className="space-y-3 sm:space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Palette className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-bold text-foreground">Aparência do CRM</h3>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Palette className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground">Aparência do CRM</h3>
                   </div>
-                  <p className="text-sm text-muted-foreground">Personalize a identidade visual e o modo de exibição do seu sistema.</p>
+                  <p className="text-[11px] text-muted-foreground">Personalize a identidade visual e o modo de exibição do seu sistema.</p>
                 </div>
                 <button
                   onClick={() => {
                     setPrimaryColor("blue");
                     setAppearance("system");
                   }}
-                  className="px-6 py-2.5 bg-muted text-foreground rounded-xl text-xs font-bold hover:bg-primary hover:text-white transition-all border border-border shadow-sm"
+                  className="px-3.5 py-1.5 bg-muted text-foreground rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all border border-border shadow-xs self-start sm:self-auto"
                 >
                   Restaurar Padrões
                 </button>
@@ -193,8 +195,8 @@ export default function SettingsPage() {
 
               {/* Background Mode Selection */}
               <div>
-                <h4 className="text-sm font-bold mb-4">Tema do Sistema</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <h4 className="text-xs font-bold mb-2 text-foreground">Tema do Sistema</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
                     { id: "system", label: "Sistema", icon: Monitor, bg: "bg-slate-200 dark:bg-slate-800", border: "border-slate-300 dark:border-slate-700", iconColor: "text-slate-600 dark:text-slate-400" },
                     { id: "light", label: "Claro", icon: Sparkles, bg: "bg-slate-50", border: "border-slate-200", iconColor: "text-amber-500" },
@@ -205,47 +207,47 @@ export default function SettingsPage() {
                       key={mode.id}
                       onClick={() => setAppearance(mode.id as any)}
                       className={cn(
-                        "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all",
+                        "flex flex-col items-center gap-1.5 p-2.5 rounded-xl border transition-all cursor-pointer",
                         appearance === mode.id 
-                          ? "border-primary bg-primary/5 shadow-sm" 
+                          ? "border-primary bg-primary/5 shadow-xs" 
                           : "border-border hover:border-primary/30"
                       )}
                     >
-                      <div className={cn("w-full h-12 rounded-xl mb-1 flex items-center justify-center overflow-hidden border", mode.bg, mode.border)}>
-                        <mode.icon className={cn("w-5 h-5", mode.iconColor)} />
+                      <div className={cn("w-full h-9 rounded-lg flex items-center justify-center overflow-hidden border", mode.bg, mode.border)}>
+                        <mode.icon className={cn("w-4 h-4", mode.iconColor)} />
                       </div>
-                      <span className="text-xs font-bold">{mode.label}</span>
+                      <span className="text-[11px] font-bold">{mode.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-border">
-                <h4 className="text-sm font-bold mb-4">Cores de Destaque</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="pt-3 border-t border-border">
+                <h4 className="text-xs font-bold mb-2 text-foreground">Cores de Destaque</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                   {colors.map((color) => (
                     <button
                       key={color.value}
                       onClick={() => setPrimaryColor(color.value)}
                       className={cn(
-                        "relative group h-24 rounded-2xl border-2 transition-all overflow-hidden p-4 flex flex-col justify-end",
+                        "relative group h-14 rounded-xl border transition-all overflow-hidden p-2 flex flex-col justify-end cursor-pointer",
                         primaryColor === color.value 
                           ? "border-primary bg-primary/5" 
                           : "border-border hover:border-primary/30"
                       )}
                     >
                       <div 
-                        className="absolute top-4 right-4 w-6 h-6 rounded-full flex items-center justify-center transition-all bg-card shadow-sm"
+                        className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center transition-all bg-card shadow-xs"
                         style={{ color: color.hex }}
                       >
-                        {primaryColor === color.value ? <Check className="w-4 h-4 stroke-[3px]" /> : null}
+                        {primaryColor === color.value ? <Check className="w-3 h-3 stroke-[3px]" /> : null}
                       </div>
                       <div 
-                        className="w-4 h-4 rounded-full mb-2"
+                        className="w-3 h-3 rounded-full mb-1"
                         style={{ backgroundColor: color.hex }}
                       />
                       <span className={cn(
-                        "text-xs font-bold transition-colors",
+                        "text-[10px] font-bold transition-colors truncate",
                         primaryColor === color.value ? "text-primary" : "text-muted-foreground"
                       )}>
                         {color.name}
@@ -256,20 +258,20 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-bold text-foreground">Probabilidades do Pipeline (Score)</h3>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Target className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground">Probabilidades do Pipeline (Score)</h3>
                   </div>
-                  <p className="text-sm text-muted-foreground">Defina o percentual de sucesso projetado para cada estágio do seu funil.</p>
+                  <p className="text-[11px] text-muted-foreground">Defina o percentual de sucesso projetado para cada estágio do seu funil.</p>
                 </div>
                 <button
                   onClick={saveProbabilities}
                   disabled={isSaved}
                   className={cn(
-                    "px-6 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2",
+                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs flex items-center gap-1.5 self-start sm:self-auto",
                     isSaved 
                       ? "bg-emerald-500 text-white border-emerald-600" 
                       : "bg-primary text-white border-primary/20 hover:bg-primary/90"
@@ -277,7 +279,7 @@ export default function SettingsPage() {
                 >
                   {isSaved ? (
                     <>
-                      <Check className="w-4 h-4" />
+                      <Check className="w-3.5 h-3.5" />
                       Salvo com Sucesso
                     </>
                   ) : (
@@ -286,10 +288,10 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
                 {STAGES_CONFIG.map((stage) => (
-                  <div key={stage.id} className="p-4 bg-muted/30 rounded-2xl border border-border">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">
+                  <div key={stage.id} className="p-2.5 bg-muted/30 rounded-xl border border-border">
+                    <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1 truncate">
                       {stage.title}
                     </label>
                     <div className="relative">
@@ -297,25 +299,25 @@ export default function SettingsPage() {
                         type="number" 
                         value={probabilities[stage.id] ?? stage.defaultProb}
                         onChange={(e) => handleProbChange(stage.id, e.target.value)}
-                        className="w-full bg-background border-none rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-primary/20"
+                        className="w-full bg-background border-none rounded-lg py-1 px-2.5 text-xs font-bold focus:ring-1 focus:ring-primary/20"
                         min="0"
                         max="100"
                       />
-                      <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                      <Percent className="absolute right-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-muted-foreground" />
                     </div>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-bold text-foreground">Inatividade da Sessão (Segurança)</h3>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground">Inatividade da Sessão (Segurança)</h3>
                   </div>
-                  <p className="text-sm text-muted-foreground">Configure a desconexão automática se o sistema não detectar ações do usuário.</p>
+                  <p className="text-[11px] text-muted-foreground">Configure a desconexão automática se o sistema não detectar ações do usuário.</p>
                 </div>
                 
                 <button
@@ -323,7 +325,7 @@ export default function SettingsPage() {
                   onClick={saveSessionSettings}
                   disabled={isSessionSaved}
                   className={cn(
-                    "px-6 py-2.5 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2 cursor-pointer",
+                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer",
                     isSessionSaved 
                       ? "bg-emerald-500 text-white border-emerald-600" 
                       : "bg-primary text-white border-primary/20 hover:bg-primary/90"
@@ -331,7 +333,7 @@ export default function SettingsPage() {
                 >
                   {isSessionSaved ? (
                     <>
-                      <Check className="w-4 h-4" />
+                      <Check className="w-3.5 h-3.5" />
                       Salvo com Sucesso
                     </>
                   ) : (
@@ -340,12 +342,12 @@ export default function SettingsPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 {/* Toggle Option */}
-                <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border">
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border border-border">
                   <div>
-                    <h4 className="text-sm font-bold text-foreground">Desconexão por Inatividade</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Sair automaticamente ao ficar inativo.</p>
+                    <h4 className="text-xs font-bold text-foreground">Desconexão por Inatividade</h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Sair automaticamente ao ficar inativo.</p>
                   </div>
                   <button
                     type="button"
@@ -354,14 +356,14 @@ export default function SettingsPage() {
                       setIsSessionSaved(false);
                     }}
                     className={cn(
-                      "w-12 h-6 rounded-full p-1 transition-colors relative cursor-pointer",
+                      "w-10 h-5 rounded-full p-0.5 transition-colors relative cursor-pointer",
                       sessionEnabled ? "bg-emerald-500" : "bg-muted"
                     )}
                   >
                     <div 
                       className={cn(
-                        "w-4 h-4 bg-white rounded-full shadow-md transition-transform",
-                        sessionEnabled ? "translate-x-6" : "translate-x-0"
+                        "w-4 h-4 bg-white rounded-full shadow-xs transition-transform",
+                        sessionEnabled ? "translate-x-5" : "translate-x-0"
                       )}
                     />
                   </button>
@@ -369,17 +371,17 @@ export default function SettingsPage() {
 
                 {/* Timer Selector */}
                 <div className={cn(
-                  "p-5 bg-muted/30 rounded-2xl border border-border transition-all duration-300",
+                  "p-3 bg-muted/30 rounded-xl border border-border transition-all duration-300",
                   !sessionEnabled && "opacity-50 pointer-events-none"
                 )}>
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-bold text-foreground">Tempo Limite</h4>
-                    <div className="text-xs font-black text-primary uppercase bg-primary/10 px-2.5 py-1 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="text-xs font-bold text-foreground">Tempo Limite</h4>
+                    <div className="text-[10px] font-bold text-primary uppercase bg-primary/10 px-2 py-0.5 rounded-md">
                       {sessionMinutes} {sessionMinutes === 1 ? "minuto" : "minutos"}
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       disabled={!sessionEnabled || sessionMinutes <= 1}
@@ -387,7 +389,7 @@ export default function SettingsPage() {
                         setSessionMinutes(prev => Math.max(1, prev - 1));
                         setIsSessionSaved(false);
                       }}
-                      className="w-10 h-10 rounded-xl bg-background hover:bg-muted border border-border font-bold flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-background hover:bg-muted border border-border font-bold text-xs flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
                     >
                       -
                     </button>
@@ -402,7 +404,7 @@ export default function SettingsPage() {
                         setSessionMinutes(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)));
                         setIsSessionSaved(false);
                       }}
-                      className="flex-1 accent-primary h-2 bg-border rounded-lg appearance-none cursor-pointer"
+                      className="flex-1 accent-primary h-1.5 bg-border rounded-lg appearance-none cursor-pointer"
                     />
                     
                     <button
@@ -412,12 +414,12 @@ export default function SettingsPage() {
                         setSessionMinutes(prev => Math.min(30, prev + 1));
                         setIsSessionSaved(false);
                       }}
-                      className="w-10 h-10 rounded-xl bg-background hover:bg-muted border border-border font-bold flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-background hover:bg-muted border border-border font-bold text-xs flex items-center justify-center transition-all disabled:opacity-50 cursor-pointer"
                     >
                       +
                     </button>
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground font-bold uppercase mt-2 px-1">
+                  <div className="flex justify-between text-[9px] text-muted-foreground font-bold uppercase mt-1.5 px-0.5">
                     <span>Mín: 1 min</span>
                     <span>Máx: 30 min</span>
                   </div>
@@ -425,15 +427,15 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section id="system-guide-section" className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+            <section id="system-guide-section" className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border/50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 pb-3 border-b border-border/50">
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Layout className="w-5 h-5 text-primary" />
-                      <h3 className="text-lg font-bold text-foreground">Guia do Sistema (Documentação)</h3>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Layout className="w-4 h-4 text-primary" />
+                      <h3 className="text-xs sm:text-sm font-bold text-foreground">Guia do Sistema (Documentação)</h3>
                     </div>
-                    <p className="text-sm text-muted-foreground">Explicação detalhada e interativa de cada módulo e recurso do SalesScore CRM.</p>
+                    <p className="text-[11px] text-muted-foreground">Explicação detalhada e interativa de cada módulo e recurso do SalesScore CRM.</p>
                   </div>
                   <button
                     type="button"
@@ -441,14 +443,14 @@ export default function SettingsPage() {
                       setSelectedGuideSection("dashboard");
                       setIsGuideOpen(true);
                     }}
-                    className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-black uppercase tracking-wider rounded-2xl cursor-pointer hover:shadow-lg shadow-primary/20 transition-all select-none shrink-0"
+                    className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer hover:shadow-sm shadow-primary/20 transition-all select-none shrink-0 self-start sm:self-auto"
                   >
-                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
                     Abrir Guia HTML Interativo
                   </button>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   <DocItem 
                     title="Controle Operacional / Dashboard" 
                     icon={LayoutDashboard} 
@@ -509,15 +511,15 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Sigma className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-bold text-foreground">Dicionário de Fórmulas e Cálculos</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sigma className="w-4 h-4 text-primary" />
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Dicionário de Fórmulas e Cálculos</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-6">Entenda como o SalesScore CRM processa seus dados para gerar inteligência comercial.</p>
+                <p className="text-[11px] text-muted-foreground mb-3">Entenda como o SalesScore CRM processa seus dados para gerar inteligência comercial.</p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   <DocItem 
                     title="Previsão de Fechamento (Forecast)" 
                     icon={Calculator} 
@@ -552,29 +554,29 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="bg-card rounded-[32px] p-6 md:p-8 border border-border shadow-sm space-y-8">
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-bold text-foreground">Customização Visual</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Customização Visual</h3>
                 </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-background rounded-2xl border border-border group hover:border-primary/30 transition-colors">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between p-3 bg-background rounded-xl border border-border group hover:border-primary/30 transition-colors">
                     <div>
-                      <p className="text-sm font-bold text-foreground">Modo Compacto</p>
-                      <p className="text-xs text-muted-foreground">Reduz o espaçamento para mostrar mais dados.</p>
+                      <p className="text-xs font-bold text-foreground">Modo Compacto</p>
+                      <p className="text-[11px] text-muted-foreground">Reduz o espaçamento para mostrar mais dados.</p>
                     </div>
-                    <div className="w-12 h-6 bg-muted rounded-full relative p-1 cursor-pointer">
-                      <div className="w-4 h-4 bg-card rounded-full shadow-sm" />
+                    <div className="w-10 h-5 bg-muted rounded-full relative p-0.5 cursor-pointer">
+                      <div className="w-4 h-4 bg-card rounded-full shadow-xs" />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-background rounded-2xl border border-border group hover:border-primary/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 bg-background rounded-xl border border-border group hover:border-primary/30 transition-colors">
                     <div>
-                      <p className="text-sm font-bold text-foreground">Animações de Transição</p>
-                      <p className="text-xs text-muted-foreground">Habilita efeitos suaves entre telas.</p>
+                      <p className="text-xs font-bold text-foreground">Animações de Transição</p>
+                      <p className="text-[11px] text-muted-foreground">Habilita efeitos suaves entre telas.</p>
                     </div>
-                    <div className="w-12 h-6 bg-primary rounded-full relative p-1 cursor-pointer">
-                      <div className="w-4 h-4 bg-card rounded-full shadow-sm ml-auto" />
+                    <div className="w-10 h-5 bg-primary rounded-full relative p-0.5 cursor-pointer">
+                      <div className="w-4 h-4 bg-card rounded-full shadow-xs ml-auto" />
                     </div>
                   </div>
                 </div>

@@ -404,79 +404,79 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <header className="h-auto md:h-24 bg-card/80 backdrop-blur-md border-b border-border pl-20 md:pl-8 px-4 md:px-8 py-4 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/10 p-2.5 rounded-2xl shrink-0">
-              <CalendarIcon className="w-6 h-6 text-primary" />
+        <header className="h-auto md:h-16 bg-card/80 backdrop-blur-md border-b border-border pl-16 md:pl-6 px-3 sm:px-4 md:px-5 py-2.5 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 p-2 rounded-xl shrink-0">
+              <CalendarIcon className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Calendário</h1>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-0.5">Gestão de Agenda</p>
+              <h1 className="text-lg md:text-xl font-bold">Calendário</h1>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mt-0.5">Gestão de Agenda</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5">
             <div className="hidden md:flex relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Buscar eventos..." 
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-11 pr-6 py-3 bg-muted border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 transition-all"
+                className="pl-9 pr-4 py-1.5 bg-muted border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 w-52 transition-all"
               />
             </div>
-            <button className="bg-card border border-border p-3 rounded-2xl text-muted-foreground hover:bg-muted transition-all shadow-sm">
-              <Filter className="w-5 h-5" />
+            <button className="bg-card border border-border p-2 rounded-xl text-muted-foreground hover:bg-muted transition-all shadow-xs">
+              <Filter className="w-4 h-4" />
             </button>
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="bg-primary text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
+              className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Novo Evento
             </button>
           </div>
         </header>
 
-        <div className="p-8 flex flex-col lg:flex-row gap-8 flex-1">
+        <div className="p-3 sm:p-4 md:p-5 flex flex-col lg:flex-row gap-4 flex-1 max-w-7xl w-full mx-auto">
           {/* Calendar Grid */}
-          <div className="flex-[2] bg-card rounded-[32px] border border-border shadow-sm p-6 md:p-8 flex flex-col transition-colors">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold capitalize">
+          <div className="flex-[2] bg-card rounded-2xl border border-border shadow-xs p-4 md:p-5 flex flex-col transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base md:text-lg font-bold capitalize">
                 {format(currentMonth, "MMMM yyyy", { locale: ptBR })}
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button 
                   onClick={prevMonth}
-                  className="p-2 hover:bg-muted rounded-xl transition-colors border border-border"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-border"
                 >
-                  <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+                  <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
                 <button 
                   onClick={() => {
                     setCurrentMonth(new Date());
                     setSelectedDate(new Date());
                   }}
-                  className="px-4 py-2 text-sm font-bold text-primary hover:bg-primary/10 rounded-xl transition-colors"
+                  className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors"
                 >
                   Hoje
                 </button>
                 <button 
                   onClick={nextMonth}
-                  className="p-2 hover:bg-muted rounded-xl transition-colors border border-border"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors border border-border"
                 >
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-px bg-border rounded-2xl overflow-hidden border border-border">
+            <div className="grid grid-cols-7 gap-px bg-border rounded-xl overflow-hidden border border-border">
               {weekDays.map((day) => (
-                <div key={day} className="bg-muted/30 py-4 text-center">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{day}</span>
+                <div key={day} className="bg-muted/30 py-2.5 text-center">
+                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{day}</span>
                 </div>
               ))}
               {calendarDays.map((date, i) => {
@@ -486,25 +486,25 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     key={i} 
                     onClick={() => setSelectedDate(date)}
                     className={cn(
-                      "bg-card min-h-[100px] p-3 cursor-pointer hover:bg-muted/10 transition-colors group relative",
+                      "bg-card min-h-[75px] md:min-h-[85px] p-2 cursor-pointer hover:bg-muted/10 transition-colors group relative",
                       !isSameMonth(date, monthStart) && "bg-muted/5 opacity-40",
                       isSameDay(date, selectedDate) && !isSameDay(date, new Date()) && "bg-primary/5"
                     )}
                   >
                     <span className={cn(
-                      "inline-flex items-center justify-center w-7 h-7 text-xs font-bold rounded-lg transition-all",
-                      isSameDay(date, new Date()) ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-muted-foreground group-hover:text-primary",
-                      isSameDay(date, selectedDate) && "ring-2 ring-primary ring-offset-2 z-10 ring-offset-background"
+                      "inline-flex items-center justify-center w-6 h-6 text-[11px] font-bold rounded-md transition-all",
+                      isSameDay(date, new Date()) ? "bg-primary text-white shadow-xs shadow-primary/20" : "text-muted-foreground group-hover:text-primary",
+                      isSameDay(date, selectedDate) && "ring-2 ring-primary ring-offset-1 z-10 ring-offset-background"
                     )}>
                       {format(date, "d")}
                     </span>
 
-                    <div className="mt-2 flex flex-col gap-1 overflow-hidden">
+                    <div className="mt-1 flex flex-col gap-0.5 overflow-hidden">
                       {dayEvents.slice(0, 3).map((e, idx) => (
                         <div 
                           key={idx} 
                           className={cn(
-                            "px-1.5 py-0.5 rounded-md text-[9px] font-bold truncate flex items-center gap-1",
+                            "px-1 py-0.5 rounded text-[8px] md:text-[9px] font-bold truncate flex items-center gap-1",
                             e.type === "Visita" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
                             e.type === "Reunião" ? "bg-primary/10 text-primary border border-primary/20" : 
                             "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
@@ -519,7 +519,7 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                         </div>
                       ))}
                       {dayEvents.length > 3 && (
-                        <div className="text-[9px] font-bold text-muted-foreground pl-1 mt-0.5">
+                        <div className="text-[8px] font-bold text-muted-foreground pl-1 mt-0.5">
                           + {dayEvents.length - 3} mais
                         </div>
                       )}
@@ -531,22 +531,22 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
           </div>
 
           {/* Side Panel: Daily Agenda */}
-          <div className="lg:w-[380px] flex flex-col gap-6">
-            <div className="bg-card rounded-[32px] border border-border shadow-sm p-8 transition-colors">
-              <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
+          <div className="lg:w-[320px] flex flex-col gap-4">
+            <div className="bg-card rounded-2xl border border-border shadow-xs p-4 md:p-5 transition-colors">
+              <h3 className="text-sm md:text-base font-bold mb-4 flex items-center justify-between">
                 <span>Agenda do Dia</span>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted/30 px-3 py-1 rounded-full border border-border">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest bg-muted/30 px-2 py-0.5 rounded-full border border-border">
                   {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
                 </span>
               </h3>
 
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
+              <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1 scrollbar-hide">
                 {getEventsForDay(selectedDate).length > 0 ? (
                   getEventsForDay(selectedDate).map((event) => (
                     <div 
                       key={event.id} 
                       className={cn(
-                        "group p-4 rounded-2xl border transition-all relative overflow-hidden",
+                        "group p-3 rounded-xl border transition-all relative overflow-hidden",
                         event.status === 'completed' 
                           ? "bg-muted/10 opacity-60 border-border" 
                           : "bg-muted/20 border-border hover:border-primary/50 hover:bg-primary/5"
@@ -566,35 +566,35 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                           e.stopPropagation();
                           handleDeleteEvent(event.id);
                         }}
-                        className="absolute top-3 right-3 z-50 p-2 hover:bg-red-500/10 rounded-lg text-muted-foreground hover:text-red-500 transition-colors bg-card/80 backdrop-blur-sm border border-transparent hover:border-red-500/20 shadow-sm"
+                        className="absolute top-2 right-2 z-50 p-1.5 hover:bg-red-500/10 rounded-lg text-muted-foreground hover:text-red-500 transition-colors bg-card/80 backdrop-blur-sm border border-transparent hover:border-red-500/20 shadow-xs"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
 
                       {event.status === 'completed' && (
-                        <div className="absolute top-0 right-0 p-1 bg-emerald-500 rounded-bl-xl shadow-lg border-l border-b border-emerald-400 z-20 text-white">
-                          <Check className="w-3 h-3" />
+                        <div className="absolute top-0 right-0 p-1 bg-emerald-500 rounded-bl-lg shadow-xs border-l border-b border-emerald-400 z-20 text-white">
+                          <Check className="w-2.5 h-2.5" />
                         </div>
                       )}
                       
-                      <div className="flex items-start justify-between mb-3 relative z-20 pointer-events-none">
-                        <div className="flex items-center gap-2 pointer-events-auto">
+                      <div className="flex items-start justify-between mb-2 relative z-20 pointer-events-none">
+                        <div className="flex items-center gap-1.5 pointer-events-auto">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
                               handleToggleStatus(event);
                             }}
                             className={cn(
-                              "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                              "w-4 h-4 rounded border flex items-center justify-center transition-all",
                               event.status === 'completed' 
                                 ? "bg-emerald-500 border-emerald-500 text-white" 
                                 : "bg-card border-border text-transparent hover:border-primary"
                             )}
                           >
-                            <Check className="w-3 h-3" />
+                            <Check className="w-2.5 h-2.5" />
                           </button>
                           <span className={cn(
-                            "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border",
+                            "px-2 py-0.5 rounded text-[8px] md:text-[9px] font-bold uppercase tracking-wider border",
                             event.type === "Visita" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
                             event.type === "Reunião" ? "bg-primary/10 text-primary border-primary/20" :
                             "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
@@ -604,40 +604,40 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                         </div>
                       </div>
                       <h4 className={cn(
-                        "font-bold mb-2 leading-tight",
+                        "font-bold text-xs md:text-sm mb-1 leading-tight",
                         event.status === 'completed' && "line-through text-muted-foreground"
                       )}>
                         {event.title}
                       </h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span className="text-[11px] font-medium">{event.time}</span>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          <span className="text-[10px] font-medium">{event.time}</span>
                         </div>
                         {event.client && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Users className="w-3.5 h-3.5" />
-                            <span className="text-[11px] font-medium">{event.client}</span>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Users className="w-3 h-3" />
+                            <span className="text-[10px] font-medium">{event.client}</span>
                           </div>
                         )}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="py-12 text-center">
-                    <div className="bg-muted w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Clock className="w-6 h-6 text-muted-foreground/30" />
+                  <div className="py-8 text-center">
+                    <div className="bg-muted w-9 h-9 rounded-xl flex items-center justify-center mx-auto mb-2.5">
+                      <Clock className="w-4 h-4 text-muted-foreground/30" />
                     </div>
-                    <p className="text-sm font-medium text-muted-foreground">Nenhum evento agendado para este dia.</p>
+                    <p className="text-xs font-medium text-muted-foreground">Nenhum evento agendado para este dia.</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-slate-900 dark:bg-slate-950 rounded-[32px] p-8 text-white relative overflow-hidden group">
+            <div className="bg-slate-900 dark:bg-slate-950 rounded-2xl p-5 text-white relative overflow-hidden group">
               <div className="relative z-10">
-                <h3 className="text-xl font-bold mb-2">Resumo da Semana</h3>
-                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                <h3 className="text-base font-bold mb-1">Resumo da Semana</h3>
+                <p className="text-slate-400 text-xs mb-3.5 leading-relaxed">
                   Você tem {getWeeklyEvents().length} compromissos agendados nesta semana.
                 </p>
                 <button 
@@ -645,13 +645,13 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     setIsReportOpen(true);
                     generateWeeklyReport();
                   }}
-                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-bold text-xs transition-all flex items-center gap-2 border border-white/10 cursor-pointer"
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
                 >
                   Ver Relatório Completo
-                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </button>
               </div>
-              <CalendarIcon className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 transition-transform group-hover:scale-110" />
+              <CalendarIcon className="absolute -right-3 -bottom-3 w-24 h-24 text-white/5 -rotate-12 transition-transform group-hover:scale-110" />
             </div>
           </div>
         </div>
@@ -671,12 +671,12 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-card rounded-[32px] shadow-2xl overflow-hidden border border-border"
+              className="relative w-full max-w-lg bg-card rounded-2xl shadow-xl overflow-hidden border border-border"
             >
-              <div className="px-8 py-6 border-b border-border flex items-center justify-between bg-muted/30">
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/30">
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">{editingEvent ? 'Editar Compromisso' : 'Novo Compromisso'}</h3>
-                  <p className="text-xs font-medium text-muted-foreground">Agendando para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</p>
+                  <h3 className="text-base font-bold text-foreground">{editingEvent ? 'Editar Compromisso' : 'Novo Compromisso'}</h3>
+                  <p className="text-[11px] font-medium text-muted-foreground">Agendando para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</p>
                 </div>
                 <button 
                   onClick={() => {
@@ -684,14 +684,14 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     setEditingEvent(null);
                     setNewEvent({ title: "", time: "10:00", endTime: "11:00", type: "Visita", client: "", description: "" });
                   }}
-                  className="p-2 hover:bg-muted rounded-xl transition-colors"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-muted-foreground" />
+                  <X className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
               
-              <form onSubmit={handleAddEvent} className="p-8 space-y-6">
-                <div className="space-y-2 font-medium text-start">
+              <form onSubmit={handleAddEvent} className="p-5 space-y-4">
+                <div className="space-y-1.5 font-medium text-start">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Título do Evento</label>
                   <input 
                     required
@@ -699,51 +699,51 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     value={newEvent.title}
                     onChange={e => setNewEvent({...newEvent, title: e.target.value})}
                     placeholder="Ex: Visita ao Edifício Garden"
-                    className="w-full px-5 py-4 bg-muted/30 rounded-2xl text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
+                    className="w-full px-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Horário Início</label>
                     <div className="relative">
-                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <input 
                         required
                         type="time" 
                         value={newEvent.time}
                         onChange={e => setNewEvent({...newEvent, time: e.target.value})}
-                        className="w-full pl-11 pr-5 py-4 bg-muted/30 rounded-2xl text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
+                        className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Horário Término</label>
                     <div className="relative">
-                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <input 
                         required
                         type="time" 
                         value={newEvent.endTime}
                         onChange={e => setNewEvent({...newEvent, endTime: e.target.value})}
-                        className="w-full pl-11 pr-5 py-4 bg-muted/30 rounded-2xl text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
+                        className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Tipo de Atividade</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     {["Visita", "Reunião", "Follow-up"].map(type => (
                       <button
                         key={type}
                         type="button"
                         onClick={() => setNewEvent({...newEvent, type})}
                         className={cn(
-                          "py-3 rounded-xl text-xs font-bold transition-all border",
+                          "py-2 rounded-xl text-xs font-bold transition-all border",
                           newEvent.type === type 
-                            ? "bg-primary text-white border-primary shadow-md shadow-primary/20" 
+                            ? "bg-primary text-white border-primary shadow-xs shadow-primary/20" 
                             : "bg-muted/30 text-muted-foreground border-border hover:border-primary"
                         )}
                       >
@@ -753,38 +753,38 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Cliente (Opcional)</label>
                   <div className="relative">
-                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <input 
                       type="text" 
                       value={newEvent.client}
                       onChange={e => setNewEvent({...newEvent, client: e.target.value})}
                       placeholder="Nome do cliente..."
-                      className="w-full pl-11 pr-5 py-4 bg-muted/30 rounded-2xl text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
+                      className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-3 mt-4">
+                <div className="flex gap-2.5 mt-4">
                   {editingEvent && (
                     <button 
                       type="button"
                       onClick={() => {
                         handleDeleteEvent(editingEvent.id);
                       }}
-                      className="flex-1 py-5 bg-red-500/10 text-red-500 rounded-2xl font-bold text-sm hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                      className="flex-1 py-2.5 bg-red-500/10 text-red-500 rounded-xl font-bold text-xs md:text-sm hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                       Excluir
                     </button>
                   )}
                   <button 
                     type="submit"
-                    className="flex-[2] py-5 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                    className="flex-[2] py-2.5 bg-primary text-white rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                   >
-                    <Check className="w-5 h-5" />
+                    <Check className="w-4 h-4" />
                     {editingEvent ? 'Salvar Alterações' : 'Salvar Compromisso'}
                   </button>
                 </div>
@@ -813,7 +813,7 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 30 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="relative w-full max-w-4xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 rounded-[32px] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh] text-white"
+              className="relative w-full max-w-4xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden z-10 flex flex-col max-h-[90vh] text-white"
             >
               {/* Header Gradient Glow */}
               <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
@@ -821,28 +821,28 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
               <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
 
               {/* Modal Title Bar */}
-              <div className="px-8 py-6 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40 relative z-10 shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-                    <TrendingUp className="w-6 h-6 animate-pulse" />
+              <div className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40 relative z-10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+                    <TrendingUp className="w-5 h-5 animate-pulse" />
                   </div>
                   <div>
-                    <h3 className="text-base font-black uppercase tracking-tight font-sans">Relatório de Desempenho Semanal</h3>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-1">Análise de Produtividade & IA Prep</p>
+                    <h3 className="text-sm md:text-base font-black uppercase tracking-tight font-sans">Relatório de Desempenho Semanal</h3>
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">Análise de Produtividade & IA Prep</p>
                   </div>
                 </div>
                 
                 <button
                   type="button"
                   onClick={() => setIsReportOpen(false)}
-                  className="p-2.5 bg-slate-800/40 hover:bg-slate-800 rounded-2xl transition-all border border-slate-800/60 text-slate-400 hover:text-white cursor-pointer"
+                  className="p-1.5 bg-slate-800/40 hover:bg-slate-800 rounded-xl transition-all border border-slate-800/60 text-slate-400 hover:text-white cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Scrollable Container */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-8 relative z-10">
+              <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-6 relative z-10">
                 
                 {/* 1. PRODUCTIVITY GRID METRICS */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

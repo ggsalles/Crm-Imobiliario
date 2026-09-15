@@ -38,6 +38,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
+import { recordAuditEvent } from "@/lib/audit";
 import { 
   getProperties,
   subscribeToProperties, 
@@ -343,7 +344,24 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     const toastId = toast.loading("Excluindo imóvel...");
     
     try {
+      const target = properties.find(p => p.id === id);
       await deleteProperty(id);
+
+      recordAuditEvent({
+        action: 'DELETE_PROPERTY',
+        title: 'Exclusão de Imóvel',
+        content: `Imóvel "${target?.title || id}" foi excluído do catálogo.`,
+        severity: 'high',
+        category: 'deletion',
+        relatedId: id,
+        entityType: 'property',
+        metadata: {
+          title: target?.title,
+          price: target?.price,
+          location: target?.location
+        }
+      });
+
       console.log(`[Properties] handleDelete: Sucesso ao excluir ID: ${id}`);
       toast.success("Imóvel excluído com sucesso.", { id: toastId });
     } catch (err: any) {
@@ -579,48 +597,48 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       <Sidebar />
       
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-20 bg-card border-b border-border pl-20 md:pl-8 px-4 md:px-8 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="h-14 md:h-16 bg-card border-b border-border pl-14 md:pl-6 px-3 sm:px-4 md:px-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
             {view === 'form' && (
               <button 
                 onClick={() => setView('list')}
-                className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border"
+                className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border"
               >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
             )}
             <div>
-              <h2 className="text-xl font-black text-foreground tracking-tight uppercase">
+              <h2 className="text-base md:text-lg font-bold text-foreground tracking-tight uppercase">
                 {view === 'list' ? 'Inventário de Imóveis' : editingProperty ? 'Editar Unidade' : 'Cadastrar Unidade'}
               </h2>
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em] mt-0.5">
+              <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">
                 {view === 'list' ? `${properties.length} imóveis ativos` : 'Preencha as especificações técnicas'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {view === 'list' && (
               <>
-                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center gap-2" title="Conexão em tempo real ativa">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                  <span className="text-[9px] font-black uppercase tracking-tighter hidden sm:inline">Ao Vivo</span>
+                <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1.5" title="Conexão em tempo real ativa">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                  <span className="text-[9px] font-bold uppercase tracking-tight hidden sm:inline">Ao Vivo</span>
                 </div>
                 <div className="relative hidden md:block">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input 
                     type="text" 
                     placeholder="Filtrar por nome ou local..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-64 pl-10 pr-4 py-2 bg-background border border-border rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-52 pl-8 pr-3 py-1.5 bg-background border border-border rounded-xl text-xs font-medium focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
                 <button 
-  onClick={handleNew}
-  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/30 hover:opacity-90 active:scale-[0.98] transition-all"
->
-                  <Plus className="w-4 h-4" />
+                  onClick={handleNew}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
                   Novo Imóvel
                 </button>
               </>
@@ -628,7 +646,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
             {view === 'form' && (
               <button 
                 onClick={() => setView('list')}
-                className="px-6 py-2.5 bg-muted text-muted-foreground rounded-xl text-xs font-black uppercase tracking-widest hover:bg-muted/80 transition-all"
+                className="px-4 py-2 bg-muted text-muted-foreground rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-muted/80 transition-all"
               >
                 Cancelar
               </button>
@@ -636,10 +654,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-muted/5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5">
           {view === 'list' ? (
-            <div className="space-y-6 md:space-y-8">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pb-1">
+            <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pb-1">
                 {[
                   { id: "all", label: "Todos", icon: Home },
                   { id: "casa", label: "Casas", icon: Home },
@@ -663,16 +681,16 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       key={type.id}
                       onClick={() => setFilterType(type.id)}
                       className={cn(
-                        "flex items-center gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border transition-all",
+                        "flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all",
                         isActive 
-                          ? "bg-foreground text-background border-foreground shadow-md" 
+                          ? "bg-foreground text-background border-foreground shadow-xs" 
                           : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
                       )}
                     >
-                      <type.icon className="w-3.5 h-3.5 shrink-0" />
+                      <type.icon className="w-3 h-3 shrink-0" />
                       <span>{type.label}</span>
                       <span className={cn(
-                        "text-[9px] px-1.5 py-0.5 rounded-md font-black shrink-0 transition-colors",
+                        "text-[9px] px-1 py-0.2 rounded font-black shrink-0 transition-colors",
                         isActive 
                           ? "bg-background/20 text-background" 
                           : "bg-muted text-muted-foreground"
@@ -685,13 +703,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               </div>
 
               {loading && (
-                <div className="flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest">
+                <div className="flex items-center gap-1.5 text-primary font-bold uppercase text-[9px] tracking-wider">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Sincronizando...
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
                 <AnimatePresence>
                   {filteredProperties.map((property) => (
                     <PropertyCard 
@@ -707,10 +725,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               </div>
 
               {filteredProperties.length === 0 && !loading && (
-                <div className="flex flex-col items-center justify-center py-32 text-center border-2 border-dashed border-border rounded-[40px]">
-                  <Home className="w-16 h-16 text-muted-foreground/20 mb-6" />
-                  <h3 className="text-xl font-black uppercase tracking-tight">Inventário Vazio</h3>
-                  <p className="text-muted-foreground text-sm font-medium mt-2 max-w-sm">
+                <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-2xl">
+                  <Home className="w-10 h-10 text-muted-foreground/20 mb-3" />
+                  <h3 className="text-base font-bold uppercase tracking-tight">Inventário Vazio</h3>
+                  <p className="text-muted-foreground text-xs font-medium mt-1 max-w-sm">
                     Nenhum imóvel corresponde aos seus filtros. Experimente cadastrar uma nova unidade para começar.
                   </p>
                 </div>
@@ -1103,13 +1121,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-card w-full max-w-2xl rounded-[32px] border border-border shadow-2xl overflow-hidden"
+              className="bg-card w-full max-w-xl rounded-2xl border border-border shadow-xl overflow-hidden"
             >
-              <div className="p-8 border-b border-border flex items-center justify-between bg-muted/20">
+              <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20">
                 <div>
-                  <h3 className="text-base font-black text-foreground uppercase tracking-tight line-clamp-1">{activeMapProperty.title}</h3>
-                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
-                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <h3 className="text-sm md:text-base font-bold text-foreground uppercase tracking-tight line-clamp-1">{activeMapProperty.title}</h3>
+                  <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1 flex-wrap">
+                    <MapPin className="w-3 h-3 text-primary shrink-0" />
                     {activeMapProperty.street 
                       ? `${activeMapProperty.street}, ${activeMapProperty.number || "S/N"}${activeMapProperty.neighborhood ? ` - ${activeMapProperty.neighborhood}` : ""}, ${activeMapProperty.city} - ${activeMapProperty.state}` 
                       : activeMapProperty.location}
@@ -1118,12 +1136,12 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                 <button
                   type="button"
                   onClick={() => setActiveMapProperty(null)}
-                  className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
+                  className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="h-[400px] w-full bg-muted/25 relative">
+              <div className="h-[320px] w-full bg-muted/25 relative">
                 <iframe
                   width="100%"
                   height="100%"
@@ -1139,7 +1157,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   )}&t=&z=16&ie=UTF8&iwloc=&output=embed`}
                 />
               </div>
-              <div className="p-6 bg-muted/10 border-t border-border flex justify-end gap-3">
+              <div className="p-4 bg-muted/10 border-t border-border flex justify-end gap-2">
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                     (activeMapProperty.street 
@@ -1149,15 +1167,15 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-6 py-3 bg-muted text-muted-foreground hover:bg-muted/80 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all border border-border"
+                  className="px-4 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all border border-border"
                 >
                   Abrir no Google Maps
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <ExternalLink className="w-3 h-3" />
                 </a>
                 <button
                   type="button"
                   onClick={() => setActiveMapProperty(null)}
-                  className="px-6 py-3 bg-primary text-primary-foreground rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-95 transition-all shadow-lg shadow-primary/20"
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-95 transition-all shadow-sm"
                 >
                   Fechar
                 </button>
@@ -1172,55 +1190,55 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-card w-full max-w-2xl rounded-[32px] border border-border shadow-2xl overflow-hidden flex flex-col"
+              className="bg-card w-full max-w-xl rounded-2xl border border-border shadow-xl overflow-hidden flex flex-col"
             >
               {/* Header */}
-              <div className="p-8 border-b border-border flex items-center justify-between bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                    <Share2 className="w-5 h-5" />
+              <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                    <Share2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-base font-black text-foreground uppercase tracking-tight">Gerador de Ficha de Imóvel</h3>
-                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.15em] mt-1">Prepare ofertas personalizadas para WhatsApp</p>
+                    <h3 className="text-sm md:text-base font-bold text-foreground uppercase tracking-tight">Gerador de Ficha de Imóvel</h3>
+                    <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Prepare ofertas personalizadas para WhatsApp</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSharingProperty(null)}
-                  className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
+                  className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors border border-border shrink-0"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Body */}
-              <div className="p-8 space-y-6 overflow-y-auto max-h-[60vh]">
-                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 flex items-start gap-3">
-                  <span className="text-xl">💡</span>
+              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto max-h-[55vh]">
+                <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10 flex items-start gap-2.5">
+                  <span className="text-base">💡</span>
                   <div className="text-xs text-muted-foreground leading-relaxed">
-                    <strong className="text-emerald-500 font-bold block mb-1">Dica do sistema:</strong>
+                    <strong className="text-emerald-500 font-bold block mb-0.5">Dica do sistema:</strong>
                     Você pode alterar livremente o texto abaixo antes de copiar ou enviar. Adicione seu nome, dados de contato ou mensagens personalizadas.
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Visualização e Edição da Ficha</label>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider pl-0.5">Visualização e Edição da Ficha</label>
                   <textarea
                     value={sharingText}
                     onChange={(e) => setSharingText(e.target.value)}
-                    rows={12}
-                    className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-mono leading-relaxed resize-y"
+                    rows={8}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs font-mono leading-relaxed resize-y"
                   />
                 </div>
               </div>
 
               {/* Footer Actions */}
-              <div className="p-6 bg-muted/10 border-t border-border flex flex-col sm:flex-row justify-end gap-3 shrink-0">
+              <div className="p-4 bg-muted/10 border-t border-border flex flex-col sm:flex-row justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setSharingProperty(null)}
-                  className="px-6 py-3 bg-muted text-muted-foreground hover:bg-muted/80 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-border"
+                  className="px-4 py-2 bg-muted text-muted-foreground hover:bg-muted/80 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border border-border"
                 >
                   Cancelar
                 </button>
@@ -1234,10 +1252,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       toast.success("Link público de captura copiado!");
                     }
                   }}
-                  className="px-6 py-3 bg-primary hover:bg-opacity-95 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/25 cursor-pointer"
+                  className="px-4 py-2 bg-primary hover:bg-opacity-95 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
                 >
-                  <ExternalLink className="w-4 h-4 text-white" />
-                  Copiar Link p/ Instagram
+                  <ExternalLink className="w-3.5 h-3.5 text-white" />
+                  Copiar Link
                 </button>
                 
                 <button
@@ -1246,9 +1264,9 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     navigator.clipboard.writeText(sharingText);
                     toast.success("Ficha do imóvel copiada!");
                   }}
-                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
                 >
-                  <Copy className="w-4 h-4 text-white fill-white" />
+                  <Copy className="w-3.5 h-3.5 text-white fill-white" />
                   Copiar Ficha WhatsApp
                 </button>
               </div>
@@ -1291,9 +1309,9 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="bg-card rounded-[32px] border border-border overflow-hidden group hover:shadow-2xl hover:shadow-primary/10 transition-all flex flex-col"
+      className="bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col"
     >
-      <div className="h-48 relative overflow-hidden shrink-0 group/img">
+      <div className="h-40 sm:h-44 relative overflow-hidden shrink-0 group/img">
         <AnimatePresence mode="wait">
               <motion.div
                 key={currentImageIndex}
@@ -1307,7 +1325,7 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
                   src={images[currentImageIndex]} 
                   alt={property.title} 
                   fill
-                  className="object-cover group-hover:scale-110 transition-transform duration-700"
+                  className="object-cover group-hover:scale-105 transition-transform duration-700"
                   referrerPolicy="no-referrer"
                 />
               </motion.div>
@@ -1316,59 +1334,59 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
         {/* Carousel Controls */}
         {images.length > 1 && (
           <>
-            <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5 z-10">
+            <div className="absolute inset-x-0 bottom-2.5 flex justify-center gap-1 z-10">
               {images.map((_, idx) => (
                 <div 
                   key={idx} 
                   className={cn(
-                    "w-1.5 h-1.5 rounded-full transition-all duration-300",
-                    idx === currentImageIndex ? "bg-white w-4" : "bg-white/40"
+                    "w-1 h-1 rounded-full transition-all duration-300",
+                    idx === currentImageIndex ? "bg-white w-3" : "bg-white/40"
                   )}
                 />
               ))}
             </div>
 
-            <div className="absolute inset-0 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-between px-3 pointer-events-none">
+            <div className="absolute inset-0 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-between px-2 pointer-events-none">
               <button 
                 onClick={prevImage}
-                className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
+                className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
               <button 
                 onClick={nextImage}
-                className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
+                className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 transition-colors pointer-events-auto"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </>
         )}
 
-        <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10 pointer-events-none">
+        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none">
           <span className={cn(
-            "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border",
+            "px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider backdrop-blur-md border",
             property.status === 'disponível' ? "bg-emerald-500/80 text-white border-emerald-400" :
             property.status === 'reservado' ? "bg-amber-500/80 text-white border-amber-400" :
             "bg-slate-800/80 text-white border-slate-700"
           )}>
             {property.status}
           </span>
-          <span className="px-3 py-1.5 bg-background/80 backdrop-blur-md text-foreground border border-border/40 rounded-xl text-[10px] font-black uppercase tracking-widest">
+          <span className="px-2 py-0.5 bg-background/80 backdrop-blur-md text-foreground border border-border/40 rounded-lg text-[9px] font-bold uppercase tracking-wider">
             {property.type}
           </span>
           {property.acceptsFinancing && (
-            <span className="px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-              <TrendingUp className="w-3 h-3" />
+            <span className="px-2 py-0.5 bg-primary text-primary-foreground rounded-lg text-[9px] font-bold uppercase tracking-wider flex items-center gap-1">
+              <TrendingUp className="w-2.5 h-2.5" />
               Financia
             </span>
           )}
         </div>
       </div>
 
-      <div className="p-5 sm:p-6 flex flex-col flex-1">
-        <div className="mb-4">
-          <h4 className="text-base font-black text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
+      <div className="p-3.5 sm:p-4 flex flex-col flex-1">
+        <div className="mb-2.5">
+          <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
           <button
             type="button"
             onClick={(e) => {
@@ -1376,47 +1394,47 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
               e.stopPropagation();
               onShowMap();
             }}
-            className="flex items-center gap-1.5 text-muted-foreground mt-1 hover:text-primary transition-colors cursor-pointer group/loc text-left"
+            className="flex items-center gap-1 text-muted-foreground mt-0.5 hover:text-primary transition-colors cursor-pointer group/loc text-left"
             title="Visualizar mapa completo"
           >
-            <MapPin className="w-3 h-3 group-hover/loc:scale-110 group-hover/loc:text-primary transition-all" />
-            <span className="text-[9px] font-black uppercase tracking-widest truncate group-hover/loc:underline">{property.location}</span>
+            <MapPin className="w-2.5 h-2.5 group-hover/loc:scale-110 group-hover/loc:text-primary transition-all" />
+            <span className="text-[9px] font-medium uppercase tracking-wider truncate group-hover/loc:underline">{property.location}</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="flex items-center gap-2 bg-muted p-2.5 rounded-xl border border-border/50">
-            <Bed className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs font-bold text-foreground">{property.bedrooms} Quartos</span>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40">
+            <Bed className="w-3 h-3 text-muted-foreground" />
+            <span className="text-[11px] font-semibold text-foreground">{property.bedrooms} Quartos</span>
           </div>
-          <div className="flex items-center gap-2 bg-muted p-2.5 rounded-xl border border-border/50">
-            <Square className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs font-bold text-foreground">{property.area}m²</span>
+          <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40">
+            <Square className="w-3 h-3 text-muted-foreground" />
+            <span className="text-[11px] font-semibold text-foreground">{property.area}m²</span>
           </div>
         </div>
 
-        <div className="mt-auto pt-4 border-t border-border flex flex-col gap-3">
+        <div className="mt-auto pt-2.5 border-t border-border flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
             <div>
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Valor Venda</p>
-              <p className="text-lg sm:text-xl font-black text-foreground tracking-tight">
+              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-0.5">Valor Venda</p>
+              <p className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/40">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-border/40">
+            <div className="flex items-center gap-1">
               <button 
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit();
                 }} 
-                className="w-9 h-9 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
+                className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
                 title="Editar imóvel"
               >
-                <Edit className="w-4 h-4" />
+                <Edit className="w-3.5 h-3.5" />
               </button>
               <button 
                 type="button"
@@ -1434,22 +1452,22 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
                   }
                 }} 
                 className={cn(
-                  "w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer z-20 relative border",
+                  "w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer z-20 relative border",
                   confirmDelete 
-                    ? "bg-red-500 text-white border-red-600 scale-105 shadow-lg shadow-red-500/20" 
+                    ? "bg-red-500 text-white border-red-600 scale-105 shadow-md shadow-red-500/20" 
                     : "bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
                 )}
                 title={confirmDelete ? "Clique novamente para confirmar" : "Excluir imóvel"}
               >
                 {confirmDelete ? (
-                  <Trash2 className="w-4 h-4 animate-pulse pointer-events-none" />
+                  <Trash2 className="w-3.5 h-3.5 animate-pulse pointer-events-none" />
                 ) : (
-                  <Trash2 className="w-4 h-4 pointer-events-none" />
+                  <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
                 )}
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button 
                 type="button"
                 onClick={(e) => {
@@ -1457,10 +1475,10 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
                   e.stopPropagation();
                   onShare();
                 }}
-                className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm cursor-pointer"
+                className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-xs cursor-pointer"
                 title="Gerar ficha para WhatsApp"
               >
-                <Share2 className="w-4 h-4 pointer-events-none" />
+                <Share2 className="w-3.5 h-3.5 pointer-events-none" />
               </button>
               <button 
                 type="button"
@@ -1469,10 +1487,10 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
                   e.stopPropagation();
                   onShowMap();
                 }}
-                className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-sm cursor-pointer"
+                className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-xs cursor-pointer"
                 title="Visualizar mapa"
               >
-                <MapPin className="w-4 h-4 pointer-events-none" />
+                <MapPin className="w-3.5 h-3.5 pointer-events-none" />
               </button>
             </div>
           </div>

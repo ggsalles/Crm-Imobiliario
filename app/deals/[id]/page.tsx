@@ -215,18 +215,18 @@ export default function DealDetailPage() {
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500 font-sans selection:bg-primary/20">
       <Sidebar />
       
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <header className="h-20 bg-card border-b border-border px-8 flex items-center justify-between shrink-0 transition-colors">
-          <div className="flex items-center gap-4">
-            <Link href="/pipeline" className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground">
-              <ArrowLeft className="w-5 h-5" />
+        <header className="h-14 md:h-16 bg-card/80 backdrop-blur-md border-b border-border/60 pl-14 md:pl-5 px-3 sm:px-4 md:px-5 flex items-center justify-between shrink-0 sticky top-0 z-10 transition-colors">
+          <div className="flex items-center gap-3">
+            <Link href="/pipeline" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground">
+              <ArrowLeft className="w-4 h-4" />
             </Link>
-            <h1 className="font-black text-foreground tracking-tight text-lg uppercase tracking-widest">Detalhes do Negócio</h1>
+            <h1 className="font-bold text-foreground text-sm sm:text-base tracking-tight">Detalhes do Negócio</h1>
           </div>
           
-          <div className="flex items-center gap-6">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted relative">
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-border bg-muted relative">
               <Image 
                 src={profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName || "User"}&background=6366f1&color=fff`} 
                 alt="Profile" 
@@ -239,20 +239,20 @@ export default function DealDetailPage() {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+        <div className="flex-1 p-3 sm:p-4 md:p-5 space-y-3 sm:space-y-4 max-w-7xl w-full mx-auto">
           
           {/* Main Card: Deal Overview */}
-          <section className="bg-card rounded-[32px] border border-border p-8 shadow-md transition-colors">
-            <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center text-primary">
-                  <DollarSign className="w-12 h-12" />
+          <section className="bg-card rounded-xl border border-border p-3.5 sm:p-4 shadow-xs transition-colors">
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <DollarSign className="w-6 h-6" />
                 </div>
                 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-3xl font-black text-foreground tracking-tight">{deal.title}</h2>
-                    <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-500/20">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight">{deal.title}</h2>
+                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-bold uppercase tracking-wider rounded-md border border-emerald-500/20">
                       {
                         deal.stage === 'lead' ? 'Novo Lead' :
                         deal.stage === 'qualification' ? 'Qualificação' :
@@ -262,20 +262,20 @@ export default function DealDetailPage() {
                       }
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-muted-foreground text-sm font-medium">
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="w-4 h-4" />
+                  <div className="flex items-center gap-3 text-muted-foreground text-xs font-medium flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5" />
                       <span>{company?.name || "Empresa Individual"}</span>
                     </div>
                     {contact && (
-                      <div className="flex items-center gap-1.5">
-                        <User className="w-4 h-4" />
+                      <div className="flex items-center gap-1">
+                        <User className="w-3.5 h-3.5" />
                         <span>{contact.name}</span>
                       </div>
                     )}
                     {owner && (
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted rounded-md text-[10px] font-black uppercase tracking-widest border border-border/50">
-                        <div className="w-4 h-4 rounded-full overflow-hidden relative">
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-muted rounded-md text-[9px] font-bold uppercase tracking-wider border border-border/50">
+                        <div className="w-3.5 h-3.5 rounded-full overflow-hidden relative">
                            <Image 
                              src={owner.photoURL || `https://ui-avatars.com/api/?name=${owner.displayName}&background=6366f1&color=fff`}
                              alt={owner.displayName}
@@ -288,18 +288,18 @@ export default function DealDetailPage() {
                     )}
                   </div>
                   
-                  <div className="text-2xl font-black text-foreground pt-2">
+                  <div className="text-base sm:text-lg font-bold text-foreground pt-0.5">
                     {formatCurrencyBRL(deal.value)}
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 w-full lg:w-auto">
+              <div className="flex gap-2 w-full lg:w-auto">
                 <button 
                   onClick={() => router.push(`/messages`)}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl font-black uppercase tracking-widest text-xs text-foreground hover:bg-muted transition-all"
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 border border-border rounded-lg font-bold text-xs text-foreground hover:bg-muted transition-all"
                 >
-                  <MessageSquare className="w-4 h-4" />
+                  <MessageSquare className="w-3.5 h-3.5" />
                   Mensagem
                 </button>
                 <button 
@@ -329,9 +329,9 @@ export default function DealDetailPage() {
                       toast.info("Este negócio já está no último estágio.");
                     }
                   }}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50"
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-xs hover:opacity-90 transition-all shadow-xs disabled:opacity-50"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
                   {loading ? "Processando..." : "Avançar Estágio"}
                 </button>
               </div>
@@ -344,48 +344,48 @@ export default function DealDetailPage() {
           </div>
 
           {/* Grid Layout */}
-          <div className="grid grid-cols-12 gap-8">
+          <div className="grid grid-cols-12 gap-3 sm:gap-4">
             
             {/* Left Column: Timeline */}
             <div className="col-span-12 lg:col-span-8">
-              <div className="bg-card rounded-[32px] border border-border overflow-hidden shadow-md transition-colors">
-                <div className="p-8 border-b border-border flex items-center justify-between bg-muted/30">
-                  <h3 className="text-xl font-black text-foreground uppercase tracking-tight">Linha do Tempo & Notas</h3>
-                  <Clock className="w-5 h-5 text-muted-foreground" />
+              <div className="bg-card rounded-xl border border-border overflow-hidden shadow-xs transition-colors">
+                <div className="p-3.5 sm:p-4 border-b border-border flex items-center justify-between bg-muted/30">
+                  <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Linha do Tempo & Notas</h3>
+                  <Clock className="w-4 h-4 text-muted-foreground" />
                 </div>
-                <div className="p-8">
+                <div className="p-3.5 sm:p-4">
                   <Timeline category="deal" relatedId={id} />
                 </div>
               </div>
             </div>
 
             {/* Right Column: Info Cards */}
-            <div className="col-span-12 lg:col-span-4 space-y-8">
+            <div className="col-span-12 lg:col-span-4 space-y-3 sm:space-y-4">
               {/* Linked Records */}
-              <div className="bg-card rounded-[32px] border border-border p-8 shadow-md transition-colors">
-                <h3 className="text-lg font-black text-foreground mb-6 uppercase tracking-tight">Registros Vinculados</h3>
+              <div className="bg-card rounded-xl border border-border p-3.5 sm:p-4 shadow-xs transition-colors">
+                <h3 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider">Registros Vinculados</h3>
                 
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {company && (
-                    <div className="flex items-center gap-4 p-4 bg-muted rounded-2xl border border-border/50">
-                      <div className="w-10 h-10 bg-background rounded-xl flex items-center justify-center shadow-sm">
-                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                    <div className="flex items-center gap-2.5 p-2.5 bg-muted/50 rounded-lg border border-border/50">
+                      <div className="w-7 h-7 bg-background rounded-md flex items-center justify-center shadow-xs">
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Empresa</p>
-                        <p className="text-sm font-bold text-foreground truncate">{company.name}</p>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Empresa</p>
+                        <p className="text-xs font-semibold text-foreground truncate">{company.name}</p>
                       </div>
                     </div>
                   )}
 
                   {contact && (
-                    <div className="flex items-center gap-4 p-4 bg-muted rounded-2xl border border-border/50">
-                      <div className="w-10 h-10 bg-background rounded-xl flex items-center justify-center shadow-sm">
-                        <User className="w-5 h-5 text-muted-foreground" />
+                    <div className="flex items-center gap-2.5 p-2.5 bg-muted/50 rounded-lg border border-border/50">
+                      <div className="w-7 h-7 bg-background rounded-md flex items-center justify-center shadow-xs">
+                        <User className="w-3.5 h-3.5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Contato</p>
-                        <p className="text-sm font-bold text-foreground truncate">{contact.name}</p>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Contato</p>
+                        <p className="text-xs font-semibold text-foreground truncate">{contact.name}</p>
                       </div>
                     </div>
                   )}
@@ -396,17 +396,17 @@ export default function DealDetailPage() {
               <PropertyMatcher deal={deal} contact={contact} onUpdate={refreshData} />
 
               {/* Next Steps */}
-              <div className="bg-primary rounded-[32px] p-8 text-primary-foreground shadow-xl shadow-primary/30">
-                <div className="flex items-center gap-3 mb-6">
-                  <Calendar className="w-5 h-5 text-primary-foreground/60" />
-                  <h3 className="text-lg font-black uppercase tracking-tight">Próximos Passos</h3>
+              <div className="bg-primary rounded-xl p-3.5 sm:p-4 text-primary-foreground shadow-xs">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-primary-foreground/70" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider">Próximos Passos</h3>
                 </div>
-                <p className="text-sm text-primary-foreground/80 mb-6 leading-relaxed font-medium">
+                <p className="text-xs text-primary-foreground/85 mb-3 leading-relaxed">
                   Agende uma reunião ou crie uma tarefa para manter este negócio em movimento.
                 </p>
                 <button 
                   onClick={handleOpenActivityModal}
-                  className="w-full py-3 bg-primary-foreground/10 hover:bg-primary-foreground/20 backdrop-blur-md rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
+                  className="w-full py-2 bg-primary-foreground/15 hover:bg-primary-foreground/25 backdrop-blur-md rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
                 >
                   Agendar Atividade
                 </button>
@@ -436,37 +436,37 @@ export default function DealDetailPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.35 }}
-              className="relative w-full max-w-lg bg-card border border-border rounded-[32px] overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-md bg-card border border-border rounded-2xl overflow-hidden shadow-xl z-10 flex flex-col max-h-[90vh]"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
               
               {/* Modal Header */}
-              <div className="px-8 py-6 border-b border-border flex items-center justify-between bg-muted/20 relative shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-                    <Calendar className="w-5 h-5" />
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/20 relative shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+                    <Calendar className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-foreground uppercase tracking-tight font-mono">Agendar Atividade</h3>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-black mt-0.5">Criar Nova Ação de Vendas</p>
+                    <h3 className="text-xs font-bold text-foreground uppercase tracking-tight font-mono">Agendar Atividade</h3>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">Criar Nova Ação de Vendas</p>
                   </div>
                 </div>
                 
                 <button
                   type="button"
                   onClick={() => setIsActivityModalOpen(false)}
-                  className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Modal Content - Content scrollable inside maximum boundaries */}
-              <form onSubmit={handleSaveActivity} className="flex-1 overflow-y-auto p-8 space-y-6">
+              <form onSubmit={handleSaveActivity} className="flex-1 overflow-y-auto p-4 space-y-3">
                 
                 {/* Title */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
                     Título da Atividade
                   </label>
                   <input
@@ -475,21 +475,21 @@ export default function DealDetailPage() {
                     value={activityTitle}
                     onChange={(e) => setActivityTitle(e.target.value)}
                     placeholder="Ex: Ligar para apresentar proposta comercial"
-                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-5 py-3.5 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20"
+                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-lg px-3 py-1.5 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20"
                   />
                 </div>
 
                 {/* Grid Type / Date */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Activity Type Selection */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
                       Tipo de Atividade
                     </label>
                     <select
                       value={activityType}
                       onChange={(e) => setActivityType(e.target.value as any)}
-                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-4 py-3.5 text-xs font-bold text-foreground transition-all cursor-pointer font-sans"
+                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-lg px-2.5 py-1.5 text-xs font-bold text-foreground transition-all cursor-pointer font-sans"
                     >
                       <option value="task">📝 Tarefa</option>
                       <option value="call">📞 Ligação</option>
@@ -499,8 +499,8 @@ export default function DealDetailPage() {
                   </div>
 
                   {/* Activity Date/Time */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
                       Data & Hora Limite
                     </label>
                     <input
@@ -508,42 +508,42 @@ export default function DealDetailPage() {
                       required
                       value={activityDate}
                       onChange={(e) => setActivityDate(e.target.value)}
-                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-4 py-3 text-xs font-bold text-foreground transition-all font-mono"
+                      className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-lg px-2.5 py-1.5 text-xs font-bold text-foreground transition-all font-mono"
                     />
                   </div>
                 </div>
 
                 {/* Description input */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground font-mono">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
                     Descrição / Observações (Opcional)
                   </label>
                   <textarea
                     value={activityDescription}
                     onChange={(e) => setActivityDescription(e.target.value)}
                     placeholder="Insira notas adicionais, detalhes de contato ou links importantes para orientar a ação..."
-                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-2xl px-5 py-4 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20 h-28 resize-none"
+                    className="w-full bg-muted/50 border border-border hover:border-border/80 focus:border-primary focus:outline-none rounded-lg px-3 py-2 text-xs font-semibold text-foreground transition-all focus:ring-1 focus:ring-primary/20 h-20 resize-none"
                   />
                 </div>
 
                 {/* Action CTA Buttons */}
-                <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                <div className="pt-2 flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     disabled={isSavingActivity}
                     onClick={() => setIsActivityModalOpen(false)}
-                    className="order-last sm:order-first flex-1 py-3 px-4 border border-border rounded-xl font-bold uppercase tracking-wider text-[9px] text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+                    className="order-last sm:order-first flex-1 py-2 px-3 border border-border rounded-lg font-bold uppercase tracking-wider text-[9px] text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingActivity || !activityTitle.trim()}
-                    className="flex-1 py-3 px-6 bg-primary text-primary-foreground font-black rounded-xl text-[9px] uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-primary/25 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-1 py-2 px-4 bg-primary text-primary-foreground font-bold rounded-lg text-[9px] uppercase tracking-wider hover:opacity-90 transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {isSavingActivity ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         Salvando...
                       </>
                     ) : (
@@ -555,8 +555,8 @@ export default function DealDetailPage() {
               </form>
 
               {/* Footer */}
-              <div className="px-8 py-3.5 border-t border-border bg-muted/10 text-center select-none shrink-0">
-                <span className="text-[8px] text-muted-foreground/60 font-mono tracking-widest uppercase font-black">
+              <div className="px-4 py-2 border-t border-border bg-muted/10 text-center select-none shrink-0">
+                <span className="text-[8px] text-muted-foreground/60 font-mono tracking-wider uppercase font-bold">
                   SALESSCORE ACTION SCHEDULER
                 </span>
               </div>

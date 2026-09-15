@@ -38,10 +38,10 @@
 
 @layer base {
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary h-full;
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary h-full overflow-x-hidden;
   }
   html {
-    @apply h-full;
+    @apply h-full overflow-x-hidden;
   }
   /* Prevent Chrome / Safari input autofill background color changes and keep typography colors */
   input:-webkit-autofill,

@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
+import { recordAuditEvent } from "@/lib/audit";
 import { 
   Trello, 
   Search, 
@@ -334,7 +335,24 @@ export default function PipelinePage() {
 
   const handleDelete = async (id: string) => {
     try {
+      const target = deals.find(d => d.id === id);
       await deleteDeal(id);
+
+      recordAuditEvent({
+        action: 'DELETE_DEAL',
+        title: 'Exclusão de Oportunidade',
+        content: `Negócio "${target?.title || id}" (R$ ${target?.value || 0}) foi excluído do funil.`,
+        severity: 'high',
+        category: 'deletion',
+        relatedId: id,
+        entityType: 'deal',
+        metadata: {
+          title: target?.title,
+          value: target?.value,
+          stage: target?.stage
+        }
+      });
+
       toast.success("Negócio excluído.");
       setDeleteConfirmId(null);
       await fetchDealsData();

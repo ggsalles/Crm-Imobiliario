@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
+import { recordAuditEvent } from "@/lib/audit";
 import { 
   Contact, 
   Company, 
@@ -145,6 +146,21 @@ export default function ContactDetail360Page() {
           }
 
           setContact(contactData);
+
+          // Audit log sensitive data access
+          recordAuditEvent({
+            action: 'VIEW_SENSITIVE_DATA',
+            title: 'Visualização da Ficha Completa do Contato',
+            content: `Ficha cadastral de "${contactData.name}" (${contactData.email || 'sem email'}) foi visualizada.`,
+            severity: 'medium',
+            category: 'sensitive_view',
+            relatedId: contactData.id,
+            entityType: 'contact',
+            metadata: {
+              contactName: contactData.name,
+              contactEmail: contactData.email
+            }
+          });
           
           const [dealsData, activitiesData, propertiesData] = await Promise.all([
             getDealsByContact(id),

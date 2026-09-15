@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   ShieldCheck,
+  ShieldAlert,
   ChevronDown,
   CreditCard,
   ChevronLeft,
@@ -389,6 +390,23 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           <Settings className={cn("w-4 h-4 shrink-0", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
           {!isCollapsed && <span className="truncate">Configurações</span>}
         </Link>
+
+        {(profile?.role === 'Admin' || profile?.isAdmin || isPlatformAdmin(profile?.email)) && (
+          <Link
+            href="/audit"
+            prefetch={true}
+            onClick={() => setIsMobileMenuOpen(false)}
+            title={isCollapsed ? "Auditoria & Segurança" : undefined}
+            className={cn(
+              "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400",
+              isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
+              pathname === "/audit" ? "bg-emerald-500/15 text-emerald-400" : ""
+            )}
+          >
+            <ShieldAlert className={cn("w-4 h-4 shrink-0 text-emerald-500 group-hover:text-emerald-400")} />
+            {!isCollapsed && <span className="truncate">Auditoria</span>}
+          </Link>
+        )}
 
         {isPlatformAdmin(profile?.email) && (
           <Link

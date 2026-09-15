@@ -88,7 +88,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-background font-sans selection:bg-primary/10 text-foreground">
+    <div className="min-h-screen flex bg-background font-sans selection:bg-primary/10 text-foreground overflow-x-hidden">
       {/* Left side: Branding (Simplified from login) */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative overflow-hidden flex-col justify-center p-12 text-white border-r border-border">
         <div className="absolute inset-0 opacity-10 pointer-events-none">

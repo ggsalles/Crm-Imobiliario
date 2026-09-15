@@ -202,7 +202,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-background font-sans selection:bg-primary/10 text-foreground transition-colors duration-500">
+    <div className="min-h-screen flex bg-background font-sans selection:bg-primary/10 text-foreground transition-colors duration-500 overflow-x-hidden">
       {/* Left side: Branding & Hero */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative overflow-hidden flex-col justify-between p-12 text-white border-r border-border">
         {/* Background Pattern */}

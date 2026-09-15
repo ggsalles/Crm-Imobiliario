@@ -90,6 +90,7 @@ import { toast } from "sonner";
 import { UserProfile, updateUserProfile, clearLocalCache } from "@/lib/db";
 import { User } from "@supabase/supabase-js";
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin } from "@/lib/constants";
+import { recordAuditEvent } from "@/lib/audit";
 
 interface AuthContextType {
   user: User | null;
@@ -830,6 +831,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut({ scope: 'local' });
       throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
     }
+
+    // Record login audit event
+    recordAuditEvent({
+      action: 'LOGIN_SUCCESS',
+      title: 'Autenticação no Sistema',
+      content: `Usuário efetuou login com sucesso: ${cleanEmail}`,
+      severity: 'info',
+      category: 'auth',
+      userEmail: cleanEmail
+    });
   };
 
   const resolveOrCreateTenant = async (email: string, companyName: string): Promise<string> => {
@@ -942,6 +953,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      if (profile) {
+        recordAuditEvent({
+          action: 'LOGOUT',
+          title: 'Encerramento de Sessão',
+          content: `Usuário ${profile.displayName || profile.email} encerrou a sessão.`,
+          severity: 'info',
+          category: 'auth',
+          userId: profile.id,
+          userName: profile.displayName || profile.email,
+          userEmail: profile.email,
+          tenantId: profile.tenantId
+        });
+      }
       await supabase.auth.signOut({ scope: 'local' });
     } catch (e) {
       console.warn("Erro ao deslogar:", e);
@@ -959,6 +983,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!profile) return;
     setLoading(true);
     try {
+      recordAuditEvent({
+        action: 'TENANT_SWITCH',
+        title: 'Troca de Imobiliária Ativa',
+        content: `Usuário ${profile.displayName || profile.email} alternou para a imobiliária ID: ${tenantId}.`,
+        severity: 'medium',
+        category: 'auth',
+        userId: profile.id,
+        userName: profile.displayName || profile.email,
+        userEmail: profile.email,
+        tenantId
+      });
+
       // 0. Registrar imobiliária ativa síncronamente no sessionStorage para blindar a seleção contra concorrência
       if (typeof window !== "undefined") {
         sessionStorage.setItem(`active-tenant-id:${profile.id}`, tenantId);
