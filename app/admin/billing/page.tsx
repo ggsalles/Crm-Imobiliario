@@ -41,6 +41,7 @@ interface TenantItem {
   slug: string;
   createdAt: string;
   isBlocked: boolean;
+  userLimit?: number;
   billingStatus?: 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
   billingSuspensionDate?: string;
   dueDay?: number;
@@ -325,6 +326,37 @@ export default function AdminBillingPage() {
     } catch (err) {
       console.error("Failed to update tenant due day:", err);
       toast.error("Erro ao alterar dia de vencimento.");
+      loadAllData();
+    }
+  }
+
+  // Handle userLimit change per tenant
+  async function updateTenantLimit(tenantId: string, limit: number) {
+    if (!config) return;
+    const cleanLimit = Math.max(1, limit);
+
+    const updatedUserLimits = {
+      ...(config.userLimits || {}),
+      [tenantId]: cleanLimit
+    };
+
+    const updatedConfig: SaaSAdminConfig = {
+      ...config,
+      userLimits: updatedUserLimits
+    };
+
+    setConfig(updatedConfig);
+
+    try {
+      await apiFetch(`/api/tenants?id=${tenantId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ userLimit: cleanLimit })
+      });
+      toast.success(`Limite de vagas atualizado para ${cleanLimit} usuários!`);
+      loadAllData();
+    } catch (err) {
+      console.error("Failed to update tenant user limit:", err);
+      toast.error("Erro ao alterar limite de usuários.");
       loadAllData();
     }
   }
@@ -831,6 +863,7 @@ export default function AdminBillingPage() {
                     <th className="px-3.5 py-2.5">Imobiliária</th>
                     <th className="px-2.5 py-2.5 text-center">Status</th>
                     <th className="px-2.5 py-2.5 text-center">Vencimento</th>
+                    <th className="px-2.5 py-2.5 text-center" title="Limite contratado de usuários/corretores">Vagas</th>
                     {displayedMonths.map(month => (
                       <th 
                         key={month.key} 
@@ -854,7 +887,7 @@ export default function AdminBillingPage() {
                 <tbody className="divide-y divide-slate-900 text-slate-300">
                   {filteredTenants.length === 0 ? (
                     <tr>
-                      <td colSpan={4 + displayedMonths.length} className="px-4 py-8 text-center text-xs text-slate-500 font-medium">
+                      <td colSpan={5 + displayedMonths.length} className="px-4 py-8 text-center text-xs text-slate-500 font-medium">
                         Nenhuma imobiliária encontrada para os filtros selecionados.
                       </td>
                     </tr>
@@ -933,6 +966,35 @@ export default function AdminBillingPage() {
                                 </option>
                               ))}
                             </select>
+                          </td>
+
+                          {/* Custom User Limit (Vagas) Column */}
+                          <td className="px-2.5 py-2.5 text-center min-w-[85px]">
+                            <div className="flex items-center justify-center gap-1">
+                              <input 
+                                type="number"
+                                min={1}
+                                max={500}
+                                defaultValue={config?.userLimits?.[tenant.id] ?? tenant.userLimit ?? 5}
+                                onBlur={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val) && val >= 1) {
+                                    updateTenantLimit(tenant.id, val);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = parseInt((e.target as HTMLInputElement).value);
+                                    if (!isNaN(val) && val >= 1) {
+                                      updateTenantLimit(tenant.id, val);
+                                    }
+                                  }
+                                }}
+                                className="w-12 bg-slate-950 border border-slate-800 text-[11px] text-slate-100 rounded-md px-1 py-0.5 text-center font-mono font-bold focus:border-indigo-500 focus:outline-none"
+                                title="Limite de vagas ativas (pressione Enter ou saia do campo para salvar)"
+                              />
+                              <span className="text-[9px] text-slate-500 font-mono">vagas</span>
+                            </div>
                           </td>
 
                           {/* Dynamic Month Columns */}

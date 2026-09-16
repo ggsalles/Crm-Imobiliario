@@ -28,6 +28,7 @@ const DEFAULT_CONFIG: SaaSAdminConfig = {
   blockedTenantIds: [],
   payments: {},
   dueDays: {},
+  userLimits: {},
   suttleStart: 1,
   criticalStart: 5,
   blockStart: 7
@@ -168,3 +169,19 @@ export async function updateTenantPayment(tenantId: string, month: string, statu
   config.payments[tenantId][month] = status;
   return saveSaaSConfig(config);
 }
+
+// User limit operations
+export async function setTenantUserLimit(tenantId: string, limit: number): Promise<boolean> {
+  const config = await getSaaSConfig();
+  if (!config.userLimits) {
+    config.userLimits = {};
+  }
+  config.userLimits[tenantId] = Math.max(1, limit);
+  return saveSaaSConfig(config);
+}
+
+export async function getTenantUserLimit(tenantId: string): Promise<number> {
+  const config = await getSaaSConfig();
+  return config.userLimits?.[tenantId] ?? 5;
+}
+

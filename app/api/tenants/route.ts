@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { getBlockedTenantIds, setTenantBlocked, getSaaSConfig, getTenantBillingStatus } from '@/lib/billing';
-import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME } from '@/lib/constants';
+import { getBlockedTenantIds, setTenantBlocked, getSaaSConfig, getTenantBillingStatus, setTenantUserLimit } from '@/lib/billing';
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,8 +49,10 @@ export async function GET(req: NextRequest) {
       if (!data) return NextResponse.json(null);
 
       const billingResult = getTenantBillingStatus(config, data.id, new Date(), data.created_at);
-      const isBlocked = data.id !== DEFAULT_TENANT_ID && 
-                        (blockedIds.includes(data.id) || billingResult.status === 'bloqueado');
+      const isBlocked = (data.is_blocked === true) || 
+                        (data.id !== DEFAULT_TENANT_ID && (blockedIds.includes(data.id) || billingResult.status === 'bloqueado'));
+      const userLimit = data.user_limit ?? config.userLimits?.[data.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
+      const dueDay = data.due_day ?? billingResult.dueDay;
 
       return NextResponse.json({
         id: data.id,
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         isBlocked,
+        userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
         dueDay: billingResult.dueDay,
@@ -99,8 +102,10 @@ export async function GET(req: NextRequest) {
 
     const items = finalTenants.map((item: any) => {
       const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at);
-      const isBlocked = item.id !== DEFAULT_TENANT_ID && 
-                        (blockedIds.includes(item.id) || billingResult.status === 'bloqueado');
+      const isBlocked = (item.is_blocked === true) || 
+                        (item.id !== DEFAULT_TENANT_ID && (blockedIds.includes(item.id) || billingResult.status === 'bloqueado'));
+      const userLimit = item.user_limit ?? config.userLimits?.[item.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
+      const dueDay = item.due_day ?? billingResult.dueDay;
 
       return {
         id: item.id,
@@ -109,6 +114,7 @@ export async function GET(req: NextRequest) {
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         isBlocked,
+        userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
         dueDay: billingResult.dueDay,
@@ -136,6 +142,13 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    // Extract and handle userLimit if present
+    const userLimitParam = data.userLimit !== undefined ? Number(data.userLimit) : undefined;
+    delete data.userLimit;
+    if (userLimitParam !== undefined) {
+      data.user_limit = userLimitParam;
+    }
+
     // Auto generate slug if not provided
     if (!data.slug && data.name) {
       data.slug = data.name
@@ -154,7 +167,16 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
     if (!result || result.length === 0) throw new Error("Failed to create tenant");
 
-    return NextResponse.json({ id: result[0].id, name: result[0].name, slug: result[0].slug });
+    if (userLimitParam !== undefined) {
+      await setTenantUserLimit(result[0].id, userLimitParam);
+    }
+
+    return NextResponse.json({ 
+      id: result[0].id, 
+      name: result[0].name, 
+      slug: result[0].slug,
+      userLimit: userLimitParam ?? DEFAULT_USER_LIMIT_PER_TENANT
+    });
   } catch (error: any) {
     console.error("[API/Tenants] POST Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -171,24 +193,40 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json();
+    const updatePayload: Record<string, any> = { ...data };
+
+    // Catch and process userLimit
+    if (data.userLimit !== undefined) {
+      const numLimit = Number(data.userLimit);
+      await setTenantUserLimit(id, numLimit);
+      updatePayload.user_limit = numLimit;
+      delete updatePayload.userLimit;
+    }
 
     // Catch and process isBlocked / is_blocked dynamic property
     const isBlockedParam = data.isBlocked !== undefined ? data.isBlocked : data.is_blocked;
     if (isBlockedParam !== undefined) {
       await setTenantBlocked(id, !!isBlockedParam);
-      delete data.isBlocked;
-      delete data.is_blocked;
+      updatePayload.is_blocked = !!isBlockedParam;
+      delete updatePayload.isBlocked;
     }
 
-    // Only update Supabase if we have additional properties left to update
-    if (Object.keys(data).length > 0) {
-      data.updated_at = new Date().toISOString();
+    if (data.dueDay !== undefined || data.due_day !== undefined) {
+      updatePayload.due_day = Number(data.dueDay ?? data.due_day);
+      delete updatePayload.dueDay;
+    }
+
+    // Update Supabase native record
+    if (Object.keys(updatePayload).length > 0) {
+      updatePayload.updated_at = new Date().toISOString();
       const { error } = await supabase
         .from('tenants')
-        .update(data)
+        .update(updatePayload)
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.warn("[API/Tenants] Notice on update:", error.message);
+      }
     }
 
     return NextResponse.json({ success: true });

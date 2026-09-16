@@ -194,6 +194,7 @@ export interface Tenant {
   slug?: string;
   createdAt?: string;
   updatedAt?: string;
+  userLimit?: number;
 }
 
 export interface UserProfile {

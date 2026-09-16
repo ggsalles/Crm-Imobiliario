@@ -8,6 +8,7 @@ export interface SaaSAdminConfig {
   blockedTenantIds: string[];
   payments: PaymentLedger;
   dueDays?: { [tenantId: string]: number };
+  userLimits?: { [tenantId: string]: number };
   suttleStart?: number;
   criticalStart?: number;
   blockStart?: number;

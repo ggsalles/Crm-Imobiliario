@@ -413,7 +413,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             href="/admin/billing"
             prefetch={true}
             onClick={() => setIsMobileMenuOpen(false)}
-            title={isCollapsed ? "Administração SaaS" : undefined}
+            title={isCollapsed ? "Gestão SaaS & Cobrança" : undefined}
             className={cn(
               "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
               isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
@@ -421,7 +421,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             )}
           >
             <CreditCard className={cn("w-4 h-4 shrink-0 text-indigo-400 group-hover:text-indigo-300")} />
-            {!isCollapsed && <span className="truncate">Admin SaaS</span>}
+            {!isCollapsed && <span className="truncate">Gestão SaaS & Cobrança</span>}
           </Link>
         )}
       </nav>
