@@ -195,6 +195,24 @@ export interface Tenant {
   createdAt?: string;
   updatedAt?: string;
   userLimit?: number;
+  isBlocked?: boolean;
+  cnpj?: string;
+  city?: string;
+  state?: string;
+  phone?: string;
+  contactEmail?: string;
+  basePrice?: number;
+  brokerLimit?: number;
+  adminLimit?: number;
+  extraBrokerPrice?: number;
+  extraAdminPrice?: number;
+  plan?: string;
+  dueDay?: number;
+  billingStatus?: string;
+  billingSuspensionDate?: string;
+  diffDays?: number;
+  overdueCount?: number;
+  oldestOverdueMonthKey?: string;
 }
 
 export interface UserProfile {

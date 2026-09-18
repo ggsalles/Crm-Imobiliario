@@ -64,10 +64,21 @@ export async function GET(req: NextRequest) {
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: billingResult.dueDay,
+        dueDay: data.due_day ?? billingResult.dueDay,
         diffDays: billingResult.diffDays,
         overdueCount: billingResult.overdueCount || 0,
-        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || ''
+        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || '',
+        cnpj: data.cnpj || '',
+        city: data.city || '',
+        state: data.state || '',
+        phone: data.phone || '',
+        contactEmail: data.contact_email || '',
+        basePrice: data.base_price !== undefined && data.base_price !== null ? Number(data.base_price) : 499.00,
+        brokerLimit: data.broker_limit !== undefined && data.broker_limit !== null ? Number(data.broker_limit) : (userLimit || 2),
+        adminLimit: data.admin_limit !== undefined && data.admin_limit !== null ? Number(data.admin_limit) : 1,
+        extraBrokerPrice: data.extra_broker_price !== undefined && data.extra_broker_price !== null ? Number(data.extra_broker_price) : 29.90,
+        extraAdminPrice: data.extra_admin_price !== undefined && data.extra_admin_price !== null ? Number(data.extra_admin_price) : 49.90,
+        plan: data.plan || 'ativo'
       }, {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -117,10 +128,21 @@ export async function GET(req: NextRequest) {
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: billingResult.dueDay,
+        dueDay: item.due_day ?? billingResult.dueDay,
         diffDays: billingResult.diffDays,
         overdueCount: billingResult.overdueCount || 0,
-        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || ''
+        oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || '',
+        cnpj: item.cnpj || '',
+        city: item.city || '',
+        state: item.state || '',
+        phone: item.phone || '',
+        contactEmail: item.contact_email || '',
+        basePrice: item.base_price !== undefined && item.base_price !== null ? Number(item.base_price) : 499.00,
+        brokerLimit: item.broker_limit !== undefined && item.broker_limit !== null ? Number(item.broker_limit) : (userLimit || 2),
+        adminLimit: item.admin_limit !== undefined && item.admin_limit !== null ? Number(item.admin_limit) : 1,
+        extraBrokerPrice: item.extra_broker_price !== undefined && item.extra_broker_price !== null ? Number(item.extra_broker_price) : 29.90,
+        extraAdminPrice: item.extra_admin_price !== undefined && item.extra_admin_price !== null ? Number(item.extra_admin_price) : 49.90,
+        plan: item.plan || 'ativo'
       };
     });
 
@@ -216,6 +238,38 @@ export async function PATCH(req: NextRequest) {
       delete updatePayload.dueDay;
     }
 
+    if (data.contactEmail !== undefined) {
+      updatePayload.contact_email = data.contactEmail;
+      delete updatePayload.contactEmail;
+    }
+
+    if (data.basePrice !== undefined || data.base_price !== undefined) {
+      updatePayload.base_price = Number(data.basePrice ?? data.base_price);
+      delete updatePayload.basePrice;
+    }
+
+    if (data.brokerLimit !== undefined || data.broker_limit !== undefined) {
+      const bLimit = Number(data.brokerLimit ?? data.broker_limit);
+      updatePayload.broker_limit = bLimit;
+      updatePayload.user_limit = bLimit; // Keep general limit aligned
+      delete updatePayload.brokerLimit;
+    }
+
+    if (data.adminLimit !== undefined || data.admin_limit !== undefined) {
+      updatePayload.admin_limit = Number(data.adminLimit ?? data.admin_limit);
+      delete updatePayload.adminLimit;
+    }
+
+    if (data.extraBrokerPrice !== undefined || data.extra_broker_price !== undefined) {
+      updatePayload.extra_broker_price = Number(data.extraBrokerPrice ?? data.extra_broker_price);
+      delete updatePayload.extraBrokerPrice;
+    }
+
+    if (data.extraAdminPrice !== undefined || data.extra_admin_price !== undefined) {
+      updatePayload.extra_admin_price = Number(data.extraAdminPrice ?? data.extra_admin_price);
+      delete updatePayload.extraAdminPrice;
+    }
+
     // Update Supabase native record
     if (Object.keys(updatePayload).length > 0) {
       updatePayload.updated_at = new Date().toISOString();
@@ -235,6 +289,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const PUT = PATCH;
 
 export async function DELETE(req: NextRequest) {
   try {

@@ -29,5 +29,8 @@
   },
   "suttleStart": 1,
   "criticalStart": 5,
-  "blockStart": 7
+  "blockStart": 7,
+  "userLimits": {
+    "c177f8cd-71b6-4bdc-a26d-4d26af076b4f": 5
+  }
 }

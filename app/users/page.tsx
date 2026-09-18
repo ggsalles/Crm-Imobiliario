@@ -50,6 +50,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin as checkPlatformAdmin } from "@/lib/constants";
 import { recordAuditEvent } from "@/lib/audit";
+import { TenantPlanCard } from "@/components/saas/TenantPlanCard";
+import { EditTenantModal } from "@/components/saas/EditTenantModal";
 
 export default function UsersPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -65,6 +67,7 @@ export default function UsersPage() {
   const [showTenantsSection, setShowTenantsSection] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+  const [editingTenantForModal, setEditingTenantForModal] = useState<Tenant | null>(null);
 
   // Create User & Limit States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -500,23 +503,54 @@ export default function UsersPage() {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTenantFilter(t.id)}
-                          className={cn(
-                            "w-full py-1 px-2 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1",
-                            isSelected 
-                              ? "bg-primary text-white" 
-                              : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {isSelected ? "✓ Selecionada no Cartão Abaixo" : "Ver / Gerenciar Vagas"}
-                        </button>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingTenantForModal(t)}
+                            className="py-1 px-2 rounded text-[11px] font-semibold bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 transition-all"
+                            title="Editar nome, CNPJ, telefone e localização"
+                          >
+                            <Edit3 className="w-3 h-3 text-amber-500" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTenantFilter(t.id)}
+                            className={cn(
+                              "py-1 px-2 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1",
+                              isSelected 
+                                ? "bg-primary text-white" 
+                                : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {isSelected ? "✓ Selecionada" : "Gerenciar"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+
+              {/* Card Moderno de Precificação e Vagas SaaS (Estilo AquaGás) */}
+              {currentTenant && (
+                <div className="p-4 sm:p-5 border-t border-border bg-muted/10 flex flex-col items-center justify-center">
+                  <div className="text-center mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Plano Comercial & Vagas SaaS</span>
+                    <h4 className="text-xs font-bold text-foreground">Gestão de Licenças e Faturamento da Imobiliária</h4>
+                  </div>
+                  <TenantPlanCard 
+                    tenant={currentTenant}
+                    activeBrokers={tenantUsers.filter(u => u.role === 'Membro' || u.userType !== 'cliente').length}
+                    activeAdmins={tenantUsers.filter(u => u.role === 'Admin').length}
+                    totalContacts={tenantUsers.filter(u => u.userType === 'cliente').length}
+                    isPlatformAdmin={isPlatformAdmin}
+                    onRefresh={() => {
+                      fetchTenants();
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -1163,6 +1197,16 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+
+        {/* Modal para Editar Cadastro da Imobiliária */}
+        <EditTenantModal
+          isOpen={!!editingTenantForModal}
+          onClose={() => setEditingTenantForModal(null)}
+          tenant={editingTenantForModal}
+          onSuccess={() => {
+            fetchTenants();
+          }}
+        />
       </main>
     </div>
   );
