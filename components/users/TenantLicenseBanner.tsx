@@ -67,8 +67,13 @@ export function TenantLicenseBanner({
                 {visualBlocksString}
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
-              <span className="font-semibold text-foreground">{currentTenant.name}</span> • {isLimitReached ? (
+            <p className="text-[11px] text-muted-foreground font-medium mt-0.5 flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-foreground">{currentTenant.name}</span>
+              <span className="px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-[9.5px] font-bold border border-emerald-500/20">
+                Plano: {currentTenant.brokerLimit ?? 2} corr. + {currentTenant.adminLimit ?? 1} adm
+              </span>
+              <span>•</span>
+              {isLimitReached ? (
                 <span className="text-amber-600 dark:text-amber-400 font-bold">Capacidade máxima atingida (100% ocupado)</span>
               ) : (
                 <span className="text-emerald-600 dark:text-emerald-400 font-bold">

@@ -58,7 +58,10 @@ export async function GET(req: NextRequest) {
         blockedIds.includes(data.id) || 
         billingResult.status === 'bloqueado'
       );
-      const userLimit = data.user_limit ?? config.userLimits?.[data.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
+      const brokerLimit = data.broker_limit !== undefined && data.broker_limit !== null ? Number(data.broker_limit) : 2;
+      const adminLimit = data.admin_limit !== undefined && data.admin_limit !== null ? Number(data.admin_limit) : 1;
+      const basePlanSlots = brokerLimit + adminLimit;
+      const userLimit = data.user_limit ?? config.userLimits?.[data.id] ?? basePlanSlots;
       const dueDay = data.due_day ?? billingResult.dueDay;
 
       return NextResponse.json({
@@ -82,8 +85,8 @@ export async function GET(req: NextRequest) {
         phone: data.phone || '',
         contactEmail: data.contact_email || '',
         basePrice: data.base_price !== undefined && data.base_price !== null ? Number(data.base_price) : 499.00,
-        brokerLimit: data.broker_limit !== undefined && data.broker_limit !== null ? Number(data.broker_limit) : (userLimit || 2),
-        adminLimit: data.admin_limit !== undefined && data.admin_limit !== null ? Number(data.admin_limit) : 1,
+        brokerLimit,
+        adminLimit,
         extraBrokerPrice: data.extra_broker_price !== undefined && data.extra_broker_price !== null ? Number(data.extra_broker_price) : 29.90,
         extraAdminPrice: data.extra_admin_price !== undefined && data.extra_admin_price !== null ? Number(data.extra_admin_price) : 49.90,
         plan: data.plan || 'ativo'
@@ -130,7 +133,10 @@ export async function GET(req: NextRequest) {
         blockedIds.includes(item.id) || 
         billingResult.status === 'bloqueado'
       );
-      const userLimit = item.user_limit ?? config.userLimits?.[item.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
+      const brokerLimit = item.broker_limit !== undefined && item.broker_limit !== null ? Number(item.broker_limit) : 2;
+      const adminLimit = item.admin_limit !== undefined && item.admin_limit !== null ? Number(item.admin_limit) : 1;
+      const basePlanSlots = brokerLimit + adminLimit;
+      const userLimit = item.user_limit ?? config.userLimits?.[item.id] ?? basePlanSlots;
       const dueDay = item.due_day ?? billingResult.dueDay;
 
       return {
@@ -154,8 +160,8 @@ export async function GET(req: NextRequest) {
         phone: item.phone || '',
         contactEmail: item.contact_email || '',
         basePrice: item.base_price !== undefined && item.base_price !== null ? Number(item.base_price) : 499.00,
-        brokerLimit: item.broker_limit !== undefined && item.broker_limit !== null ? Number(item.broker_limit) : (userLimit || 2),
-        adminLimit: item.admin_limit !== undefined && item.admin_limit !== null ? Number(item.admin_limit) : 1,
+        brokerLimit,
+        adminLimit,
         extraBrokerPrice: item.extra_broker_price !== undefined && item.extra_broker_price !== null ? Number(item.extra_broker_price) : 29.90,
         extraAdminPrice: item.extra_admin_price !== undefined && item.extra_admin_price !== null ? Number(item.extra_admin_price) : 49.90,
         plan: item.plan || 'ativo'
@@ -280,16 +286,28 @@ export async function PATCH(req: NextRequest) {
       delete updatePayload.basePrice;
     }
 
-    if (data.brokerLimit !== undefined || data.broker_limit !== undefined) {
-      const bLimit = Number(data.brokerLimit ?? data.broker_limit);
+    const hasBLimit = data.brokerLimit !== undefined || data.broker_limit !== undefined;
+    const hasALimit = data.adminLimit !== undefined || data.admin_limit !== undefined;
+    const bLimit = hasBLimit ? Number(data.brokerLimit ?? data.broker_limit) : undefined;
+    const aLimit = hasALimit ? Number(data.adminLimit ?? data.admin_limit) : undefined;
+
+    if (bLimit !== undefined) {
       updatePayload.broker_limit = bLimit;
-      updatePayload.user_limit = bLimit; // Keep general limit aligned
       delete updatePayload.brokerLimit;
     }
 
-    if (data.adminLimit !== undefined || data.admin_limit !== undefined) {
-      updatePayload.admin_limit = Number(data.adminLimit ?? data.admin_limit);
+    if (aLimit !== undefined) {
+      updatePayload.admin_limit = aLimit;
       delete updatePayload.adminLimit;
+    }
+
+    // Se userLimit não foi passado explicitamente mas o plano foi alterado, sincroniza com a soma do plano base
+    if (data.userLimit === undefined && data.user_limit === undefined && (hasBLimit || hasALimit)) {
+      const finalB = bLimit !== undefined ? bLimit : 2;
+      const finalA = aLimit !== undefined ? aLimit : 1;
+      const syncedLimit = finalB + finalA;
+      await setTenantUserLimit(id, syncedLimit);
+      updatePayload.user_limit = syncedLimit;
     }
 
     if (data.extraBrokerPrice !== undefined || data.extra_broker_price !== undefined) {

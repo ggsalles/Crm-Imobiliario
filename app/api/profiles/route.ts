@@ -472,78 +472,74 @@ export async function PATCH(req: NextRequest) {
     const data = await req.json();
     const { tenantIds, ...otherData } = data;
 
+    // Normaliza tenantIds caso tenham sido informados
+    const validTenantIds: string[] = Array.isArray(tenantIds) 
+      ? tenantIds.filter(Boolean)
+      : (otherData.tenant_id ? [otherData.tenant_id] : []);
+
+    // Se temos tenantIds definidos, garante que o tenant_id primário seja consistente e válido
+    if (validTenantIds.length > 0) {
+      if (!otherData.tenant_id || !validTenantIds.includes(otherData.tenant_id)) {
+        otherData.tenant_id = validTenantIds[0];
+      }
+    }
+
+    // 1. Atualiza dados do perfil na tabela profiles em uma única operação direta
     if (Object.keys(otherData).length > 0) {
       const { error } = await supabase
         .from('profiles')
         .update(otherData)
         .eq('id', id);
 
-      if (error) throw error;
-
-      // Se alterou a imobiliária ativa (tenant_id), cria ou garante associação dinâmica na tabela profile_tenants
-      if (otherData.tenant_id) {
-        try {
-          const { data: profData } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', id)
-            .maybeSingle();
-          const userRole = otherData.role || (profData && profData.role) || 'Membro';
-
-          await supabase
-            .from('profile_tenants')
-            .upsert({
-              profile_id: id,
-              tenant_id: otherData.tenant_id,
-              role: userRole
-            });
-        } catch (assocErr) {
-          console.warn("[API/Profiles] Erro ao registrar associação dinâmica em profile_tenants no PATCH:", assocErr);
-        }
-
-
+      if (error) {
+        console.error("[API/Profiles] Erro ao atualizar tabela profiles:", error);
+        throw error;
       }
     }
 
+    // 2. Sincroniza a tabela de relacionamento muitos-para-muitos profile_tenants de forma atômica e resiliente
     if (Array.isArray(tenantIds)) {
       try {
-        const { error: delError } = await supabase
-          .from('profile_tenants')
-          .delete()
-          .eq('profile_id', id);
-        
-        if (delError) {
-          console.warn("Erro ao deletar associacoes antigas:", delError);
+        const userRole = otherData.role || 'Membro';
+
+        // 2a. Remove apenas associações que foram desmarcadas (evita apagar e recriar tudo)
+        if (validTenantIds.length > 0) {
+          const { error: delError } = await supabase
+            .from('profile_tenants')
+            .delete()
+            .eq('profile_id', id)
+            .not('tenant_id', 'in', `(${validTenantIds.join(',')})`);
+          
+          if (delError) {
+            console.warn("[API/Profiles] Aviso ao remover associações desmarcadas:", delError);
+          }
+        } else {
+          await supabase.from('profile_tenants').delete().eq('profile_id', id);
         }
 
-        if (tenantIds.length > 0) {
-          const insertRows = tenantIds.map((tid: string) => ({
+        // 2b. Upsert seguro com tratamento de conflito na chave primária (profile_id, tenant_id)
+        if (validTenantIds.length > 0) {
+          const insertRows = validTenantIds.map((tid: string) => ({
             profile_id: id,
             tenant_id: tid,
-            role: otherData.role || 'Membro'
+            role: userRole
           }));
 
-          const { error: insError } = await supabase
+          const { error: upsertError } = await supabase
             .from('profile_tenants')
-            .insert(insertRows);
+            .upsert(insertRows, { onConflict: 'profile_id,tenant_id' });
           
-          if (insError) throw insError;
-
-          const { data: currProfile } = await supabase
-            .from('profiles')
-            .select('tenant_id')
-            .eq('id', id)
-            .maybeSingle();
-
-          if (currProfile && !tenantIds.includes(currProfile.tenant_id)) {
-            await supabase
-              .from('profiles')
-              .update({ tenant_id: tenantIds[0] })
-              .eq('id', id);
+          if (upsertError) {
+            console.warn("[API/Profiles] Upsert em lote falhou, aplicando fallback linha por linha:", upsertError);
+            for (const row of insertRows) {
+              await supabase.from('profile_tenants').upsert(row, { onConflict: 'profile_id,tenant_id' }).catch((err) => {
+                console.warn("[API/Profiles] Fallback upsert unitário falhou para tenant:", row.tenant_id, err);
+              });
+            }
           }
         }
       } catch (assocErr) {
-        console.warn("Erro ao atualizar associacoes profile_tenants:", assocErr);
+        console.error("[API/Profiles] Erro ao sincronizar associações profile_tenants:", assocErr);
       }
     }
 

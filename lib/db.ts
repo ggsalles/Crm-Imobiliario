@@ -215,6 +215,51 @@ export interface Tenant {
   oldestOverdueMonthKey?: string;
 }
 
+export interface TenantPlanCapacity {
+  baseBrokers: number;
+  baseAdmins: number;
+  baseSlots: number;
+  activeBrokers: number;
+  activeAdmins: number;
+  extraBrokers: number;
+  extraAdmins: number;
+  totalExtras: number;
+  totalCapacity: number;
+}
+
+export function calculateTenantPlanCapacity(
+  tenant?: Partial<Tenant> | null,
+  tenantUsers: UserProfile[] = []
+): TenantPlanCapacity {
+  const baseBrokers = tenant?.brokerLimit !== undefined && tenant?.brokerLimit !== null ? Number(tenant.brokerLimit) : 2;
+  const baseAdmins = tenant?.adminLimit !== undefined && tenant?.adminLimit !== null ? Number(tenant.adminLimit) : 1;
+  const baseSlots = baseBrokers + baseAdmins;
+
+  // Membros ativos da equipe (exclui contatos/clientes)
+  const staff = tenantUsers.filter(u => u.userType !== 'cliente');
+  const activeAdmins = staff.filter(u => u.role === 'Admin').length;
+  const activeBrokers = staff.filter(u => u.role !== 'Admin').length;
+
+  const extraBrokers = Math.max(0, activeBrokers - baseBrokers);
+  const extraAdmins = Math.max(0, activeAdmins - baseAdmins);
+  const totalExtras = extraBrokers + extraAdmins;
+
+  // Capacidade total: base + extras (ou tenant.userLimit se tiver sido expandido manualmente além da base)
+  const totalCapacity = Math.max(baseSlots + totalExtras, Number(tenant?.userLimit) || baseSlots);
+
+  return {
+    baseBrokers,
+    baseAdmins,
+    baseSlots,
+    activeBrokers,
+    activeAdmins,
+    extraBrokers,
+    extraAdmins,
+    totalExtras,
+    totalCapacity
+  };
+}
+
 export interface UserProfile {
   id: string; // id in profiles table
   displayName: string;
@@ -758,7 +803,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
 
   const fetchUsers = async () => {
     try {
-      const data = await apiFetch('/api/profiles');
+      const data = await apiFetch('/api/profiles', { bypassCache: true });
       if (data && Array.isArray(data)) {
         let filtered = data as UserProfile[];
         if (ownerId) filtered = filtered.filter(u => u.id === ownerId);
@@ -818,6 +863,28 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
         } catch (e) {
           console.warn("[lib/db] Error updating local profile cache synchronously:", e);
         }
+      }
+    }
+
+    // Invalida cache de GETs de perfis
+    invalidateApiCache('/api/profiles');
+
+    // Atualiza imediatamente cache global em memória para sincronização instantânea
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('users:')) {
+        dataCache[k] = (dataCache[k] || []).map((u: any) => {
+          if (u.id === id) {
+            return {
+              ...u,
+              displayName: data.displayName !== undefined ? data.displayName : u.displayName,
+              role: data.role !== undefined ? data.role : u.role,
+              userType: data.userType !== undefined ? data.userType : u.userType,
+              tenantId: data.tenantId !== undefined ? data.tenantId : u.tenantId,
+              tenantIds: data.tenantIds !== undefined ? data.tenantIds : u.tenantIds
+            };
+          }
+          return u;
+        });
       }
     }
 

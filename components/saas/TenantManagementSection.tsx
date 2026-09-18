@@ -4,8 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import { Building2, CreditCard, ArrowUpRight, Loader2, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tenant, UserProfile } from '@/lib/db';
-import { DEFAULT_TENANT_ID } from '@/lib/constants';
+import { Tenant, UserProfile, calculateTenantPlanCapacity } from '@/lib/db';
+import { DEFAULT_TENANT_ID, isPlatformAdmin as checkPlatformAdmin } from '@/lib/constants';
 import { TenantPlanCard } from '@/components/saas/TenantPlanCard';
 
 interface TenantManagementSectionProps {
@@ -93,8 +93,13 @@ export function TenantManagementSection({
       
       <div className="p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-muted/5">
         {tenants.map(t => {
-          const tenantUserCount = users.filter(u => u.tenantId === t.id).length;
-          const limit = t.userLimit ?? 5;
+          const tUsers = users.filter(u => {
+            if (checkPlatformAdmin(u.email) && t.id !== DEFAULT_TENANT_ID) return false;
+            return (u.tenantId || DEFAULT_TENANT_ID) === t.id || (u.tenantIds && u.tenantIds.includes(t.id));
+          });
+          const planCap = calculateTenantPlanCapacity(t, tUsers);
+          const tenantUserCount = tUsers.filter(u => u.userType !== 'cliente').length;
+          const limit = planCap.totalCapacity;
           const isSelected = (selectedTenantFilter || currentTenantId) === t.id;
           return (
             <div 
@@ -127,38 +132,47 @@ export function TenantManagementSection({
                   </span>
                 </div>
 
-                {/* Direct User Limit Configurator */}
-                <div className="flex items-center justify-between bg-muted/40 p-2 rounded-md border border-border/50">
-                  <div>
-                    <span className="text-[10px] font-bold text-foreground uppercase tracking-wider block">Vagas / Licenças</span>
-                    <span className="text-[8.5px] text-muted-foreground">Definir limite</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input 
-                      type="number"
-                      min={1}
-                      max={500}
-                      defaultValue={limit}
-                      key={`${t.id}-${limit}`}
-                      disabled={isUpdatingLimit}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (!isNaN(val) && val >= 1 && val !== limit) {
-                          onQuickUpdateLimit(val, t.id);
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = parseInt((e.target as HTMLInputElement).value);
+                {/* Capacidade do Plano Sincronizada */}
+                <div className="bg-muted/40 p-2 rounded-md border border-border/50 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-foreground uppercase tracking-wider block">Capacidade do Plano</span>
+                        <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded border border-emerald-500/20">
+                          Sincronizado
+                        </span>
+                      </div>
+                      <span className="text-[8.5px] text-muted-foreground block">
+                        {planCap.baseSlots} base ({planCap.baseBrokers} corr. + {planCap.baseAdmins} adm){planCap.totalExtras > 0 ? ` • +${planCap.totalExtras} extra(s)` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="number"
+                        min={1}
+                        max={500}
+                        defaultValue={limit}
+                        key={`${t.id}-${limit}`}
+                        disabled={isUpdatingLimit}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value);
                           if (!isNaN(val) && val >= 1 && val !== limit) {
                             onQuickUpdateLimit(val, t.id);
                           }
-                        }
-                      }}
-                      className="w-14 px-1.5 py-1 text-xs bg-background border border-border rounded font-mono font-bold text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary"
-                      title="Pressione Enter ou saia do campo para salvar o limite"
-                    />
-                    <span className="text-[10px] text-muted-foreground font-semibold">vagas</span>
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = parseInt((e.target as HTMLInputElement).value);
+                            if (!isNaN(val) && val >= 1 && val !== limit) {
+                              onQuickUpdateLimit(val, t.id);
+                            }
+                          }
+                        }}
+                        className="w-14 px-1.5 py-1 text-xs bg-background border border-border rounded font-mono font-bold text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                        title="Capacidade calculada do plano comercial (pressione Enter para ajuste manual)"
+                      />
+                      <span className="text-[10px] text-muted-foreground font-semibold">vagas</span>
+                    </div>
                   </div>
                 </div>
 
@@ -200,8 +214,8 @@ export function TenantManagementSection({
           </div>
           <TenantPlanCard 
             tenant={currentTenant}
-            activeBrokers={tenantUsers.filter(u => u.role === 'Membro' || u.userType !== 'cliente').length}
-            activeAdmins={tenantUsers.filter(u => u.role === 'Admin').length}
+            activeBrokers={tenantUsers.filter(u => u.userType !== 'cliente' && u.role !== 'Admin').length}
+            activeAdmins={tenantUsers.filter(u => u.userType !== 'cliente' && u.role === 'Admin').length}
             totalContacts={tenantUsers.filter(u => u.userType === 'cliente').length}
             isPlatformAdmin={isPlatformAdmin}
             onRefresh={onRefreshTenants}

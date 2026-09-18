@@ -69,13 +69,19 @@ export function TenantPlanCard({
   const handleSavePlan = async () => {
     setIsSavingPlan(true);
     try {
+      const bLimit = Number(brokerLimit) || 1;
+      const aLimit = Number(adminLimit) || 1;
+      const currentExtraBrokers = Math.max(0, activeBrokers - bLimit);
+      const currentExtraAdmins = Math.max(0, activeAdmins - aLimit);
+      const syncedUserLimit = bLimit + aLimit + currentExtraBrokers + currentExtraAdmins;
+
       const payload = {
         basePrice: Number(basePrice) || 0,
-        brokerLimit: Number(brokerLimit) || 1,
-        adminLimit: Number(adminLimit) || 1,
+        brokerLimit: bLimit,
+        adminLimit: aLimit,
         extraBrokerPrice: Number(extraBrokerPrice) || 0,
         extraAdminPrice: Number(extraAdminPrice) || 0,
-        userLimit: Number(brokerLimit) || 1
+        userLimit: syncedUserLimit
       };
 
       const res = await fetch(`/api/tenants?id=${tenant.id}`, {
@@ -89,7 +95,7 @@ export function TenantPlanCard({
         throw new Error(data.error || 'Erro ao salvar valores do plano');
       }
 
-      toast.success('Valores do plano salvos com sucesso!');
+      toast.success(`Valores do plano salvos! Capacidade sincronizada para ${syncedUserLimit} vagas.`);
       try {
         if (onRefresh) onRefresh();
       } catch (cbErr) {
@@ -201,13 +207,21 @@ export function TenantPlanCard({
         </div>
 
         {/* Total Monthly Highlight Card */}
-        <div className="bg-[#111c3a] border border-[#1e293b] rounded-xl p-3.5 space-y-1">
+        <div className="bg-[#111c3a] border border-[#1e293b] rounded-xl p-3.5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-slate-200">
               Fatura Mensal Total:
             </span>
             <span className="text-sm sm:text-base font-extrabold text-emerald-400 font-mono tracking-tight">
               R$ {formatBrl(totalMonthly)}/mês
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1.5 border-t border-[#1e293b]">
+            <span className="flex items-center gap-1 text-slate-400">
+              Capacidade do Plano:
+            </span>
+            <span className="font-bold text-white font-mono bg-[#0b1329] px-2 py-0.5 rounded border border-[#1e293b]">
+              {brokerLimit + adminLimit + extraBrokers + extraAdmins} vagas ({brokerLimit + adminLimit} base{extraBrokers + extraAdmins > 0 ? ` + ${extraBrokers + extraAdmins} extra(s)` : ''})
             </span>
           </div>
           <p className="text-[11px] text-slate-400 leading-tight">

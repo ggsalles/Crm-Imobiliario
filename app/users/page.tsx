@@ -21,6 +21,7 @@ import {
   deleteUserProfile,
   createUserProfile,
   Tenant,
+  calculateTenantPlanCapacity,
   getTenants,
   createTenant,
   apiFetch
@@ -58,6 +59,7 @@ export default function UsersPage() {
   const [selectedTenantFilter, setSelectedTenantFilter] = useState<string>("");
   const [isUpdatingLimit, setIsUpdatingLimit] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [savingUid, setSavingUid] = useState<string | null>(null);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const [newUserData, setNewUserData] = useState({
     displayName: "",
@@ -85,9 +87,10 @@ export default function UsersPage() {
   const currentTenant = tenants.find(t => t.id === currentTenantId) || {
     id: currentTenantId,
     name: currentTenantId === DEFAULT_TENANT_ID ? DEFAULT_TENANT_NAME : "Imobiliária",
-    userLimit: 5
+    userLimit: 3,
+    brokerLimit: 2,
+    adminLimit: 1
   };
-  const tenantUserLimit = currentTenant?.userLimit ?? 5;
 
   // Active users registered to this tenant (never count platform master as a client's seat)
   const tenantUsers = users.filter(u => {
@@ -97,7 +100,14 @@ export default function UsersPage() {
     return (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
            (u.tenantIds && u.tenantIds.includes(currentTenantId));
   });
-  const activeCount = tenantUsers.length;
+
+  // Capacidade total sincronizada com o plano comercial (base + extras)
+  const planCapacity = calculateTenantPlanCapacity(currentTenant, tenantUsers);
+  const tenantUserLimit = planCapacity.totalCapacity;
+
+  // Active staff count (ignoring clients/contacts, since staff licenses apply to corretores and admins)
+  const staffUsers = tenantUsers.filter(u => u.userType !== 'cliente');
+  const activeCount = staffUsers.length;
   const isLimitReached = activeCount >= tenantUserLimit;
   const remainingSlots = Math.max(0, tenantUserLimit - activeCount);
   const usagePercentage = Math.min(100, Math.round((activeCount / tenantUserLimit) * 100));
@@ -167,8 +177,35 @@ export default function UsersPage() {
   };
 
   const handleSaveEdit = async (id: string) => {
+    if (savingUid) return;
+    setSavingUid(id);
+
+    // Atualização otimista imediata para resposta visual instantânea sem latência
+    const updatedTenantIds = editForm.tenantIds && editForm.tenantIds.length > 0
+      ? editForm.tenantIds
+      : (editForm.tenantId ? [editForm.tenantId] : []);
+    const updatedTenantId = editForm.tenantId || updatedTenantIds[0] || DEFAULT_TENANT_ID;
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === id) {
+        return {
+          ...u,
+          displayName: editForm.displayName ?? u.displayName,
+          role: editForm.role ?? u.role,
+          userType: editForm.userType ?? u.userType,
+          tenantId: updatedTenantId,
+          tenantIds: updatedTenantIds.length > 0 ? updatedTenantIds : u.tenantIds
+        };
+      }
+      return u;
+    }));
+
     try {
-      await updateUserProfile(id, editForm);
+      await updateUserProfile(id, {
+        ...editForm,
+        tenantId: updatedTenantId,
+        tenantIds: updatedTenantIds
+      });
 
       recordAuditEvent({
         action: 'UPDATE_USER_ROLE',
@@ -183,8 +220,12 @@ export default function UsersPage() {
 
       setEditingUser(null);
       toast.success("Usuário atualizado com sucesso");
-    } catch {
-      toast.error("Erro ao atualizar usuário");
+    } catch (err: any) {
+      console.error("[app/users] Erro ao atualizar perfil do usuário:", err);
+      toast.error(err?.message || "Erro ao atualizar usuário");
+      forceDataResync();
+    } finally {
+      setSavingUid(null);
     }
   };
 
@@ -458,6 +499,7 @@ export default function UsersPage() {
                       currentUserId={user?.id}
                       isAdmin={isAdmin}
                       isEditing={editingUser === u.id}
+                      isSaving={savingUid === u.id}
                       editForm={editForm}
                       setEditForm={setEditForm}
                       tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
