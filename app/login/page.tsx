@@ -73,11 +73,11 @@ export default function LoginPage() {
   useEffect(() => {
     async function checkAndLoadUserTenants() {
       if (user && profile && !authLoading && !hasConfirmedTenant) {
-        const isAdmin = profile.role?.toLowerCase() === 'admin' || profile.isAdmin || isPlatformAdmin(profile.email);
+        const isPlatform = isPlatformAdmin(profile.email);
         const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
 
-        // Fast Path: Single tenant users bypass network waterfalls and navigate immediately
-        if (!isAdmin && userTenantIds.length <= 1) {
+        // Fast Path: Non-platform users with 1 or fewer tenants bypass modal and navigate immediately
+        if (!isPlatform && userTenantIds.length <= 1) {
           setHasConfirmedTenant(true);
           router.push("/");
           return;
@@ -87,7 +87,8 @@ export default function LoginPage() {
           setIsLoadingUserTenants(true);
           const allTenants = await getTenants();
           if (Array.isArray(allTenants)) {
-            const filtered = isAdmin ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
+            // Only platform master can switch between all tenants in the system
+            const filtered = isPlatform ? allTenants : allTenants.filter((t: any) => userTenantIds.includes(t.id));
             
             if (filtered.length > 1) {
               // User owns or acts for multiple tenants, show modal selector

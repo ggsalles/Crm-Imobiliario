@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_TENANT_ID } from '@/lib/constants';
+import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
+import { getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -320,7 +321,12 @@ export async function GET(req: NextRequest) {
       console.warn("Tabela profile_tenants pode nao ter sido criada ainda:", e);
     }
 
-    const items = (profiles || []).map((item: any) => ({
+    const callerUser = getAuthenticatedUser(req);
+    const callerIsMaster = callerUser?.email ? isPlatformAdmin(callerUser.email) : false;
+    const requestedTenantId = searchParams.get('tenantId');
+    const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser) : null);
+
+    let items = (profiles || []).map((item: any) => ({
       id: item.id,
       displayName: item.display_name,
       email: item.email,
@@ -331,6 +337,23 @@ export async function GET(req: NextRequest) {
       tenantId: item.tenant_id,
       tenantIds: associationsMap[item.id] || [item.tenant_id || DEFAULT_TENANT_ID]
     }));
+
+    // Se o solicitante NÃO for o Master (ggsalles), ocultar o login do Master de empresas clientes:
+    if (!callerIsMaster) {
+      items = items.filter(item => !isPlatformAdmin(item.email));
+      
+      // E isolar por empresa para que vejam apenas usuários pertencentes à sua organização
+      if (activeTenantId) {
+        items = items.filter(item => 
+          item.tenantId === activeTenantId || (item.tenantIds && item.tenantIds.includes(activeTenantId))
+        );
+      }
+    } else if (requestedTenantId) {
+      // Se for o master e filtrou um inquilino específico:
+      items = items.filter(item =>
+        item.tenantId === requestedTenantId || (item.tenantIds && item.tenantIds.includes(requestedTenantId))
+      );
+    }
 
     return NextResponse.json(items);
   } catch (error: any) {

@@ -89,11 +89,14 @@ export default function UsersPage() {
   };
   const tenantUserLimit = currentTenant?.userLimit ?? 5;
 
-  // Active users registered to this tenant
-  const tenantUsers = users.filter(u => 
-    (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
-    (u.tenantIds && u.tenantIds.includes(currentTenantId))
-  );
+  // Active users registered to this tenant (never count platform master as a client's seat)
+  const tenantUsers = users.filter(u => {
+    if (checkPlatformAdmin(u.email) && currentTenantId !== DEFAULT_TENANT_ID) {
+      return false;
+    }
+    return (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
+           (u.tenantIds && u.tenantIds.includes(currentTenantId));
+  });
   const activeCount = tenantUsers.length;
   const isLimitReached = activeCount >= tenantUserLimit;
   const remainingSlots = Math.max(0, tenantUserLimit - activeCount);
@@ -275,10 +278,22 @@ export default function UsersPage() {
     );
   }
 
-  const filteredUsers = users.filter(u => 
-    u.displayName.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    // Platform master login is strictly hidden from regular companies
+    if (!isPlatformAdmin && checkPlatformAdmin(u.email)) {
+      return false;
+    }
+    // Regular companies only see their own users
+    if (!isPlatformAdmin) {
+      const belongs = (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
+                      (u.tenantIds && u.tenantIds.includes(currentTenantId));
+      if (!belongs) return false;
+    }
+    return (
+      u.displayName.toLowerCase().includes(search.toLowerCase()) || 
+      u.email.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
@@ -445,7 +460,7 @@ export default function UsersPage() {
                       isEditing={editingUser === u.id}
                       editForm={editForm}
                       setEditForm={setEditForm}
-                      tenants={tenants}
+                      tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
                       deletingUid={deletingUid}
                       onEditClick={handleEditClick}
                       onSaveEdit={handleSaveEdit}
@@ -479,7 +494,7 @@ export default function UsersPage() {
           newUserData={newUserData}
           setNewUserData={setNewUserData}
           isAdmin={isAdmin}
-          tenants={tenants}
+          tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
         />
 
         {/* Modal de Limite de Vagas Atingido */}
