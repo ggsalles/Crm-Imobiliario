@@ -4,33 +4,17 @@ export const dynamic = "force-dynamic";
 
 import { Sidebar } from "@/components/sidebar";
 import { useTheme } from "@/providers/theme-provider";
-import { InteractiveGuideModal } from "@/components/InteractiveGuideModal";
 import { 
   Palette, 
   Check, 
   Layout, 
   Sparkles, 
-  Smartphone, 
   Monitor,
-  LayoutDashboard,
-  Trello,
-  Calendar,
-  Users,
-  BarChart3,
-  ShieldCheck,
-  MessageSquare,
-  Home,
-  ChevronDown,
-  Building2,
-  UserCircle,
   Target,
   Percent,
-  Calculator,
-  Sigma,
   Clock,
   Moon
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -52,62 +36,10 @@ const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | 
   { name: "Deep Indigo", value: "indigo", hex: "#6366f1" },
 ];
 
-function DocItem({ title, icon: Icon, content, onExplore }: { title: string; icon: any; content: string; onExplore?: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="bg-background rounded-xl border border-border overflow-hidden transition-all hover:border-primary/30 group">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 text-left font-sans"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="w-3.5 h-3.5 text-primary" />
-          </div>
-          <span className="text-xs font-bold text-foreground">{title}</span>
-        </div>
-        <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="px-3 pb-3 pt-0 flex flex-col gap-2">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {content}
-              </p>
-              {onExplore && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onExplore();
-                  }}
-                  className="w-fit flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20 hover:border-primary rounded-lg text-[9px] font-bold transition-all cursor-pointer relative overflow-hidden select-none active:scale-95 mt-0.5"
-                >
-                  <Sparkles className="w-2.5 h-2.5 text-primary group-hover:text-white" />
-                  Visualizar Guia Técnico HTML
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 export default function SettingsPage() {
   const { primaryColor, setPrimaryColor, appearance, setAppearance } = useTheme();
   const [probabilities, setProbabilities] = useState<Record<string, number>>({});
   const [isSaved, setIsSaved] = useState(false);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
-  const [selectedGuideSection, setSelectedGuideSection] = useState("dashboard");
 
   const [sessionEnabled, setSessionEnabled] = useState(true);
   const [sessionMinutes, setSessionMinutes] = useState(15);
@@ -426,171 +358,9 @@ export default function SettingsPage() {
                 </div>
               </div>
             </section>
-
-            <section id="system-guide-section" className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 pb-3 border-b border-border/50">
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Layout className="w-4 h-4 text-primary" />
-                      <h3 className="text-xs sm:text-sm font-bold text-foreground">Guia do Sistema (Documentação)</h3>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Explicação detalhada e interativa de cada módulo e recurso do SalesScore CRM.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedGuideSection("dashboard");
-                      setIsGuideOpen(true);
-                    }}
-                    className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer hover:shadow-sm shadow-primary/20 transition-all select-none shrink-0 self-start sm:self-auto"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                    Abrir Guia HTML Interativo
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  <DocItem 
-                    title="Controle Operacional / Dashboard" 
-                    icon={LayoutDashboard} 
-                    content="A tela principal (Dashboard) integra inteligência preditiva para fornecer o pulso do seu negócio. O gráfico de performance da equipe mostra o ranking dos agentes por volume de vendas e taxa de conversão real. Os cards superiores mostram métricas rápidas como o Forecast (Previsão Realista) que utiliza algoritmos de probabilidade para estimar o fechamento do mês, além da média de vendas e melhor performance individual."
-                    onExplore={() => {
-                      setSelectedGuideSection("dashboard");
-                      setIsGuideOpen(true);
-                    }}
-                  />
-                  <DocItem 
-                    title="Pipeline (Funil de Vendas)" 
-                    icon={Trello} 
-                    content="O Pipeline é o centro de comando. Cada card (Deal) exibe o valor formatado, empresa vinculada e data de atualização. Você pode arrastar os cards entre os estágios configuráveis. Ao editar um negócio, o sistema oferece integração direta com o Inventário de Imóveis e Contatos, garantindo resiliência de dados através de um cache inteligente que permite visualização imediata mesmo com instabilidades de rede."
-                    onExplore={() => {
-                      setSelectedGuideSection("pipeline");
-                      setIsGuideOpen(true);
-                    }}
-                  />
-                  <DocItem 
-                    title="Vendas Inteligentes (IA)" 
-                    icon={Sparkles} 
-                    content="O SalesScore utiliza IA para analisar o histórico de interações e sugerir o próximo passo ideal. No detalhe do negócio, o módulo 'Vendas Inteligentes' gera orientações de coaching em tempo real para acelerar o fechamento, identificando gargalos no funil e sugerindo imóveis do inventário que possuem maior 'Match' com o perfil do comprador."
-                  />
-                  <DocItem 
-                    title="Gestão de Imóveis e Matching" 
-                    icon={Home} 
-                    content="Gerencie seu inventário com campos técnicos detalhados. O recurso de 'Match de Imóveis' realiza um cruzamento matemático entre o valor do negócio, preferências do cliente e características do imóvel. Negócios podem ser vinculados a múltiplos registros, permitindo rastreabilidade completa entre o proprietário, o imóvel e o lead comprador."
-                    onExplore={() => {
-                      setSelectedGuideSection("matching");
-                      setIsGuideOpen(true);
-                    }}
-                  />
-                  <DocItem 
-                    title="Segurança e Isolamento SaaS" 
-                    icon={ShieldCheck} 
-                    content="Como Administrador, você pode gerenciar os níveis de acesso da sua equipe. Nosso sistema de Isolamento de Multi-Tenant garante segurança criptográfica e por Row-Level Security no banco de dados, protegendo os negócios, orçamentos e cadastros de clientes contra qualquer vazamento entre imobiliárias contratantes."
-                    onExplore={() => {
-                      setSelectedGuideSection("sec_saas");
-                      setIsGuideOpen(true);
-                    }}
-                  />
-                  <DocItem 
-                    title="Mensagens Internas" 
-                    icon={MessageSquare} 
-                    content="O sistema de Mensagens (Chat) elimina a necessidade de ferramentas externas para comunicação rápida. Troque informações sobre imóveis, peça ajuda em negociações complexas ou envie atualizações para toda a empresa. Notificações em tempo real garantem que ninguém perca uma mensagem importante."
-                  />
-                  <DocItem 
-                    title="Empresas e Parceiros" 
-                    icon={Building2} 
-                    content="Gerencie as entidades jurídicas parceiras, como bancos para financiamento, administradoras de condomínios e outras imobiliárias. Manter os contatos das empresas atualizados facilita agilizar processos de documentação e fechamento de novos negócios."
-                  />
-                  <DocItem 
-                    title="Perfis de Usuários" 
-                    icon={UserCircle} 
-                    content="Cada usuário no sistema possui um perfil personalizável. Aqui você pode atualizar sua foto, e-mail de contato e senha. Lembre-se de manter seu perfil atualizado, pois essas informações são usadas automaticamente na geração de contratos e materiais de marketing."
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Sigma className="w-4 h-4 text-primary" />
-                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Dicionário de Fórmulas e Cálculos</h3>
-                </div>
-                <p className="text-[11px] text-muted-foreground mb-3">Entenda como o SalesScore CRM processa seus dados para gerar inteligência comercial.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  <DocItem 
-                    title="Previsão de Fechamento (Forecast)" 
-                    icon={Calculator} 
-                    content="Fórmula: Receita Realizada + Σ (Valor em Pipeline × % Probabilidade do Estágio). Esta métrica projeta o fechamento realista do mês. Diferente do valor bruto do pipeline, o Forecast pondera o risco de cada etapa, fornecendo uma visão segura do faturamento esperado."
-                  />
-                  <DocItem 
-                    title="Taxa de Conversão" 
-                    icon={Percent} 
-                    content="Fórmula: (Negócios Ganhos / Total de Oportunidades Finalizadas) × 100. Analisamos a eficiência individual e coletiva em transformar leads em contratos assinados. Uma taxa saudável gira entre 15% e 25% no mercado imobiliário de alto padrão."
-                  />
-                  <DocItem 
-                    title="Empresa Individual vs Jurídica" 
-                    icon={Building2} 
-                    content="No SalesScore, um Negócio pode ser associado a uma 'Empresa Individual' quando o cliente é uma pessoa física direta, ou a uma 'Entidade Jurídica' quando envolve representação corporativa. Isso permite segmentar o faturamento entre B2B e B2C com precisão."
-                  />
-                  <DocItem 
-                    title="Ticket Médio Mensal" 
-                    icon={Sigma} 
-                    content="Fórmula: Valor Total Faturado / Quantidade de Vendas Realizadas. Essencial para identificar o posicionamento da sua imobiliária no mercado e o perfil de ticket dos imóveis mais líquidos no inventário."
-                  />
-                  <DocItem 
-                    title="Saúde da Carteira (Radar)" 
-                    icon={Sparkles} 
-                    content="O gráfico de radar analisa 5 dimensões: Volume de Leads, Velocidade de Vendas, Ticket Médio, Taxa de Retenção e Batimento de Metas. Quanto mais equilibrada a área do gráfico, mais saudável é o seu processo comercial."
-                  />
-                  <DocItem 
-                    title="Progressão de Meta" 
-                    icon={Target} 
-                    content="Fórmula: (Receita do Mês Atual / Meta Estabelecida) × 100. No Dashboard de Performance, a barra de progresso mostra quão perto você está do objetivo financeiro configurado para o período atual."
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Customização Visual</h3>
-                </div>
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between p-3 bg-background rounded-xl border border-border group hover:border-primary/30 transition-colors">
-                    <div>
-                      <p className="text-xs font-bold text-foreground">Modo Compacto</p>
-                      <p className="text-[11px] text-muted-foreground">Reduz o espaçamento para mostrar mais dados.</p>
-                    </div>
-                    <div className="w-10 h-5 bg-muted rounded-full relative p-0.5 cursor-pointer">
-                      <div className="w-4 h-4 bg-card rounded-full shadow-xs" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-background rounded-xl border border-border group hover:border-primary/30 transition-colors">
-                    <div>
-                      <p className="text-xs font-bold text-foreground">Animações de Transição</p>
-                      <p className="text-[11px] text-muted-foreground">Habilita efeitos suaves entre telas.</p>
-                    </div>
-                    <div className="w-10 h-5 bg-primary rounded-full relative p-0.5 cursor-pointer">
-                      <div className="w-4 h-4 bg-card rounded-full shadow-xs ml-auto" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
           </div>
         </div>
       </main>
-
-      <InteractiveGuideModal 
-        isOpen={isGuideOpen} 
-        onClose={() => setIsGuideOpen(false)} 
-        initialTab={selectedGuideSection}
-      />
     </div>
   );
 }
