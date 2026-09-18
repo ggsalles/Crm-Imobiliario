@@ -41,6 +41,7 @@ interface TenantItem {
   slug: string;
   createdAt: string;
   isBlocked: boolean;
+  isManuallyUnlocked?: boolean;
   userLimit?: number;
   billingStatus?: 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
   billingSuspensionDate?: string;
@@ -76,6 +77,8 @@ export default function AdminBillingPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "overdue" | "regular" | "blocked">("all");
   const [, setSavePending] = useState(false);
+  const [unlockModalTenant, setUnlockModalTenant] = useState<TenantItem | null>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
   // Period management (default: 6-month block)
   // periodMode: 'current_6' | 's1_2026' | 's2_2026' | 's1_2025' | 's2_2025' | 'full_year_2026' | 'custom'
@@ -198,20 +201,100 @@ export default function AdminBillingPage() {
     setSavePending(true);
     
     try {
-      setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, isBlocked: nextStatus } : t));
-      
       const updatedBlocked = [...(config.blockedTenantIds || [])];
-      const index = updatedBlocked.indexOf(tenantId);
+      const updatedUnlocked = [...(config.unlockedTenantIds || [])];
+      const bIndex = updatedBlocked.indexOf(tenantId);
+      const uIndex = updatedUnlocked.indexOf(tenantId);
       
-      if (nextStatus && index === -1) {
-        updatedBlocked.push(tenantId);
-      } else if (!nextStatus && index !== -1) {
-        updatedBlocked.splice(index, 1);
+      if (nextStatus) {
+        // Bloquear
+        if (bIndex === -1) updatedBlocked.push(tenantId);
+        if (uIndex !== -1) updatedUnlocked.splice(uIndex, 1);
+      } else {
+        // Liberar
+        if (bIndex !== -1) updatedBlocked.splice(bIndex, 1);
+        if (uIndex === -1) updatedUnlocked.push(tenantId);
       }
 
       const updatedConfig: SaaSAdminConfig = {
         ...config,
-        blockedTenantIds: updatedBlocked
+        blockedTenantIds: updatedBlocked,
+        unlockedTenantIds: updatedUnlocked
+      };
+
+      setConfig(updatedConfig);
+      setTenants(prev => prev.map(t => t.id === tenantId ? { 
+        ...t, 
+        isBlocked: nextStatus,
+        isManuallyUnlocked: !nextStatus 
+      } : t));
+
+      await apiFetch("/api/tenants/config", {
+        method: "POST",
+        body: JSON.stringify(updatedConfig)
+      });
+
+      await apiFetch(`/api/tenants?id=${tenantId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isBlocked: nextStatus, isManuallyUnlocked: !nextStatus })
+      });
+
+      toast.success(
+        nextStatus 
+          ? "Acesso da imobiliária bloqueado manualmente!" 
+          : "Acesso da imobiliária liberado com sucesso!"
+      );
+      await loadAllData();
+    } catch (err) {
+      console.error("Failed to toggle tenant block:", err);
+      toast.error("Falha ao salvar ação de bloqueio.");
+      await loadAllData();
+    } finally {
+      setSavePending(false);
+    }
+  }
+
+  // Quitar faturas pendentes e liberar imobiliária
+  async function confirmPaymentAndUnlock(tenant: TenantItem) {
+    if (!config) return;
+    setIsUnlocking(true);
+    setSavePending(true);
+
+    try {
+      const currentLedger = config.payments || {};
+      const tenantLedger = { ...(currentLedger[tenant.id] || {}) };
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      const dueDay = config.dueDays?.[tenant.id] ?? tenant.dueDay ?? 10;
+      const today = new Date();
+
+      // Marca todas as faturas vencidas como PAGO
+      for (let i = 24; i >= 0; i--) {
+        const d = new Date(currentYear, currentMonth - 1 - i, 1);
+        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const status = tenantLedger[mKey] || 'pendente';
+        const dueMidnight = new Date(d.getFullYear(), d.getMonth(), dueDay);
+        
+        if (status !== 'pago' && (today.getTime() >= dueMidnight.getTime() || status === 'atrasado')) {
+          tenantLedger[mKey] = 'pago';
+        }
+      }
+
+      if (tenant.oldestOverdueMonthKey) {
+        tenantLedger[tenant.oldestOverdueMonthKey] = 'pago';
+      }
+
+      const updatedBlocked = (config.blockedTenantIds || []).filter(id => id !== tenant.id);
+      const updatedUnlocked = (config.unlockedTenantIds || []).filter(id => id !== tenant.id);
+
+      const updatedConfig: SaaSAdminConfig = {
+        ...config,
+        blockedTenantIds: updatedBlocked,
+        unlockedTenantIds: updatedUnlocked,
+        payments: {
+          ...config.payments,
+          [tenant.id]: tenantLedger
+        }
       };
 
       setConfig(updatedConfig);
@@ -221,27 +304,85 @@ export default function AdminBillingPage() {
         body: JSON.stringify(updatedConfig)
       });
 
-      await apiFetch(`/api/tenants?id=${tenantId}`, {
+      await apiFetch(`/api/tenants?id=${tenant.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ isBlocked: nextStatus })
+        body: JSON.stringify({ isBlocked: false, isManuallyUnlocked: false })
       });
 
-      toast.success(
-        nextStatus 
-          ? "Acesso da imobiliária bloqueado manualmente!" 
-          : "Acesso da imobiliária liberado com sucesso!"
-      );
-      loadAllData();
+      toast.success(`Fatura quitada e acesso de "${tenant.name}" liberado com sucesso!`);
+      setUnlockModalTenant(null);
+      await loadAllData();
     } catch (err) {
-      console.error("Failed to toggle tenant block:", err);
-      toast.error("Falha ao salvar ação de bloqueio.");
-      loadAllData();
+      console.error("Failed to confirm payment and unlock:", err);
+      toast.error("Erro ao regularizar fatura e liberar imobiliária.");
+      await loadAllData();
     } finally {
+      setIsUnlocking(false);
       setSavePending(false);
     }
   }
 
-  // Handle individual payment ledger cycle toggle: PAGO -> PENDENTE -> ATRASADO -> PAGO
+  // Liberar acesso sob carência (mantém fatura pendente para controle de cobrança)
+  async function grantGracePeriodAndUnlock(tenant: TenantItem) {
+    if (!config) return;
+    setIsUnlocking(true);
+    setSavePending(true);
+
+    try {
+      const updatedBlocked = (config.blockedTenantIds || []).filter(id => id !== tenant.id);
+      const updatedUnlocked = [...(config.unlockedTenantIds || [])];
+      if (!updatedUnlocked.includes(tenant.id)) {
+        updatedUnlocked.push(tenant.id);
+      }
+
+      const updatedConfig: SaaSAdminConfig = {
+        ...config,
+        blockedTenantIds: updatedBlocked,
+        unlockedTenantIds: updatedUnlocked
+      };
+
+      setConfig(updatedConfig);
+
+      await apiFetch("/api/tenants/config", {
+        method: "POST",
+        body: JSON.stringify(updatedConfig)
+      });
+
+      await apiFetch(`/api/tenants?id=${tenant.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isBlocked: false, isManuallyUnlocked: true })
+      });
+
+      toast.success(`Acesso de "${tenant.name}" liberado sob carência administrativa!`);
+      setUnlockModalTenant(null);
+      await loadAllData();
+    } catch (err) {
+      console.error("Failed to grant grace period:", err);
+      toast.error("Erro ao conceder carência para a imobiliária.");
+      await loadAllData();
+    } finally {
+      setIsUnlocking(false);
+      setSavePending(false);
+    }
+  }
+
+  // Ação ao clicar no botão de Acesso
+  function handleToggleClick(tenant: TenantItem, isBlockedOnSaaS: boolean) {
+    if (isBlockedOnSaaS) {
+      // Se a imobiliária tem inadimplência cadastrada, abre as opções para o Master
+      if ((tenant.overdueCount || 0) > 0 || (tenant.diffDays !== undefined && tenant.diffDays >= (config?.blockStart || 7))) {
+        setUnlockModalTenant(tenant);
+        return;
+      }
+      // Se estava bloqueada sem inadimplência de data, desbloqueia direto
+      toggleTenantBlock(tenant.id, true);
+    } else {
+      // Se está liberada, suspende o acesso manualmente
+      toggleTenantBlock(tenant.id, false);
+    }
+  }
+
+  // Handle individual payment ledger cycle toggle: PENDENTE -> PAGO -> ATRASADO -> PENDENTE
   async function cyclePaymentStatus(tenantId: string, monthKey: string) {
     if (!config) return;
 
@@ -250,12 +391,12 @@ export default function AdminBillingPage() {
     const currentStatus = tenantLedger[monthKey] || "pendente";
     
     let nextStatus: 'pago' | 'pendente' | 'atrasado' = "pago";
-    if (currentStatus === "pago") {
-      nextStatus = "pendente";
-    } else if (currentStatus === "pendente") {
+    if (currentStatus === "pendente") {
+      nextStatus = "pago";
+    } else if (currentStatus === "pago") {
       nextStatus = "atrasado";
     } else {
-      nextStatus = "pago";
+      nextStatus = "pendente";
     }
 
     const updatedPayments = {
@@ -293,10 +434,11 @@ export default function AdminBillingPage() {
         body: JSON.stringify(updatedConfig)
       });
       toast.success(`Mensalidade de ${monthKey} atualizada para ${nextStatus.toUpperCase()}!`);
+      await loadAllData();
     } catch (err) {
       console.error("Failed to cycle payment status:", err);
       toast.error("Erro ao registrar pagamento.");
-      loadAllData();
+      await loadAllData();
     }
   }
 
@@ -404,8 +546,15 @@ export default function AdminBillingPage() {
 
   // Statistics calculation
   const totalImobiliarias = tenants.length;
-  const blockedCount = tenants.filter(t => t.isBlocked || t.billingStatus === 'bloqueado').length;
-  const overdueAlertCount = tenants.filter(t => t.billingStatus === 'aviso_sutil' || t.billingStatus === 'aviso_critico').length;
+  const blockedCount = tenants.filter(t => {
+    const isManuallyUnlocked = Boolean(t.isManuallyUnlocked || config?.unlockedTenantIds?.includes(t.id));
+    return !isManuallyUnlocked && (t.isBlocked || t.billingStatus === 'bloqueado');
+  }).length;
+  const overdueAlertCount = tenants.filter(t => {
+    const isManuallyUnlocked = Boolean(t.isManuallyUnlocked || config?.unlockedTenantIds?.includes(t.id));
+    const isBlocked = !isManuallyUnlocked && (t.isBlocked || t.billingStatus === 'bloqueado');
+    return !isBlocked && (t.billingStatus === 'aviso_sutil' || t.billingStatus === 'aviso_critico' || (t.overdueCount || 0) > 0);
+  }).length;
   const activeCount = totalImobiliarias - blockedCount;
   const monthlySubscriptionPrice = 299;
   const estimatedRevenue = activeCount * monthlySubscriptionPrice;
@@ -416,14 +565,17 @@ export default function AdminBillingPage() {
                           t.slug?.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
 
+    const isManuallyUnlocked = Boolean(t.isManuallyUnlocked || config?.unlockedTenantIds?.includes(t.id));
+    const isBlockedOnSaaS = !isManuallyUnlocked && (t.isBlocked || t.billingStatus === "bloqueado");
+
     if (statusFilter === "overdue") {
-      return t.billingStatus === "aviso_sutil" || t.billingStatus === "aviso_critico" || (t.overdueCount || 0) > 0;
+      return (t.billingStatus === "aviso_sutil" || t.billingStatus === "aviso_critico" || (t.overdueCount || 0) > 0) && !isBlockedOnSaaS;
     }
     if (statusFilter === "regular") {
-      return t.billingStatus === "regular" && !t.isBlocked;
+      return !isBlockedOnSaaS && ((t.billingStatus === "regular" && (t.overdueCount || 0) === 0) || isManuallyUnlocked);
     }
     if (statusFilter === "blocked") {
-      return t.isBlocked || t.billingStatus === "bloqueado";
+      return isBlockedOnSaaS;
     }
     return true;
   });
@@ -893,7 +1045,8 @@ export default function AdminBillingPage() {
                     </tr>
                   ) : (
                     filteredTenants.map(tenant => {
-                      const isBlockedOnSaaS = tenant.isBlocked || tenant.billingStatus === 'bloqueado';
+                      const isManuallyUnlocked = Boolean(tenant.isManuallyUnlocked || config?.unlockedTenantIds?.includes(tenant.id));
+                      const isBlockedOnSaaS = !isManuallyUnlocked && (tenant.isBlocked || tenant.billingStatus === 'bloqueado');
                       const tenantPayments = config?.payments?.[tenant.id] || {};
 
                       // Visual badge for the live billing evaluation
@@ -904,11 +1057,18 @@ export default function AdminBillingPage() {
                         </span>
                       );
 
-                      if (tenant.billingStatus === 'bloqueado') {
+                      if (isBlockedOnSaaS) {
                         statusBadge = (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-rose-500/15 text-rose-400 border border-rose-500/30" title={`Suspensão (${tenant.diffDays || 0} dias de atraso)`}>
                             <Lock className="w-2.5 h-2.5" />
                             Bloqueado {tenant.diffDays ? `(D+${tenant.diffDays})` : ""}
+                          </span>
+                        );
+                      } else if (isManuallyUnlocked && (tenant.overdueCount || 0) > 0) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-blue-500/15 text-blue-400 border border-blue-500/30" title={`Acesso liberado sob carência administrativa (${tenant.diffDays || 0} dias de pendência)`}>
+                            <Unlock className="w-2.5 h-2.5" />
+                            Carência (D+{tenant.diffDays || 0})
                           </span>
                         );
                       } else if (tenant.billingStatus === 'aviso_critico') {
@@ -1032,18 +1192,25 @@ export default function AdminBillingPage() {
                           {/* Lock / Unlock Toggle Action Button */}
                           <td className="px-3 py-2 text-center min-w-[105px]">
                             <button
-                              onClick={() => toggleTenantBlock(tenant.id, isBlockedOnSaaS)}
+                              onClick={() => handleToggleClick(tenant, isBlockedOnSaaS)}
                               className={`inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider font-mono border select-none transition-all cursor-pointer ${
                                 isBlockedOnSaaS
                                   ? "bg-rose-600 border-rose-600 text-white hover:bg-rose-500 shadow-xs"
+                                  : isManuallyUnlocked && (tenant.overdueCount || 0) > 0
+                                  ? "bg-blue-900/50 border-blue-500/50 text-blue-300 hover:bg-blue-800/60"
                                   : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                               }`}
-                              title={isBlockedOnSaaS ? "Clique para liberar o acesso" : "Clique para suspender o acesso manualmente"}
+                              title={isBlockedOnSaaS ? "Clique para liberar o acesso desta imobiliária" : "Clique para suspender o acesso manualmente"}
                             >
                               {isBlockedOnSaaS ? (
                                 <>
                                   <Lock className="w-2.5 h-2.5 text-white" />
                                   Bloqueado
+                                </>
+                              ) : isManuallyUnlocked && (tenant.overdueCount || 0) > 0 ? (
+                                <>
+                                  <Unlock className="w-2.5 h-2.5 text-blue-300" />
+                                  Carência
                                 </>
                               ) : (
                                 <>
@@ -1239,6 +1406,100 @@ export default function AdminBillingPage() {
                 className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer"
               >
                 Fechar Simulador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Desbloqueio & Regularização de Faturamento */}
+      {unlockModalTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-950 border border-slate-800 w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 relative text-slate-100">
+            <button
+              onClick={() => !isUnlocking && setUnlockModalTenant(null)}
+              disabled={isUnlocking}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-900 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-mono uppercase tracking-widest bg-rose-500/15 text-rose-400 px-2 py-0.5 rounded border border-rose-500/30 font-bold">
+                  Desbloqueio de Acesso
+                </span>
+                <span className="text-[9px] font-mono text-slate-500">
+                  {unlockModalTenant.slug || unlockModalTenant.id.slice(0, 8)}
+                </span>
+              </div>
+              <h3 className="text-base font-bold text-white mt-1.5">
+                Liberar Acesso: {unlockModalTenant.name}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Esta imobiliária possui fatura em atraso há <strong className="text-rose-400">{unlockModalTenant.diffDays || 8} dias</strong> (vencimento todo dia {unlockModalTenant.dueDay || 10}). Como deseja proceder?
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {/* Option 1: Confirm Payment and Unlock */}
+              <button
+                onClick={() => confirmPaymentAndUnlock(unlockModalTenant)}
+                disabled={isUnlocking}
+                className="w-full text-left p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 transition-all group cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30 mt-0.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-300 group-hover:text-emerald-200">
+                        Marcar Fatura como PAGA e Liberar
+                      </span>
+                      <span className="text-[8px] uppercase tracking-wider bg-emerald-500/20 text-emerald-300 font-mono px-1 py-0.5 rounded font-bold">
+                        Recomendado
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-200/70 mt-0.5 leading-snug">
+                      Quita o histórico de mensalidades pendentes, altera o status para <strong>Regular</strong> e restaura o acesso sem pendências.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: Grant Grace Period / Provisional Unlock */}
+              <button
+                onClick={() => grantGracePeriodAndUnlock(unlockModalTenant)}
+                disabled={isUnlocking}
+                className="w-full text-left p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/15 transition-all group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30 mt-0.5">
+                    <Unlock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-blue-300 group-hover:text-blue-200">
+                        Liberar Acesso Provisório (Carência)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-blue-200/70 mt-0.5 leading-snug">
+                      Mantém a fatura como <strong>PENDENTE</strong> para cobrança administrativa, mas desbloqueia os usuários para utilizarem o CRM normalmente.
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-900">
+              <button
+                type="button"
+                onClick={() => setUnlockModalTenant(null)}
+                disabled={isUnlocking}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer"
+              >
+                Cancelar
               </button>
             </div>
           </div>

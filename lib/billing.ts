@@ -26,6 +26,7 @@ const CACHE_FILE_PATH = path.join(process.cwd(), 'blocked_tenants.json');
 // Default initial config
 const DEFAULT_CONFIG: SaaSAdminConfig = {
   blockedTenantIds: [],
+  unlockedTenantIds: [],
   payments: {},
   dueDays: {},
   userLimits: {},
@@ -41,12 +42,16 @@ function readConfigFromFile(): SaaSAdminConfig {
       const txt = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
       const data = JSON.parse(txt);
       if (data && Array.isArray(data.blockedTenantIds)) {
+        if (!Array.isArray(data.unlockedTenantIds)) {
+          data.unlockedTenantIds = [];
+        }
         return data as SaaSAdminConfig;
       }
       // Migrate from old simple array style if detected
       if (Array.isArray(data)) {
         return {
           blockedTenantIds: data,
+          unlockedTenantIds: [],
           payments: {}
         };
       }
@@ -147,14 +152,47 @@ export async function getBlockedTenantIds(bypassCache = false): Promise<string[]
 
 export async function setTenantBlocked(tenantId: string, blocked: boolean): Promise<boolean> {
   const config = await getSaaSConfig();
-  const index = config.blockedTenantIds.indexOf(tenantId);
+  if (!config.blockedTenantIds) config.blockedTenantIds = [];
+  if (!config.unlockedTenantIds) config.unlockedTenantIds = [];
 
-  if (blocked && index === -1) {
-    config.blockedTenantIds.push(tenantId);
-  } else if (!blocked && index !== -1) {
-    config.blockedTenantIds.splice(index, 1);
+  const bIndex = config.blockedTenantIds.indexOf(tenantId);
+  const uIndex = config.unlockedTenantIds.indexOf(tenantId);
+
+  if (blocked) {
+    if (bIndex === -1) {
+      config.blockedTenantIds.push(tenantId);
+    }
+    if (uIndex !== -1) {
+      config.unlockedTenantIds.splice(uIndex, 1);
+    }
   } else {
-    return true;
+    if (bIndex !== -1) {
+      config.blockedTenantIds.splice(bIndex, 1);
+    }
+  }
+
+  return saveSaaSConfig(config);
+}
+
+export async function setTenantUnlocked(tenantId: string, unlocked: boolean): Promise<boolean> {
+  const config = await getSaaSConfig();
+  if (!config.blockedTenantIds) config.blockedTenantIds = [];
+  if (!config.unlockedTenantIds) config.unlockedTenantIds = [];
+
+  const bIndex = config.blockedTenantIds.indexOf(tenantId);
+  const uIndex = config.unlockedTenantIds.indexOf(tenantId);
+
+  if (unlocked) {
+    if (uIndex === -1) {
+      config.unlockedTenantIds.push(tenantId);
+    }
+    if (bIndex !== -1) {
+      config.blockedTenantIds.splice(bIndex, 1);
+    }
+  } else {
+    if (uIndex !== -1) {
+      config.unlockedTenantIds.splice(uIndex, 1);
+    }
   }
 
   return saveSaaSConfig(config);

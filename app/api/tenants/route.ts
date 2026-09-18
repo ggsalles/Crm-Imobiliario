@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { getBlockedTenantIds, setTenantBlocked, getSaaSConfig, getTenantBillingStatus, setTenantUserLimit } from '@/lib/billing';
+import { getBlockedTenantIds, setTenantBlocked, setTenantUnlocked, getSaaSConfig, getTenantBillingStatus, setTenantUserLimit } from '@/lib/billing';
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -49,8 +49,15 @@ export async function GET(req: NextRequest) {
       if (!data) return NextResponse.json(null);
 
       const billingResult = getTenantBillingStatus(config, data.id, new Date(), data.created_at);
-      const isBlocked = (data.is_blocked === true) || 
-                        (data.id !== DEFAULT_TENANT_ID && (blockedIds.includes(data.id) || billingResult.status === 'bloqueado'));
+      const isManuallyUnlocked = Boolean(
+        billingResult.isManuallyUnlocked || 
+        (config.unlockedTenantIds && config.unlockedTenantIds.includes(data.id))
+      );
+      const isBlocked = !isManuallyUnlocked && (
+        (data.is_blocked === true) || 
+        blockedIds.includes(data.id) || 
+        billingResult.status === 'bloqueado'
+      );
       const userLimit = data.user_limit ?? config.userLimits?.[data.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
       const dueDay = data.due_day ?? billingResult.dueDay;
 
@@ -61,6 +68,7 @@ export async function GET(req: NextRequest) {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         isBlocked,
+        isManuallyUnlocked,
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
@@ -113,8 +121,15 @@ export async function GET(req: NextRequest) {
 
     const items = finalTenants.map((item: any) => {
       const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at);
-      const isBlocked = (item.is_blocked === true) || 
-                        (item.id !== DEFAULT_TENANT_ID && (blockedIds.includes(item.id) || billingResult.status === 'bloqueado'));
+      const isManuallyUnlocked = Boolean(
+        billingResult.isManuallyUnlocked || 
+        (config.unlockedTenantIds && config.unlockedTenantIds.includes(item.id))
+      );
+      const isBlocked = !isManuallyUnlocked && (
+        (item.is_blocked === true) || 
+        blockedIds.includes(item.id) || 
+        billingResult.status === 'bloqueado'
+      );
       const userLimit = item.user_limit ?? config.userLimits?.[item.id] ?? DEFAULT_USER_LIMIT_PER_TENANT;
       const dueDay = item.due_day ?? billingResult.dueDay;
 
@@ -125,6 +140,7 @@ export async function GET(req: NextRequest) {
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         isBlocked,
+        isManuallyUnlocked,
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
@@ -227,10 +243,26 @@ export async function PATCH(req: NextRequest) {
 
     // Catch and process isBlocked / is_blocked dynamic property
     const isBlockedParam = data.isBlocked !== undefined ? data.isBlocked : data.is_blocked;
+    const isManuallyUnlockedParam = data.isManuallyUnlocked;
+
     if (isBlockedParam !== undefined) {
-      await setTenantBlocked(id, !!isBlockedParam);
-      updatePayload.is_blocked = !!isBlockedParam;
+      if (isBlockedParam) {
+        await setTenantBlocked(id, true);
+        await setTenantUnlocked(id, false);
+        updatePayload.is_blocked = true;
+      } else {
+        await setTenantBlocked(id, false);
+        if (isManuallyUnlockedParam) {
+          await setTenantUnlocked(id, true);
+        }
+        updatePayload.is_blocked = false;
+      }
       delete updatePayload.isBlocked;
+    }
+
+    if (isManuallyUnlockedParam !== undefined) {
+      await setTenantUnlocked(id, !!isManuallyUnlockedParam);
+      delete updatePayload.isManuallyUnlocked;
     }
 
     if (data.dueDay !== undefined || data.due_day !== undefined) {

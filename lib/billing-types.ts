@@ -6,6 +6,7 @@ export interface PaymentLedger {
 
 export interface SaaSAdminConfig {
   blockedTenantIds: string[];
+  unlockedTenantIds?: string[];
   payments: PaymentLedger;
   dueDays?: { [tenantId: string]: number };
   userLimits?: { [tenantId: string]: number };
@@ -23,6 +24,7 @@ export interface BillingStatusResult {
   suspendedUntilStr: string;
   overdueCount?: number;
   oldestOverdueMonthKey?: string;
+  isManuallyUnlocked?: boolean;
 }
 
 export function getTenantBillingStatus(
@@ -135,6 +137,13 @@ export function getTenantBillingStatus(
     }
   }
 
+  // Se a empresa possui liberação manual/carência concedida pelo Master, seu acesso não é bloqueado
+  const isManuallyUnlocked = Boolean(config.unlockedTenantIds && config.unlockedTenantIds.includes(tenantId));
+  let calculatedStatus = worstStatus;
+  if (isManuallyUnlocked && worstStatus === 'bloqueado') {
+    calculatedStatus = 'aviso_sutil';
+  }
+
   // Data de referência para cálculo da string de suspensão
   const targetDueDate = oldestDueDate || new Date(currentYear, currentMonth - 1, dueDay);
   const suspenseDate = new Date(targetDueDate.getFullYear(), targetDueDate.getMonth(), targetDueDate.getDate() + blockStart, 0, 0, 0);
@@ -144,13 +153,14 @@ export function getTenantBillingStatus(
     String(suspenseDate.getMinutes()).padStart(2, '0');
 
   return {
-    status: worstStatus,
+    status: calculatedStatus,
     diffDays: maxOverdueDays,
     dueDay,
     currentMonthKey,
     dueDate: targetDueDate,
     suspendedUntilStr: formattedSuspendedStr,
     overdueCount: overdueInvoicesCount,
-    oldestOverdueMonthKey: oldestMonthKey || currentMonthKey
+    oldestOverdueMonthKey: oldestMonthKey || currentMonthKey,
+    isManuallyUnlocked
   };
 }

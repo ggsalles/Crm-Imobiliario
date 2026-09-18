@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/providers/auth-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { DatabaseStatusBanner } from "@/components/DatabaseStatusBanner";
+import { BillingAlertBanner } from "@/components/BillingAlertBanner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <DatabaseStatusBanner />
+            <BillingAlertBanner />
             {children}
             <Toaster position="top-right" />
           </AuthProvider>

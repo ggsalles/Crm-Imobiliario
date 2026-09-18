@@ -104,6 +104,9 @@ interface AuthContextType {
   billingStatus?: 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
   billingSuspensionDate?: string;
   dueDay?: number;
+  diffDays?: number;
+  tenantName?: string;
+  isTenantBlocked?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -118,6 +121,9 @@ const AuthContext = createContext<AuthContextType>({
   billingStatus: 'regular',
   billingSuspensionDate: '',
   dueDay: 10,
+  diffDays: 0,
+  tenantName: '',
+  isTenantBlocked: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -151,6 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [billingStatus, setBillingStatus] = useState<'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado'>('regular');
   const [billingSuspensionDate, setBillingSuspensionDate] = useState("");
   const [dueDay, setDueDay] = useState(10);
+  const [diffDays, setDiffDays] = useState(0);
+  const [tenantName, setTenantName] = useState("");
   const [hasDismissedCriticalAlert, setHasDismissedCriticalAlert] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -346,9 +354,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.ok && active) {
           const tenantData = await res.json();
           if (tenantData) {
-            setBillingStatus(tenantData.billingStatus || 'regular');
+            const status = (tenantData.billingStatus || 'regular') as 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
+            const days = tenantData.diffDays || 0;
+            const due = tenantData.dueDay !== undefined ? tenantData.dueDay : 10;
+            const tName = tenantData.name || "SalesScore";
+
+            setBillingStatus(status);
             setBillingSuspensionDate(tenantData.billingSuspensionDate || '');
-            setDueDay(tenantData.dueDay !== undefined ? tenantData.dueDay : 10);
+            setDueDay(due);
+            setDiffDays(days);
+            setTenantName(tName);
+            setBlockedTenantName(tName);
+
+            // Emite notificação de alerta imediato caso haja pendência de faturamento
+            if (status === 'bloqueado') {
+              if (isPlatformAdmin(profile.email)) {
+                toast.error(
+                  `Alerta Master: A empresa "${tName}" está com o faturamento BLOQUEADO (vencido no dia ${due} - D+${days}).`,
+                  { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
+                );
+              }
+            } else if (status === 'aviso_critico') {
+              toast.warning(
+                `Alerta Financeiro: Fatura da empresa "${tName}" vencida no dia ${due}. Suspensão em ${tenantData.billingSuspensionDate}.`,
+                { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
+              );
+            } else if (status === 'aviso_sutil') {
+              toast.warning(
+                `Aviso Financeiro: Fatura da empresa "${tName}" em aberto com vencimento recente no dia ${due}.`,
+                { id: `billing-alert-toast-${profile.tenantId}`, duration: 6000 }
+              );
+            }
 
             // Platform admin never gets locked out of the CRM
             if (isPlatformAdmin(profile.email)) {
@@ -356,9 +392,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return;
             }
 
-            if (tenantData.isBlocked) {
+            if (tenantData.isBlocked || status === 'bloqueado') {
               setIsTenantBlocked(true);
-              setBlockedTenantName(tenantData.name || "Sua Imobiliária");
+              setBlockedTenantName(tName);
               return;
             } else {
               setIsTenantBlocked(false);
@@ -1042,8 +1078,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     changeTenant,
     billingStatus,
     billingSuspensionDate,
-    dueDay
-  }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay]);
+    dueDay,
+    diffDays,
+    tenantName,
+    isTenantBlocked
+  }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay, diffDays, tenantName, isTenantBlocked]);
 
   const isPublicPath = pathname === '/login' || 
     pathname === '/register' || 
@@ -1138,6 +1177,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
+      {/* Alerta Modal Especial para Administrador Master acessando empresa com faturamento bloqueado */}
+      {billingStatus === 'bloqueado' && isPlatformAdmin(profile?.email) && !hasDismissedCriticalAlert && !isPublicPath && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-rose-500/30 rounded-3xl p-6 md:p-8 shadow-2xl shadow-rose-950/20 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="mx-auto w-12 h-12 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center border border-rose-500/20 mb-6 shadow-md shadow-rose-950/10">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-4 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              Alerta Master • Acesso Bloqueado (D+{diffDays || 8})
+            </span>
+
+            <h2 className="text-lg font-black text-slate-100 tracking-tight">
+              Empresa com Faturamento Bloqueado
+            </h2>
+
+            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
+              A empresa <strong className="text-white font-bold">&quot;{tenantName || blockedTenantName || 'SalesScore'}&quot;</strong> está com a fatura vencida desde o dia <strong>{dueDay || 10}</strong> ({diffDays || 8} dias de atraso).
+              <br />
+              <span className="block mt-2 font-bold text-rose-400">
+                Os usuários e corretores comuns desta imobiliária estão com a tela de bloqueio ativa. Seu acesso Master foi mantido para você auditar o sistema ou regularizar os pagamentos.
+              </span>
+            </p>
+
+            <div className="mt-8 space-y-3">
+              <button
+                onClick={() => {
+                  setHasDismissedCriticalAlert(true);
+                  router.push('/admin/billing');
+                }}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-rose-500/15 active:scale-[0.98] transition-all text-xs cursor-pointer"
+              >
+                Abrir Painel de Cobrança SaaS
+              </button>
+
+              <button
+                onClick={() => setHasDismissedCriticalAlert(true)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl active:scale-[0.98] transition-all text-xs cursor-pointer"
+              >
+                Ciente, continuar navegação administrativa
+              </button>
+            </div>
+            
+            <p className="text-[9px] text-slate-600 font-mono tracking-widest uppercase mt-6">
+              SalesScore Billing Protection System
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta Modal para Aviso Crítico */}
       {billingStatus === 'aviso_critico' && !hasDismissedCriticalAlert && !isPublicPath && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-slate-900 border border-amber-500/30 rounded-3xl p-6 md:p-8 shadow-2xl shadow-amber-950/20 text-center animate-in fade-in zoom-in-95 duration-200">

@@ -163,7 +163,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [activeTenant, setActiveTenant] = useState<any | null>(null);
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
-  const { billingStatus, billingSuspensionDate } = useAuth();
+  const { billingStatus, billingSuspensionDate, dueDay, diffDays } = useAuth();
 
   const navRef = useRef<HTMLElement>(null);
 
@@ -319,15 +319,80 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         </div>
       )}
 
-      {billingStatus === 'aviso_sutil' && !isCollapsed && (
-        <div className="mx-2 mb-1.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
-          <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            Pendência
-          </span>
-          <p className="text-[8.5px] text-muted-foreground mt-0.5 leading-snug font-semibold">
-            Fatura pendente até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
-          </p>
+      {/* Billing Alert Badges */}
+      {!isCollapsed && (
+        <>
+          {billingStatus === 'bloqueado' && (
+            <div className="mx-2 mb-1.5 p-2 bg-rose-500/15 border border-rose-500/30 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                  Bloqueado (D+{diffDays || 8})
+                </span>
+                <span className="text-[7.5px] font-bold text-rose-300 bg-rose-500/20 px-1 py-0.5 rounded font-mono">
+                  Dia {dueDay || 10}
+                </span>
+              </div>
+              <p className="text-[8.5px] text-rose-200/90 mt-1 leading-snug font-medium">
+                Fatura em atraso desde o dia <strong>{dueDay || 10}</strong>.
+              </p>
+              {isPlatformAdmin(profile?.email) && (
+                <Link
+                  href="/admin/billing"
+                  className="mt-1 text-[8.5px] font-bold text-rose-400 hover:text-rose-300 transition-colors underline flex items-center gap-0.5"
+                >
+                  Cobrança SaaS →
+                </Link>
+              )}
+            </div>
+          )}
+
+          {billingStatus === 'aviso_critico' && (
+            <div className="mx-2 mb-1.5 p-2 bg-amber-500/15 border border-amber-500/30 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Aviso Crítico
+                </span>
+                <span className="text-[7.5px] font-bold text-amber-300 bg-amber-500/20 px-1 py-0.5 rounded font-mono">
+                  D+{diffDays || 5}
+                </span>
+              </div>
+              <p className="text-[8.5px] text-amber-200/90 mt-1 leading-snug font-medium">
+                Bloqueio em <span className="text-amber-300 font-bold">{billingSuspensionDate}</span>.
+              </p>
+              {isPlatformAdmin(profile?.email) && (
+                <Link
+                  href="/admin/billing"
+                  className="mt-1 text-[8.5px] font-bold text-amber-400 hover:text-amber-300 transition-colors underline flex items-center gap-0.5"
+                >
+                  Cobrança SaaS →
+                </Link>
+              )}
+            </div>
+          )}
+
+          {billingStatus === 'aviso_sutil' && (
+            <div className="mx-2 mb-1.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
+              <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Pendência
+              </span>
+              <p className="text-[8.5px] text-muted-foreground mt-0.5 leading-snug font-semibold">
+                Fatura pendente até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* When collapsed and has billing issue */}
+      {isCollapsed && billingStatus && billingStatus !== 'regular' && (
+        <div className="flex justify-center mb-2" title={`Aviso Financeiro: ${billingStatus}`}>
+          <div className={cn(
+            "w-3 h-3 rounded-full animate-ping",
+            billingStatus === 'bloqueado' ? "bg-rose-500" : "bg-amber-500"
+          )} />
         </div>
       )}
 
