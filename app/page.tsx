@@ -41,8 +41,12 @@ import {
   Trash2,
   Building2,
   Phone,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle,
+  AlertOctagon,
+  MessageCircle
 } from "lucide-react";
+import { getDealStaleInfo, getWhatsAppRescueUrl } from "@/lib/lead-health";
 import { toast } from "sonner";
 import { recordAuditEvent } from "@/lib/audit";
 import { useAuth } from "@/providers/auth-provider";
@@ -181,6 +185,9 @@ function DashboardContent() {
 
   const goalRevenue = useMemo(() => currentGoal?.stageGoals?.['closed'] || currentGoal?.revenue || 0, [currentGoal]);
   const closedDealsTotal = useMemo(() => deals.filter(d => d.stage === 'closed').reduce((acc, d) => acc + d.value, 0), [deals]);
+  const staleDeals = useMemo(() => deals.filter(d => getDealStaleInfo(d).isStale), [deals]);
+  const criticalDeals = useMemo(() => deals.filter(d => getDealStaleInfo(d).severity === 'critical'), [deals]);
+  const staleDealsValue = useMemo(() => staleDeals.reduce((acc, d) => acc + (d.value || 0), 0), [staleDeals]);
 
   // Filtered and Sorted Recent Deals (Placed before any early returns to satisfy React Rules of Hooks)
   const filteredRecentDeals = useMemo(() => {
@@ -909,6 +916,109 @@ function DashboardContent() {
                     chartData={getTrendData('leads').reverse()}
                   />
                 </div>
+
+                {/* Stale Leads Rescue Widget */}
+                {staleDeals.length > 0 && (
+                  <motion.div
+                    variants={itemVariants}
+                    className="p-4 md:p-5 rounded-2xl md:rounded-3xl border border-amber-500/30 bg-amber-500/[0.04] shadow-xs"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="w-5 h-5 animate-bounce" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm md:text-base font-bold text-foreground">
+                              Atenção Comercial: {staleDeals.length} {staleDeals.length === 1 ? 'Lead Parado' : 'Leads Parados'}
+                            </h4>
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(staleDealsValue)} em risco
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Oportunidades sem contato há mais de 5 dias. Recupere estes clientes antes que desistam ou busquem outra imobiliária.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push('/pipeline')}
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 shrink-0"
+                      >
+                        Abrir Funil de Resgate
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                      {staleDeals.slice(0, 4).map(deal => {
+                        const staleInfo = getDealStaleInfo(deal);
+                        const contact = contacts.find(c => c.id === deal.contactId);
+                        const rescueUrl = contact?.phone 
+                          ? getWhatsAppRescueUrl(contact.phone, contact.name, deal.title)
+                          : null;
+
+                        return (
+                          <div 
+                            key={deal.id}
+                            className="p-3 rounded-xl border border-border/80 bg-card hover:border-amber-500/40 transition-all flex flex-col justify-between gap-2 shadow-2xs"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md",
+                                  staleInfo.severity === 'critical' 
+                                    ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" 
+                                    : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                                )}>
+                                  {staleInfo.daysInactive}d sem contato
+                                </span>
+                                <span className="text-[10px] font-bold text-foreground">
+                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value || 0)}
+                                </span>
+                              </div>
+                              <p className="font-bold text-xs text-foreground line-clamp-1" title={deal.title}>
+                                {deal.title}
+                              </p>
+                              <p className="text-[10.5px] text-muted-foreground truncate">
+                                {contact?.name || 'Cliente sem nome'}
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-1">
+                              <button
+                                onClick={() => router.push(`/deals/${deal.id}`)}
+                                className="text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                Ver detalhes
+                              </button>
+                              {rescueUrl ? (
+                                <a
+                                  href={rescueUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-bold flex items-center gap-1 transition-all"
+                                  title="Enviar mensagem no WhatsApp"
+                                >
+                                  <MessageCircle className="w-2.5 h-2.5" />
+                                  Resgatar
+                                </a>
+                              ) : (
+                                <button
+                                  onClick={() => router.push(`/deals/${deal.id}`)}
+                                  className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[9.5px] font-bold"
+                                >
+                                  Sem telefone
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* Main Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">

@@ -81,6 +81,9 @@ export interface Property {
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
+  iptu?: number;
+  condoFee?: number;
+  buildingName?: string;
   notes?: string;
   description?: string;
   imageUrls?: string[];
@@ -1501,6 +1504,9 @@ function sanitizePropertyData(data: any, userId: string) {
     bathrooms: Number(data.bathrooms || 0),
     parking_spots: Number(data.parkingSpots || 0),
     accepts_financing: Boolean(data.acceptsFinancing),
+    iptu: data.iptu !== undefined && data.iptu !== null ? Number(data.iptu) : null,
+    condo_fee: data.condoFee !== undefined && data.condoFee !== null ? Number(data.condoFee) : null,
+    building_name: data.buildingName ? String(data.buildingName).substring(0, 500) : null,
     notes: data.notes ? String(data.notes).substring(0, 5000) : null,
     description: data.description ? String(data.description).substring(0, 5000) : null,
     owner_id: userId

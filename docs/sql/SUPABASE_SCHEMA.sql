@@ -60,6 +60,9 @@ create table if not exists properties (
   bathrooms int,
   parking_spots int,
   accepts_financing boolean default false,
+  condo_fee numeric default 0,
+  iptu numeric default 0,
+  building_name text,
   notes text,
   description text,
   image_url text, -- Store as JSON array or text

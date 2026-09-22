@@ -33,7 +33,10 @@ import {
   Check,
   Share2,
   Copy,
-  MessageSquare
+  MessageSquare,
+  SlidersHorizontal,
+  RotateCcw,
+  Building2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
@@ -66,6 +69,14 @@ export default function PropertiesPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchStreet, setSearchStreet] = useState("");
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState("all");
+  const [displayMinPrice, setDisplayMinPrice] = useState("");
+  const [displayMaxPrice, setDisplayMaxPrice] = useState("");
+  const [bedroomsFilter, setBedroomsFilter] = useState<string>("all");
+  const [parkingFilter, setParkingFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [title, setTitle] = useState("");
@@ -74,6 +85,9 @@ export default function PropertiesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
+  const [displayIptu, setDisplayIptu] = useState("");
+  const [displayCondoFee, setDisplayCondoFee] = useState("");
+  const [buildingName, setBuildingName] = useState("");
   const [cep, setCep] = useState("");
   const [areaInput, setAreaInput] = useState<string>("");
   const [isEstimatingPrice, setIsEstimatingPrice] = useState(false);
@@ -103,10 +117,10 @@ export default function PropertiesPage() {
 
     return `✨ *OPORTUNIDADE IMOBILIÁRIA* ✨
 🏡 *${property.title}*
-
+${property.buildingName ? `🏢 *Edifício/Condomínio:* ${property.buildingName}\n` : ''}
 📍 *Localização:* ${property.location}
 💰 *Valor:* ${priceFormatted}
-
+${property.condoFee && property.condoFee > 0 ? `🏢 *Condomínio:* ${formatCurrencyBRL(property.condoFee)}/mês\n` : ''}${property.iptu && property.iptu > 0 ? `🏛️ *IPTU:* ${formatCurrencyBRL(property.iptu)}/ano\n` : ''}
 📐 *Área:* ${property.area} m²
 🛏 *Quartos:* ${property.bedrooms} dormitórios
 🚿 *Banheiros:* ${property.bathrooms} banheiros
@@ -258,7 +272,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
   useEffect(() => {
     if (view === 'form') {
       setTitle(editingProperty?.title || "");
+      setBuildingName(editingProperty?.buildingName || "");
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
+      setDisplayIptu(editingProperty?.iptu ? formatCurrencyBRL(editingProperty.iptu) : "");
+      setDisplayCondoFee(editingProperty?.condoFee ? formatCurrencyBRL(editingProperty.condoFee) : "");
       setImageUrls(editingProperty?.imageUrls || []);
       setCep(formatCEP(editingProperty?.cep || ""));
       setAreaInput(editingProperty?.area ? String(editingProperty.area) : "");
@@ -369,6 +386,9 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           parkingSpots,
           acceptsFinancing,
           currentPrice: currentPriceNum,
+          condoFee: parseCurrencyBRLToNumber(displayCondoFee),
+          iptu: parseCurrencyBRLToNumber(displayIptu),
+          buildingName: buildingName.trim(),
           portfolioAverageM2: portfolioAvgM2
         })
       });
@@ -415,16 +435,153 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     }
   }, [user, authLoading, profile, router]);
 
+  const availableNeighborhoods = useMemo(() => {
+    const set = new Set<string>();
+    properties.forEach(p => {
+      if (p.neighborhood && p.neighborhood.trim()) {
+        set.add(p.neighborhood.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [properties]);
+
   const filteredProperties = useMemo(() => {
     if (typeof window === 'undefined') return [];
+    
+    const query = search.trim().toLowerCase();
+    const streetQuery = searchStreet.trim().toLowerCase();
+    const minPriceNum = displayMinPrice ? parseCurrencyBRLToNumber(displayMinPrice) : 0;
+    const maxPriceNum = displayMaxPrice ? parseCurrencyBRLToNumber(displayMaxPrice) : 0;
+
     return properties.filter((p) => {
-      const matchesSearch =
-        (p.title || "").toLowerCase().includes(search.toLowerCase()) ||
-        (p.location || "").toLowerCase().includes(search.toLowerCase());
-      const matchesType = filterType === "all" || p.type === filterType;
-      return matchesSearch && matchesType;
+      // 1. Universal Omni-Search (Title, Building/Condo, Street, Neighborhood, City, Code/ID)
+      if (query) {
+        const matchesTitle = (p.title || "").toLowerCase().includes(query);
+        const matchesBuilding = (p.buildingName || "").toLowerCase().includes(query);
+        const matchesNeighborhood = (p.neighborhood || "").toLowerCase().includes(query);
+        const matchesStreet = (p.street || "").toLowerCase().includes(query);
+        const matchesLocation = (p.location || "").toLowerCase().includes(query);
+        const matchesCity = (p.city || "").toLowerCase().includes(query);
+        const matchesId = (p.id || "").toLowerCase().includes(query);
+
+        if (!matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId) {
+          return false;
+        }
+      }
+
+      // 2. Specific Street Filter
+      if (streetQuery) {
+        const pStreet = (p.street || "").toLowerCase();
+        const pLocation = (p.location || "").toLowerCase();
+        if (!pStreet.includes(streetQuery) && !pLocation.includes(streetQuery)) {
+          return false;
+        }
+      }
+
+      // 3. Property Type (casa, apartamento, etc.)
+      if (filterType !== "all" && p.type !== filterType) {
+        return false;
+      }
+
+      // 4. Commercial Status (disponível, reservado, vendido, alugado)
+      if (statusFilter !== "all" && p.status !== statusFilter) {
+        return false;
+      }
+
+      // 5. Neighborhood Filter
+      if (selectedNeighborhood !== "all") {
+        const pNeigh = (p.neighborhood || "").trim().toLowerCase();
+        if (pNeigh !== selectedNeighborhood.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 6. Price Range
+      const price = Number(p.price) || 0;
+      if (minPriceNum > 0 && price < minPriceNum) {
+        return false;
+      }
+      if (maxPriceNum > 0 && price > maxPriceNum) {
+        return false;
+      }
+
+      // 7. Bedrooms (Minimum)
+      if (bedroomsFilter !== "all") {
+        const pBeds = Number(p.bedrooms) || 0;
+        if (bedroomsFilter === "4+") {
+          if (pBeds < 4) return false;
+        } else {
+          const reqBeds = Number(bedroomsFilter);
+          if (pBeds < reqBeds) return false;
+        }
+      }
+
+      // 8. Parking Spots (Minimum)
+      if (parkingFilter !== "all") {
+        const pSpots = Number(p.parkingSpots) || 0;
+        if (parkingFilter === "2+") {
+          if (pSpots < 2) return false;
+        } else {
+          const reqSpots = Number(parkingFilter);
+          if (pSpots < reqSpots) return false;
+        }
+      }
+
+      return true;
     });
-  }, [properties, search, filterType]);
+  }, [
+    properties,
+    search,
+    searchStreet,
+    filterType,
+    statusFilter,
+    selectedNeighborhood,
+    displayMinPrice,
+    displayMaxPrice,
+    bedroomsFilter,
+    parkingFilter
+  ]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count++;
+    if (searchStreet.trim()) count++;
+    if (selectedNeighborhood !== "all") count++;
+    if (displayMinPrice.trim()) count++;
+    if (displayMaxPrice.trim()) count++;
+    if (bedroomsFilter !== "all") count++;
+    if (parkingFilter !== "all") count++;
+    if (statusFilter !== "all") count++;
+    if (filterType !== "all") count++;
+    return count;
+  }, [
+    search,
+    searchStreet,
+    selectedNeighborhood,
+    displayMinPrice,
+    displayMaxPrice,
+    bedroomsFilter,
+    parkingFilter,
+    statusFilter,
+    filterType
+  ]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearch("");
+    setSearchStreet("");
+    setSelectedNeighborhood("all");
+    setDisplayMinPrice("");
+    setDisplayMaxPrice("");
+    setBedroomsFilter("all");
+    setParkingFilter("all");
+    setStatusFilter("all");
+    setFilterType("all");
+  }, []);
+
+  const setPricePreset = useCallback((min: number | null, max: number | null) => {
+    setDisplayMinPrice(min ? formatCurrencyBRL(min) : "");
+    setDisplayMaxPrice(max ? formatCurrencyBRL(max) : "");
+  }, []);
 
   const handleDelete = async (id: string) => {
     console.log(`[Properties] handleDelete: Executando exclusão do ID: ${id}`);
@@ -623,9 +780,12 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
 
       const data: Partial<Property> = {
         title: String(formData.get("title") || "").substring(0, 200),
+        buildingName: String(formData.get("buildingName") || "").trim().substring(0, 200),
         type: (formData.get("type") as any) || "apartamento",
         status: (formData.get("status") as any) || "disponível",
         price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
+        iptu: Number(parseCurrencyBRLToNumber(String(formData.get("iptu") || "0"))),
+        condoFee: Number(parseCurrencyBRLToNumber(String(formData.get("condoFee") || "0"))),
         location: location.substring(0, 500),
         cep: String(formData.get("cep") || "").replace(/\D/g, "").substring(0, 8), // Salva apenas 8 dígitos
         street: String(formData.get("street") || "").substring(0, 200),
@@ -712,16 +872,6 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
                   <span className="text-[9px] font-bold uppercase tracking-tight hidden sm:inline">Ao Vivo</span>
                 </div>
-                <div className="relative hidden md:block">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input 
-                    type="text" 
-                    placeholder="Filtrar por nome ou local..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-52 pl-8 pr-3 py-1.5 bg-background border border-border rounded-xl text-xs font-medium focus:ring-2 focus:ring-primary/20 transition-all"
-                  />
-                </div>
                 <button 
                   onClick={handleNew}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all"
@@ -745,6 +895,329 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5">
           {view === 'list' ? (
             <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
+              
+              {/* Barra de Busca Universal Inteligente & Filtros Avançados */}
+              <div className="bg-card border border-border/80 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  {/* Campo de Busca Universal (Omni-Search) */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input 
+                      type="text" 
+                      placeholder="Buscar por nome, edifício/condomínio, rua, bairro, código..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-10 pr-9 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                    />
+                    {search && (
+                      <button 
+                        type="button"
+                        onClick={() => setSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                        title="Limpar busca"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Botões de Ação de Filtragem */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsFilterOpen(!isFilterOpen)}
+                      className={cn(
+                        "flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer",
+                        isFilterOpen || activeFiltersCount > 0
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          : "bg-muted/50 hover:bg-muted text-foreground border-border"
+                      )}
+                      title="Abrir painel de filtros detalhados"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>Filtros</span>
+                      {activeFiltersCount > 0 && (
+                        <span className={cn(
+                          "px-1.5 py-0.2 rounded-full text-[10px] font-black leading-none",
+                          isFilterOpen || activeFiltersCount > 0
+                            ? "bg-primary-foreground text-primary"
+                            : "bg-primary text-primary-foreground"
+                        )}>
+                          {activeFiltersCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {activeFiltersCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearAllFilters}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 text-xs font-bold transition-all cursor-pointer"
+                        title="Limpar todos os filtros aplicados"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Limpar</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Painel Expansível de Filtros Avançados */}
+                <AnimatePresence>
+                  {isFilterOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-border/60 pt-3.5 space-y-4"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                        {/* 1. Bairro */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Bairro
+                          </label>
+                          <select
+                            value={selectedNeighborhood}
+                            onChange={(e) => setSelectedNeighborhood(e.target.value)}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          >
+                            <option value="all">Todos os bairros ({availableNeighborhoods.length})</option>
+                            {availableNeighborhoods.map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 2. Rua / Logradouro */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Rua / Logradouro
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Ex: Av. Brasil, Rua 15..."
+                              value={searchStreet}
+                              onChange={(e) => setSearchStreet(e.target.value)}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-medium text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                            />
+                            {searchStreet && (
+                              <button 
+                                type="button" 
+                                onClick={() => setSearchStreet("")} 
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. Dormitórios / Quartos */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Quartos (Mínimo)
+                          </label>
+                          <div className="grid grid-cols-5 gap-1">
+                            {[
+                              { id: "all", label: "Todos" },
+                              { id: "1", label: "1+" },
+                              { id: "2", label: "2+" },
+                              { id: "3", label: "3+" },
+                              { id: "4+", label: "4+" },
+                            ].map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => setBedroomsFilter(item.id)}
+                                className={cn(
+                                  "py-1.5 rounded-lg text-xs font-bold transition-all text-center border cursor-pointer",
+                                  bedroomsFilter === item.id
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                                )}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 4. Vagas de Garagem */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Vagas de Garagem
+                          </label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {[
+                              { id: "all", label: "Todas" },
+                              { id: "1", label: "1+" },
+                              { id: "2+", label: "2+" },
+                            ].map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => setParkingFilter(item.id)}
+                                className={cn(
+                                  "py-1.5 rounded-lg text-xs font-bold transition-all text-center border cursor-pointer",
+                                  parkingFilter === item.id
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                                )}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 5. Faixa de Preço (De / Até) */}
+                        <div className="sm:col-span-2 lg:col-span-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                              Faixa de Preço de Venda (R$)
+                            </label>
+                            {(displayMinPrice || displayMaxPrice) && (
+                              <button
+                                type="button"
+                                onClick={() => { setDisplayMinPrice(""); setDisplayMaxPrice(""); }}
+                                className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                              >
+                                Resetar valores
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Valor mínimo (R$)"
+                              value={displayMinPrice}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, "");
+                                setDisplayMinPrice(raw ? formatCurrencyBRL(raw) : "");
+                              }}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Valor máximo (R$)"
+                              value={displayMaxPrice}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, "");
+                                setDisplayMaxPrice(raw ? formatCurrencyBRL(raw) : "");
+                              }}
+                              className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                            />
+                          </div>
+
+                          {/* Atalhos Rápidos de Preço */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Atalhos:</span>
+                            {[
+                              { label: "Até 300k", min: null, max: 300000 },
+                              { label: "300k - 600k", min: 300000, max: 600000 },
+                              { label: "600k - 1.2M", min: 600000, max: 1200000 },
+                              { label: "Acima de 1.2M", min: 1200000, max: null },
+                            ].map((preset, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setPricePreset(preset.min, preset.max)}
+                                className="px-2 py-0.5 rounded-md bg-muted text-[10px] font-semibold text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all border border-border/50 cursor-pointer"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 6. Status Comercial */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Status Comercial
+                          </label>
+                          <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          >
+                            <option value="all">Todos os status</option>
+                            <option value="disponível">Disponível</option>
+                            <option value="reservado">Reservado</option>
+                            <option value="vendido">Vendido</option>
+                            <option value="alugado">Alugado</option>
+                          </select>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Tags de Filtros Ativos (Remoção com um clique) */}
+                {activeFiltersCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-1">Filtros ativos:</span>
+                    {search.trim() && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Busca: &ldquo;{search}&rdquo;</span>
+                        <button type="button" onClick={() => setSearch("")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {selectedNeighborhood !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Bairro: {selectedNeighborhood}</span>
+                        <button type="button" onClick={() => setSelectedNeighborhood("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {searchStreet.trim() && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Rua: &ldquo;{searchStreet}&rdquo;</span>
+                        <button type="button" onClick={() => setSearchStreet("")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {displayMinPrice.trim() && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Min: {displayMinPrice}</span>
+                        <button type="button" onClick={() => setDisplayMinPrice("")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {displayMaxPrice.trim() && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Max: {displayMaxPrice}</span>
+                        <button type="button" onClick={() => setDisplayMaxPrice("")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {bedroomsFilter !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>{bedroomsFilter === "4+" ? "4+ Quartos" : `${bedroomsFilter}+ Quartos`}</span>
+                        <button type="button" onClick={() => setBedroomsFilter("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {parkingFilter !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>{parkingFilter === "2+" ? "2+ Vagas" : `${parkingFilter}+ Vagas`}</span>
+                        <button type="button" onClick={() => setParkingFilter("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {statusFilter !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Status: {statusFilter}</span>
+                        <button type="button" onClick={() => setStatusFilter("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                    {filterType !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
+                        <span>Tipo: {filterType}</span>
+                        <button type="button" onClick={() => setFilterType("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Categorias / Tipos de Unidade */}
               <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pb-1">
                 {[
                   { id: "all", label: "Todos", icon: Home },
@@ -769,7 +1242,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       key={type.id}
                       onClick={() => setFilterType(type.id)}
                       className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all",
+                        "flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all cursor-pointer",
                         isActive 
                           ? "bg-foreground text-background border-foreground shadow-xs" 
                           : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
@@ -788,6 +1261,30 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Barra de Contagem e Resultados */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold text-muted-foreground px-1">
+                <div className="flex items-center gap-2">
+                  <span>
+                    Exibindo <strong className="text-foreground">{filteredProperties.length}</strong> de <strong className="text-foreground">{properties.length}</strong> {properties.length === 1 ? 'imóvel' : 'imóveis'}
+                  </span>
+                  {activeFiltersCount > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full font-bold">
+                      (Filtro ativado)
+                    </span>
+                  )}
+                </div>
+                {filteredProperties.length < properties.length && activeFiltersCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Ver todos os {properties.length} imóveis</span>
+                  </button>
+                )}
               </div>
 
               {loading && (
@@ -813,12 +1310,24 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               </div>
 
               {filteredProperties.length === 0 && !loading && (
-                <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-2xl">
-                  <Home className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                  <h3 className="text-base font-bold uppercase tracking-tight">Inventário Vazio</h3>
-                  <p className="text-muted-foreground text-xs font-medium mt-1 max-w-sm">
-                    Nenhum imóvel corresponde aos seus filtros. Experimente cadastrar uma nova unidade para começar.
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40">
+                  <Home className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                  <h3 className="text-base font-bold uppercase tracking-tight">Nenhum imóvel encontrado</h3>
+                  <p className="text-muted-foreground text-xs font-medium mt-1 max-w-md">
+                    {activeFiltersCount > 0 
+                      ? "Nenhum imóvel corresponde aos critérios de pesquisa e filtros selecionados. Tente ajustar a busca ou limpar os filtros."
+                      : "Seu inventário de imóveis está vazio. Comece cadastrando sua primeira unidade."}
                   </p>
+                  {activeFiltersCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="mt-4 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-sm hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Limpar todos os filtros ({activeFiltersCount})</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -845,14 +1354,28 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   >
                 <div className="p-10 space-y-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="md:col-span-2 space-y-3">
-                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Identificação do Imóvel</label>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Identificação / Título do Imóvel</label>
                       <input 
                         name="title"
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="Ex: Apartamento Vista Mar Premium"
+                        className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex items-center justify-between">
+                        <span>Nome do Edifício ou Condomínio</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground lowercase">opcional</span>
+                      </label>
+                      <input 
+                        name="buildingName"
+                        value={buildingName}
+                        onChange={(e) => setBuildingName(e.target.value)}
+                        placeholder="Ex: Edifício Solar das Acácias / Cond. Alphaville"
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                       />
                     </div>
@@ -891,16 +1414,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       </select>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between pl-1">
-                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                          Preço de Venda (R$)
-                        </label>
+                    {/* Bloco de Valores Financeiros e Encargos */}
+                    <div className="md:col-span-2 p-6 sm:p-7 bg-muted/20 border border-border/70 rounded-3xl space-y-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-4">
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground">Valores & Encargos Financeiros</h4>
+                          <p className="text-xs text-muted-foreground">Preço de venda e despesas periódicas do imóvel (formatação monetária automática)</p>
+                        </div>
                         <button
                           type="button"
                           onClick={handleSuggestPrice}
                           disabled={isEstimatingPrice}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all border border-primary/25 disabled:opacity-50 cursor-pointer shadow-xs"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all border border-primary/25 disabled:opacity-50 cursor-pointer shadow-xs self-start sm:self-auto"
                           title="Calcular estimativa de preço de mercado com base em dados imobiliários e IA"
                         >
                           {isEstimatingPrice ? (
@@ -916,23 +1441,71 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                           )}
                         </button>
                       </div>
-                      <input 
-                        name="price"
-                        required
-                        value={displayPrice}
-                        onChange={(e) => setDisplayPrice(formatCurrencyBRL(e.target.value))}
-                        onFocus={(e) => e.target.select()}
-                        placeholder="R$ 0,00"
-                        className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-black text-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                      />
-                      {parseFloat(areaInput || "0") > 0 && parseCurrencyBRLToNumber(displayPrice) > 0 && (
-                        <p className="text-[11px] font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
-                          <span>Preço por m²:</span>
-                          <span className="font-bold text-foreground font-mono">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.round(parseCurrencyBRLToNumber(displayPrice) / parseFloat(areaInput)))} / m²
-                          </span>
-                        </p>
-                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                            Preço de Venda (R$) *
+                          </label>
+                          <input 
+                            name="price"
+                            required
+                            value={displayPrice}
+                            onChange={(e) => setDisplayPrice(formatCurrencyBRL(e.target.value))}
+                            onFocus={(e) => e.target.select()}
+                            placeholder="R$ 0,00"
+                            className="w-full px-5 py-3.5 bg-background border border-border rounded-2xl text-base font-black text-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          />
+                          {parseFloat(areaInput || "0") > 0 && parseCurrencyBRLToNumber(displayPrice) > 0 ? (
+                            <p className="text-[11px] font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                              <span>Média m²:</span>
+                              <span className="font-bold text-foreground font-mono">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.round(parseCurrencyBRLToNumber(displayPrice) / parseFloat(areaInput)))} / m²
+                              </span>
+                            </p>
+                          ) : (
+                            <p className="text-[11px] font-medium text-muted-foreground pl-1">Valor de avaliação / venda</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex items-center justify-between">
+                            <span>Valor Condomínio (R$)</span>
+                            <span className="text-[9px] font-semibold text-muted-foreground lowercase">mensal</span>
+                          </label>
+                          <input 
+                            name="condoFee"
+                            value={displayCondoFee}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "");
+                              setDisplayCondoFee(raw ? formatCurrencyBRL(raw) : "");
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            placeholder="R$ 0,00"
+                            className="w-full px-5 py-3.5 bg-background border border-border rounded-2xl text-base font-bold text-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          />
+                          <p className="text-[11px] font-medium text-muted-foreground pl-1">Taxa mensal do condomínio</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex items-center justify-between">
+                            <span>IPTU (R$)</span>
+                            <span className="text-[9px] font-semibold text-muted-foreground lowercase">anual / total</span>
+                          </label>
+                          <input 
+                            name="iptu"
+                            value={displayIptu}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "");
+                              setDisplayIptu(raw ? formatCurrencyBRL(raw) : "");
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            placeholder="R$ 0,00"
+                            className="w-full px-5 py-3.5 bg-background border border-border rounded-2xl text-base font-bold text-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          />
+                          <p className="text-[11px] font-medium text-muted-foreground pl-1">Valor total anual ou cota única</p>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-3">
@@ -1526,6 +2099,12 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
       <div className="p-3.5 sm:p-4 flex flex-col flex-1">
         <div className="mb-2.5">
           <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
+          {property.buildingName && (
+            <p className="text-[10px] font-semibold text-primary line-clamp-1 flex items-center gap-1 mt-0.5">
+              <span>🏢</span>
+              <span className="truncate">{property.buildingName}</span>
+            </p>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -1569,6 +2148,27 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
               </div>
             )}
           </div>
+
+          {/* Encargos Periódicos (Condomínio e IPTU) */}
+          {((property.condoFee && property.condoFee > 0) || (property.iptu && property.iptu > 0)) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground font-medium pt-1 border-t border-border/40">
+              {property.condoFee && property.condoFee > 0 ? (
+                <span className="inline-flex items-center gap-1">
+                  <span>Cond.:</span>
+                  <strong className="text-foreground">{formatCurrencyBRL(property.condoFee)}</strong>
+                </span>
+              ) : null}
+              {property.condoFee && property.condoFee > 0 && property.iptu && property.iptu > 0 ? (
+                <span className="text-border">•</span>
+              ) : null}
+              {property.iptu && property.iptu > 0 ? (
+                <span className="inline-flex items-center gap-1">
+                  <span>IPTU:</span>
+                  <strong className="text-foreground">{formatCurrencyBRL(property.iptu)}</strong>
+                </span>
+              ) : null}
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-border/40">
             <div className="flex items-center gap-1">

@@ -314,6 +314,12 @@ export default function PublicPropertyCapturePage() {
                 <div className="flex flex-col gap-1">
                   <span className="text-[10px] uppercase font-black tracking-widest text-[#60a5fa] leading-none mb-1">CÓD: {property.id.slice(0, 8).toUpperCase()}</span>
                   <h2 className="text-xl md:text-3xl font-black tracking-tight drop-shadow-sm leading-tight inline-flex items-center gap-1.5">{property.title}</h2>
+                  {property.buildingName && (
+                    <p className="text-xs md:text-sm font-semibold text-blue-200 mt-0.5 flex items-center gap-1.5">
+                      <span>🏢</span>
+                      <span>{property.buildingName}</span>
+                    </p>
+                  )}
                   <p className="text-lg md:text-2xl font-extrabold text-blue-300 tracking-tight leading-none mt-2">{formatPrice(property.price)}</p>
                 </div>
               </div>
@@ -383,6 +389,41 @@ export default function PublicPropertyCapturePage() {
               </div>
             </div>
           </div>
+
+          {/* Encargos Periódicos (Condomínio e IPTU) */}
+          {((property.condoFee && property.condoFee > 0) || (property.iptu && property.iptu > 0)) && (
+            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                  R$
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none">Encargos Periódicos</p>
+                  <p className="text-xs text-slate-700 font-medium mt-0.5">Despesas adicionais do imóvel</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                {property.condoFee && property.condoFee > 0 ? (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Condomínio</p>
+                    <p className="text-sm sm:text-base font-extrabold text-slate-800">
+                      {formatPrice(property.condoFee)}
+                      <span className="text-[10px] font-normal text-muted-foreground">/mês</span>
+                    </p>
+                  </div>
+                ) : null}
+                {property.iptu && property.iptu > 0 ? (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">IPTU</p>
+                    <p className="text-sm sm:text-base font-extrabold text-slate-800">
+                      {formatPrice(property.iptu)}
+                      <span className="text-[10px] font-normal text-muted-foreground">/ano</span>
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
 
           {/* Description Card */}
           <div className="bg-white rounded-3xl border border-slate-200/50 p-6 md:p-8 shadow-sm space-y-6">

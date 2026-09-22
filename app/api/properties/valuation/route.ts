@@ -64,6 +64,9 @@ export async function POST(req: NextRequest) {
       parkingSpots = 0,
       acceptsFinancing = true,
       currentPrice = 0,
+      condoFee = 0,
+      iptu = 0,
+      buildingName = "",
       portfolioAverageM2 = null
     } = body;
 
@@ -71,18 +74,23 @@ export async function POST(req: NextRequest) {
     const bedroomsNum = Number(bedrooms) || 0;
     const bathroomsNum = Number(bathrooms) || 0;
     const parkingSpotsNum = Number(parkingSpots) || 0;
+    const condoFeeNum = Number(condoFee) || 0;
+    const iptuNum = Number(iptu) || 0;
 
     // Prompt estruturado em formato JSON rigoroso para o mercado imobiliário brasileiro
     const prompt = `Você é um Perito Avaliador de Imóveis (CNAI) e Engenheiro de Avaliações experiente no mercado imobiliário brasileiro, seguindo os princípios do Método Comparativo Direto de Dados de Mercado (ABNT NBR 14653).
 
 Avalie o seguinte imóvel para VENDA no Brasil:
 - Tipo: ${type}
+${buildingName ? `- Edifício / Empreendimento / Condomínio: ${buildingName}` : ""}
 - Localização: Bairro ${neighborhood || "Central"}, Cidade ${city || "Não especificada"} - UF ${state || "BR"}
 - Área Privativa/Útil: ${areaNum > 0 ? `${areaNum} m²` : "Padrão de mercado para a tipologia"}
 - Quartos: ${bedroomsNum}
 - Banheiros: ${bathroomsNum}
 - Vagas de Garagem: ${parkingSpotsNum}
 - Aceita Financiamento: ${acceptsFinancing ? "Sim" : "Não"}
+${condoFeeNum > 0 ? `- Condomínio Mensal: R$ ${condoFeeNum} (custo de manutenção mensal)` : ""}
+${iptuNum > 0 ? `- IPTU Anual: R$ ${iptuNum}` : ""}
 ${portfolioAverageM2 ? `- Média de m² de imóveis similares na carteira interna desta imobiliária: R$ ${portfolioAverageM2}/m²` : ""}
 ${currentPrice > 0 ? `- Preço inicial cogitado pelo proprietário: R$ ${currentPrice}` : ""}
 

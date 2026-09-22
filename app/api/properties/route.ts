@@ -61,6 +61,9 @@ export async function GET(req: NextRequest) {
         bathrooms: Number(property.bathrooms || 0),
         parkingSpots: Number(property.parking_spots || 0),
         acceptsFinancing: Boolean(property.accepts_financing),
+        iptu: property.iptu !== null && property.iptu !== undefined ? Number(property.iptu) : null,
+        condoFee: property.condo_fee !== null && property.condo_fee !== undefined ? Number(property.condo_fee) : null,
+        buildingName: property.building_name ? String(property.building_name) : null,
         notes: property.notes ? String(property.notes) : null,
         description: property.description ? String(property.description) : null,
         imageUrls: urls,
@@ -137,6 +140,9 @@ export async function GET(req: NextRequest) {
         bathrooms: Number(item.bathrooms || 0),
         parkingSpots: Number(item.parking_spots || 0),
         acceptsFinancing: Boolean(item.accepts_financing),
+        iptu: item.iptu !== null && item.iptu !== undefined ? Number(item.iptu) : null,
+        condoFee: item.condo_fee !== null && item.condo_fee !== undefined ? Number(item.condo_fee) : null,
+        buildingName: item.building_name ? String(item.building_name) : null,
         notes: item.notes ? String(item.notes) : null,
         description: item.description ? String(item.description) : null,
         imageUrls: urls,
@@ -169,6 +175,24 @@ export async function POST(req: NextRequest) {
     const { imageUrls, ...sanitized } = data;
     if (data.tenant_id) {
       (sanitized as any).tenant_id = data.tenant_id;
+    }
+
+    // Normalize camelCase to snake_case for Supabase columns
+    if ('condoFee' in sanitized) {
+      sanitized.condo_fee = sanitized.condoFee;
+      delete sanitized.condoFee;
+    }
+    if ('buildingName' in sanitized) {
+      sanitized.building_name = sanitized.buildingName;
+      delete sanitized.buildingName;
+    }
+    if ('parkingSpots' in sanitized) {
+      sanitized.parking_spots = sanitized.parkingSpots;
+      delete sanitized.parkingSpots;
+    }
+    if ('acceptsFinancing' in sanitized) {
+      sanitized.accepts_financing = sanitized.acceptsFinancing;
+      delete sanitized.acceptsFinancing;
     }
 
     console.log("[API/Properties] POST: Inserindo na tabela 'properties'...");
@@ -227,6 +251,24 @@ export async function PATCH(req: NextRequest) {
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
     
     const { imageUrls, ...sanitized } = data;
+
+    // Normalize camelCase to snake_case for Supabase columns
+    if ('condoFee' in sanitized) {
+      sanitized.condo_fee = sanitized.condoFee;
+      delete sanitized.condoFee;
+    }
+    if ('buildingName' in sanitized) {
+      sanitized.building_name = sanitized.buildingName;
+      delete sanitized.buildingName;
+    }
+    if ('parkingSpots' in sanitized) {
+      sanitized.parking_spots = sanitized.parkingSpots;
+      delete sanitized.parkingSpots;
+    }
+    if ('acceptsFinancing' in sanitized) {
+      sanitized.accepts_financing = sanitized.acceptsFinancing;
+      delete sanitized.acceptsFinancing;
+    }
 
     console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
     const { error } = await supabase

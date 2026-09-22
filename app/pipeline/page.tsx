@@ -23,7 +23,13 @@ import {
   ExternalLink,
   X,
   Loader2,
-  Target
+  Target,
+  AlertTriangle,
+  AlertOctagon,
+  MessageCircle,
+  RotateCcw,
+  Flame,
+  CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -51,6 +57,7 @@ import {
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { getDealStaleInfo, getWhatsAppRescueUrl, LOST_REASONS } from "@/lib/lead-health";
 import Link from "next/link";
 
 const STAGES = [
@@ -59,6 +66,7 @@ const STAGES = [
   { id: "proposal", title: "Proposta", color: "bg-orange-500" },
   { id: "negotiation", title: "Análise Jurídica", color: "bg-yellow-500" },
   { id: "closed", title: "Vendido / Alugado", color: "bg-emerald-500" },
+  { id: "lost", title: "Perdido / Desistência", color: "bg-rose-500" },
 ];
 
 const BADGE_COLORS: Record<string, string> = {
@@ -67,6 +75,7 @@ const BADGE_COLORS: Record<string, string> = {
   proposal: "bg-orange-500/10 text-orange-500 border border-orange-500/20",
   negotiation: "bg-amber-500/10 text-amber-500 border border-amber-500/20",
   closed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
+  lost: "bg-rose-500/10 text-rose-500 border border-rose-500/20",
 };
 
 export default function PipelinePage() {
@@ -81,6 +90,16 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [isLostReasonModalOpen, setIsLostReasonModalOpen] = useState(false);
+  const [pendingLostDeal, setPendingLostDeal] = useState<{
+    dealId: string;
+    previousStage: string;
+    dealTitle?: string;
+    contactId?: string;
+  } | null>(null);
+  const [selectedLostReason, setSelectedLostReason] = useState<string>(LOST_REASONS[0].id);
+  const [lostNotes, setLostNotes] = useState<string>("");
+  const [healthFilter, setHealthFilter] = useState<'all' | 'stale' | 'critical' | 'lost' | 'active'>('all');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -91,7 +110,8 @@ export default function PipelinePage() {
     qualification: 40,
     proposal: 60,
     negotiation: 80,
-    closed: 100
+    closed: 100,
+    lost: 0
   });
 
   const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
@@ -108,7 +128,7 @@ export default function PipelinePage() {
         }
       } else {
         const defaults = STAGES.reduce((acc, stage, idx) => {
-          acc[stage.id] = (idx + 1) * 20;
+          acc[stage.id] = stage.id === 'lost' ? 0 : Math.min((idx + 1) * 20, 100);
           return acc;
         }, {} as Record<string, number>);
         setProbabilities(defaults);
@@ -212,14 +232,32 @@ export default function PipelinePage() {
     const { draggableId, destination } = result;
     const newStage = destination.droppableId;
 
-    // Optimistic update
-    const updatedDeals = deals.map(d => d.id === draggableId ? { ...d, stage: newStage } : d);
-    setDeals(updatedDeals);
-
     if (!draggableId || draggableId === 'undefined' || draggableId === 'null') {
       console.warn("[Pipeline] onDragEnd: draggableId is invalid", draggableId);
       return;
     }
+
+    const currentDeal = deals.find(d => d.id === draggableId);
+
+    // If moved to "lost", prompt the reason modal
+    if (newStage === 'lost') {
+      if (currentDeal && currentDeal.stage !== 'lost') {
+        setPendingLostDeal({
+          dealId: draggableId,
+          previousStage: currentDeal.stage,
+          dealTitle: currentDeal.title,
+          contactId: currentDeal.contactId
+        });
+        setSelectedLostReason(LOST_REASONS[0].id);
+        setLostNotes("");
+        setIsLostReasonModalOpen(true);
+        return;
+      }
+    }
+
+    // Optimistic update
+    const updatedDeals = deals.map(d => d.id === draggableId ? { ...d, stage: newStage } : d);
+    setDeals(updatedDeals);
 
     try {
       await updateDeal(draggableId, { stage: newStage });
@@ -258,6 +296,93 @@ export default function PipelinePage() {
       }
     } catch (err) {
       toast.error("Erro ao atualizar estágio do negócio.");
+    }
+  };
+
+  const handleConfirmLost = async () => {
+    if (!pendingLostDeal) return;
+    const { dealId, dealTitle, contactId } = pendingLostDeal;
+    const reasonObj = LOST_REASONS.find(r => r.id === selectedLostReason);
+    const reasonLabel = reasonObj?.label || selectedLostReason;
+    const notesFormatted = lostNotes.trim() ? ` Detalhes: "${lostNotes.trim()}"` : '';
+
+    try {
+      await updateDeal(dealId, { stage: 'lost' });
+      setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: 'lost' } : d));
+
+      await createTimelineEvent({
+        type: 'system',
+        category: 'deal',
+        relatedId: dealId,
+        content: `Negócio registrado como Perdido / Desistência. Motivo: ${reasonLabel}.${notesFormatted}`,
+        title: 'Negócio Perdido',
+        metadata: {
+          type: 'deal_lost',
+          lostReason: reasonLabel,
+          lostNotes: lostNotes.trim(),
+          dealId
+        }
+      });
+
+      if (contactId) {
+        await createTimelineEvent({
+          type: 'system',
+          category: 'contact',
+          relatedId: contactId,
+          content: `Negócio "${dealTitle || ''}" arquivado como perdido. Motivo: ${reasonLabel}`,
+          title: 'Desistência / Perda de Oportunidade',
+          metadata: {
+            type: 'deal_lost',
+            lostReason: reasonLabel,
+            dealId
+          }
+        });
+      }
+
+      toast.success("Negócio marcado como perdido e registrado no histórico.");
+      setIsLostReasonModalOpen(false);
+      setPendingLostDeal(null);
+    } catch (err) {
+      toast.error("Erro ao registrar perda.");
+    }
+  };
+
+  const handleCancelLost = () => {
+    if (pendingLostDeal) {
+      setDeals(prev => prev.map(d => d.id === pendingLostDeal.dealId ? { ...d, stage: pendingLostDeal.previousStage } : d));
+    }
+    setIsLostReasonModalOpen(false);
+    setPendingLostDeal(null);
+  };
+
+  const handleReactivateDeal = async (deal: Deal) => {
+    try {
+      await updateDeal(deal.id, { stage: 'lead' });
+      setDeals(prev => prev.map(d => d.id === deal.id ? { ...d, stage: 'lead' } : d));
+
+      await createTimelineEvent({
+        type: 'system',
+        category: 'deal',
+        relatedId: deal.id,
+        content: `Negócio reativado pelo corretor e retornado para "Novo Lead".`,
+        title: 'Negócio Reativado',
+        metadata: { type: 'deal_reactivated', dealId: deal.id }
+      });
+
+      if (deal.contactId) {
+        await createTimelineEvent({
+          type: 'system',
+          category: 'contact',
+          relatedId: deal.contactId,
+          content: `Negócio "${deal.title}" foi reativado no pipeline.`,
+          title: 'Lead Reativado',
+          metadata: { type: 'deal_reactivated', dealId: deal.id }
+        });
+      }
+
+      toast.success("Negócio reativado e retornado ao funil!");
+    } catch (err) {
+      toast.error("Erro ao reativar negócio.");
     }
   };
 
@@ -361,6 +486,12 @@ export default function PipelinePage() {
     }
   };
 
+  const staleDeals = useMemo(() => deals.filter(d => getDealStaleInfo(d).isStale), [deals]);
+  const criticalDeals = useMemo(() => deals.filter(d => getDealStaleInfo(d).severity === 'critical'), [deals]);
+  const lostDeals = useMemo(() => deals.filter(d => d.stage === 'lost'), [deals]);
+  const activeDeals = useMemo(() => deals.filter(d => !getDealStaleInfo(d).isStale && d.stage !== 'closed' && d.stage !== 'lost'), [deals]);
+  const staleDealsValue = useMemo(() => staleDeals.reduce((acc, d) => acc + d.value, 0), [staleDeals]);
+
   if (authLoading || (loading && !user)) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
@@ -369,10 +500,23 @@ export default function PipelinePage() {
     );
   }
 
-  const filteredDeals = deals.filter(d => 
-    d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    companies.find(c => c.id === d.companyId)?.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredDeals = deals.filter(d => {
+    const contact = contacts.find(c => c.id === d.contactId);
+    const company = companies.find(c => c.id === d.companyId);
+    const matchesSearch = 
+      d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (company?.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (contact?.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    const staleInfo = getDealStaleInfo(d);
+    if (healthFilter === 'stale') return staleInfo.isStale;
+    if (healthFilter === 'critical') return staleInfo.severity === 'critical';
+    if (healthFilter === 'lost') return d.stage === 'lost';
+    if (healthFilter === 'active') return !staleInfo.isStale && d.stage !== 'closed' && d.stage !== 'lost';
+    return true;
+  });
 
   const totalClosed = deals
     .filter(d => d.stage === 'closed')
@@ -438,27 +582,130 @@ export default function PipelinePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder="Pesquisar negócios..."
+                placeholder="Pesquisar por título, cliente ou imobiliária..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-xs md:text-sm shadow-sm"
               />
             </div>
-            <button className="flex items-center gap-1.5 px-3.5 py-2 bg-card border border-border rounded-xl text-xs font-semibold text-muted-foreground hover:bg-muted transition-all shrink-0">
-              <Filter className="w-3.5 h-3.5" />
-              Filtros
-            </button>
+
+            {/* Health Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0">
+              <button
+                onClick={() => setHealthFilter('all')}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  healthFilter === 'all'
+                    ? "bg-foreground text-background border-foreground shadow-xs"
+                    : "bg-card border-border text-muted-foreground hover:bg-muted"
+                )}
+              >
+                Todos ({deals.length})
+              </button>
+              <button
+                onClick={() => setHealthFilter('active')}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  healthFilter === 'active'
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-card border-border text-muted-foreground hover:bg-muted"
+                )}
+              >
+                <Flame className="w-3.5 h-3.5 text-blue-500" />
+                Em Dia ({activeDeals.length})
+              </button>
+              <button
+                onClick={() => setHealthFilter('stale')}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  healthFilter === 'stale'
+                    ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                    : "bg-card border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                )}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Parados &gt; 5d
+                {staleDeals.length > 0 && (
+                  <span className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-black",
+                    healthFilter === 'stale' ? "bg-white/25 text-white" : "bg-amber-500 text-white"
+                  )}>
+                    {staleDeals.length}
+                  </span>
+                )}
+              </button>
+              {criticalDeals.length > 0 && (
+                <button
+                  onClick={() => setHealthFilter('critical')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                    healthFilter === 'critical'
+                      ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                      : "bg-card border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+                  )}
+                >
+                  <AlertOctagon className="w-3.5 h-3.5 animate-pulse" />
+                  Críticos &gt; 10d ({criticalDeals.length})
+                </button>
+              )}
+              {lostDeals.length > 0 && (
+                <button
+                  onClick={() => setHealthFilter('lost')}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                    healthFilter === 'lost'
+                      ? "bg-rose-800 text-white border-rose-800 shadow-xs"
+                      : "bg-card border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  <X className="w-3.5 h-3.5 text-rose-500" />
+                  Perdidos ({lostDeals.length})
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
+        {/* Attention Banner for Stale Deals */}
+        {staleDeals.length > 0 && healthFilter === 'all' && (
+          <div className="mx-4 md:mx-6 mt-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs md:text-sm font-black text-foreground">
+                    {staleDeals.length} {staleDeals.length === 1 ? 'oportunidade parada' : 'oportunidades paradas'} (&gt; 5 dias sem contato)
+                  </p>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                    {formatCurrencyBRL(staleDealsValue)} em risco
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Negócios sem atualização recente correm risco de esfriamento. Use o botão &quot;Resgatar&quot; no cartão para acionar o cliente via WhatsApp.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setHealthFilter('stale')}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all"
+              >
+                Filtrar Leads Parados ({staleDeals.length})
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-x-auto px-2.5 md:px-3.5 py-2.5">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="flex h-full gap-2 md:gap-2.5 w-full min-w-[850px] pb-1">
+            <div className="flex h-full gap-2 md:gap-2.5 w-full min-w-[950px] pb-1">
               {STAGES.map((stage) => {
                 const stageDeals = filteredDeals.filter(d => d.stage === stage.id);
                 const stageTotal = stageDeals.reduce((acc, d) => acc + d.value, 0);
@@ -466,7 +713,7 @@ export default function PipelinePage() {
                 const stageProgress = stageGoalValue > 0 ? Math.min((stageTotal / stageGoalValue) * 100, 100) : 0;
 
                 return (
-                  <div key={stage.id} className="flex-1 min-w-[160px] flex flex-col">
+                  <div key={stage.id} className="flex-1 min-w-[170px] flex flex-col">
                     <div className="mb-2 px-1 space-y-1">
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -506,86 +753,176 @@ export default function PipelinePage() {
                         <div 
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className="flex-1 bg-muted/20 rounded-xl p-2 space-y-2 border border-dashed border-border"
+                          className={cn(
+                            "flex-1 rounded-xl p-2 space-y-2 border border-dashed transition-colors",
+                            stage.id === 'lost' 
+                              ? "bg-rose-500/[0.04] border-rose-500/20" 
+                              : "bg-muted/20 border-border"
+                          )}
                         >
-                          {stageDeals.map((deal, index) => (
-                            <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className="bg-card p-2.5 rounded-xl border border-border shadow-sm group hover:border-primary/30 hover:shadow-md transition-all active:scale-[0.98]"
-                              >
-                                <div className="flex justify-between items-start mb-1.5">
-                                  <div className="flex gap-1">
-                                    <Link href={`/deals/${deal.id}`} className="p-0.5 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
-                                      <ExternalLink className="w-3 h-3" />
-                                    </Link>
-                                    <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-0.5 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
-                                    <button 
-                                      onClick={() => {
-                                        if (deleteConfirmId === deal.id) {
-                                          handleDelete(deal.id);
-                                        } else {
-                                          setDeleteConfirmId(deal.id);
-                                        }
-                                      }} 
-                                      className={cn(
-                                        "p-0.5 rounded-md transition-all",
-                                        deleteConfirmId === deal.id 
-                                          ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
-                                          : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                          {stageDeals.map((deal, index) => {
+                            const staleInfo = getDealStaleInfo(deal);
+                            const contact = contacts.find(c => c.id === deal.contactId);
+                            const rescueUrl = contact?.phone 
+                              ? getWhatsAppRescueUrl(contact.phone, contact.name, deal.title)
+                              : null;
+
+                            return (
+                              <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={cn(
+                                    "bg-card p-2.5 rounded-xl border shadow-sm group hover:shadow-md transition-all active:scale-[0.98]",
+                                    staleInfo.cardBorderClass || "border-border hover:border-primary/30",
+                                    deal.stage === 'lost' && "opacity-85 hover:opacity-100 border-rose-500/30"
+                                  )}
+                                >
+                                  {/* Stale Warning Badge */}
+                                  {staleInfo.isStale && (
+                                    <div className={cn(
+                                      "mb-2 px-2 py-1 rounded-lg text-[9.5px] font-bold flex items-center justify-between gap-1 border",
+                                      staleInfo.severity === 'critical'
+                                        ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                    )}>
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        {staleInfo.severity === 'critical' ? (
+                                          <AlertOctagon className="w-3 h-3 text-rose-500 animate-pulse shrink-0" />
+                                        ) : (
+                                          <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                                        )}
+                                        <span className="truncate">{staleInfo.label}</span>
+                                      </div>
+                                      {rescueUrl && (
+                                        <a
+                                          href={rescueUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0"
+                                          title="Enviar WhatsApp de resgate para o cliente"
+                                        >
+                                          <MessageCircle className="w-2.5 h-2.5" />
+                                          Resgatar
+                                        </a>
                                       )}
-                                      title={deleteConfirmId === deal.id ? "Clique novamente para confirmar" : "Excluir"}
-                                    >
-                                      <Trash2 className={cn("w-3 h-3", deleteConfirmId === deal.id && "animate-pulse")} />
-                                    </button>
-                                  </div>
-                                  <div className="flex -space-x-1.5">
-                                    <div className="w-5 h-5 rounded-full border border-card bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary uppercase">
-                                      {contacts.find(c => c.id === deal.contactId)?.name.charAt(0) || '?'}
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-between items-start mb-1.5">
+                                    <div className="flex gap-1">
+                                      <Link href={`/deals/${deal.id}`} className="p-0.5 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
+                                        <ExternalLink className="w-3 h-3" />
+                                      </Link>
+                                      <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-0.5 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
+                                      <button 
+                                        onClick={() => {
+                                          if (deleteConfirmId === deal.id) {
+                                            handleDelete(deal.id);
+                                          } else {
+                                            setDeleteConfirmId(deal.id);
+                                          }
+                                        }} 
+                                        className={cn(
+                                          "p-0.5 rounded-md transition-all",
+                                          deleteConfirmId === deal.id 
+                                            ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
+                                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                        )}
+                                        title={deleteConfirmId === deal.id ? "Clique novamente para confirmar" : "Excluir"}
+                                      >
+                                        <Trash2 className={cn("w-3 h-3", deleteConfirmId === deal.id && "animate-pulse")} />
+                                      </button>
+                                    </div>
+                                    <div className="flex -space-x-1.5">
+                                      <div className="w-5 h-5 rounded-full border border-card bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary uppercase" title={contact?.name || 'Cliente não atribuído'}>
+                                        {contact?.name.charAt(0) || '?'}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                                <Link href={`/deals/${deal.id}`} className="block hover:text-primary transition-colors">
-                                  <h4 className="font-bold text-foreground text-xs mb-0.5 line-clamp-2 leading-tight" title={deal.title}>{deal.title}</h4>
-                                </Link>
-                                <p className="text-[10.5px] text-muted-foreground mb-2 truncate flex items-center gap-1">
-                                  <Building2 className="w-3 h-3 shrink-0" />
-                                  <span className="truncate">{companies.find(c => c.id === deal.companyId)?.name || 'Empresa não vinculada'}</span>
-                                </p>
-                                
-                                <div className="flex flex-wrap items-center justify-between gap-1 pt-1.5 border-t border-border/50">
-                                  <span className="text-xs font-bold text-foreground">
-                                    {formatCurrencyBRL(deal.value)}
-                                  </span>
-                                  <div className="flex items-center gap-1 text-[9px] font-semibold text-muted-foreground">
-                                    <Clock className="w-2.5 h-2.5 shrink-0" />
-                                    <span>{deal.updatedAt ? new Date(deal.updatedAt).toLocaleDateString() : '-'}</span>
+
+                                  <Link href={`/deals/${deal.id}`} className="block hover:text-primary transition-colors">
+                                    <h4 className="font-bold text-foreground text-xs mb-0.5 line-clamp-2 leading-tight" title={deal.title}>{deal.title}</h4>
+                                  </Link>
+
+                                  {contact && (
+                                    <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mb-1">
+                                      <span className="truncate font-semibold text-foreground/80">{contact.name}</span>
+                                      {rescueUrl && (
+                                        <a
+                                          href={rescueUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 p-0.5 rounded hover:bg-emerald-500/10 transition-colors shrink-0"
+                                          title={`Conversar com ${contact.name} no WhatsApp`}
+                                        >
+                                          <MessageCircle className="w-3 h-3" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <p className="text-[10px] text-muted-foreground mb-2 truncate flex items-center gap-1">
+                                    <Building2 className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{companies.find(c => c.id === deal.companyId)?.name || 'Empresa não vinculada'}</span>
+                                  </p>
+                                  
+                                  <div className="flex flex-wrap items-center justify-between gap-1 pt-1.5 border-t border-border/50">
+                                    <span className="text-xs font-bold text-foreground">
+                                      {formatCurrencyBRL(deal.value)}
+                                    </span>
+                                    <div className="flex items-center gap-1 text-[9px] font-semibold text-muted-foreground">
+                                      <Clock className="w-2.5 h-2.5 shrink-0" />
+                                      <span>{deal.updatedAt ? new Date(deal.updatedAt).toLocaleDateString() : '-'}</span>
+                                    </div>
                                   </div>
+
+                                  {/* Reactivate button for lost deals */}
+                                  {deal.stage === 'lost' && (
+                                    <div className="mt-2 pt-1.5 border-t border-rose-500/20 flex items-center justify-between gap-1">
+                                      <span className="text-[9.5px] font-bold text-rose-500 flex items-center gap-1">
+                                        <X className="w-3 h-3" /> Arquivado
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleReactivateDeal(deal);
+                                        }}
+                                        className="px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[9.5px] font-bold flex items-center gap-1 transition-all"
+                                        title="Reativar oportunidade para Novo Lead"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5" />
+                                        Reativar
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                        <button 
-                          onClick={() => {
-                            setEditingDeal({ stage: stage.id } as Deal);
-                            setIsModalOpen(true);
-                          }}
-                          className="w-full py-1.5 border border-dashed border-border rounded-xl flex items-center justify-center text-muted-foreground hover:border-primary/50 hover:text-primary transition-all group"
-                        >
-                          <Plus className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                        </button>
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
-              );
-            })}
-          </div>
+                              )}
+                            </Draggable>
+                            );
+                          })}
+                          {provided.placeholder}
+                          <button 
+                            onClick={() => {
+                              setEditingDeal({ stage: stage.id } as Deal);
+                              setIsModalOpen(true);
+                            }}
+                            className="w-full py-1.5 border border-dashed border-border rounded-xl flex items-center justify-center text-muted-foreground hover:border-primary/50 hover:text-primary transition-all group"
+                          >
+                            <Plus className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                          </button>
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                );
+              })}
+            </div>
           </DragDropContext>
         </div>
       </main>
@@ -780,6 +1117,94 @@ export default function PipelinePage() {
                   <button type="submit" className="flex-1 py-3 font-bold bg-primary text-white rounded-2xl hover:opacity-90 transition-all shadow-lg shadow-primary/20">Salvar</button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Lost Reason Modal */}
+      <AnimatePresence>
+        {isLostReasonModalOpen && pendingLostDeal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl border border-rose-500/30"
+            >
+              <button onClick={handleCancelLost} className="absolute right-6 top-6 p-2 rounded-full hover:bg-muted transition-colors">
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+              
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                  <AlertOctagon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Registrar Motivo da Perda</h2>
+                  <p className="text-xs text-muted-foreground">Oportunidade: &quot;{pendingLostDeal.dealTitle}&quot;</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mb-4">
+                Identificar a causa da perda gera inteligência de mercado para calibrar o portfólio de imóveis e os preços da imobiliária.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Motivo Principal</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {LOST_REASONS.map(reason => (
+                      <button
+                        key={reason.id}
+                        type="button"
+                        onClick={() => setSelectedLostReason(reason.id)}
+                        className={cn(
+                          "p-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between",
+                          selectedLostReason === reason.id
+                            ? "bg-rose-500/10 border-rose-500 text-rose-600 dark:text-rose-400 shadow-xs"
+                            : "bg-muted/30 border-border text-foreground/80 hover:bg-muted"
+                        )}
+                      >
+                        <span className="truncate">{reason.label}</span>
+                        {selectedLostReason === reason.id && (
+                          <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 ml-1.5" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 ml-1 block">Observações Adicionais (Opcional)</label>
+                  <textarea
+                    value={lostNotes}
+                    onChange={(e) => setLostNotes(e.target.value)}
+                    placeholder="Ex: O cliente optou por apartamento de 3 quartos no Bairro Jardins com taxa condominial mais baixa..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                  />
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                  <button 
+                    type="button" 
+                    onClick={handleCancelLost} 
+                    className="flex-1 py-2.5 font-bold text-xs text-muted-foreground hover:bg-muted rounded-xl transition-all border border-border"
+                  >
+                    Cancelar (Manter no Funil)
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={handleConfirmLost} 
+                    className="flex-1 py-2.5 font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center justify-center gap-1.5"
+                  >
+                    Confirmar Perda
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
