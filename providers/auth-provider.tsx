@@ -1051,6 +1051,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn("Erro ao deslogar:", e);
     } finally {
       clearAuthSession();
+      clearLocalCache();
       if (typeof window !== "undefined") {
         try { sessionStorage.clear(); } catch {}
       }

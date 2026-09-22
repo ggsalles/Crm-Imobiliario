@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    const id = searchParams.get('id') || searchParams.get('slug');
     const hasCacheBuster = searchParams.has('t') || !!id;
     const config = await getSaaSConfig(hasCacheBuster);
     const blockedIds = config.blockedTenantIds || [];
@@ -44,7 +44,14 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(null); // Hide system config
       }
       
-      const { data, error } = await supabase.from('tenants').select('*').eq('id', id).maybeSingle();
+      let query = supabase.from('tenants').select('*');
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUuid) {
+        query = query.eq('id', id);
+      } else {
+        query = query.or(`id.eq.${id},slug.eq.${id}`);
+      }
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       if (!data) return NextResponse.json(null);
 

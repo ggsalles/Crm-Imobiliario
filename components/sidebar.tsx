@@ -24,6 +24,7 @@ import {
   CreditCard,
   ChevronLeft,
   ChevronRight,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -43,6 +44,7 @@ const navItems = [
   { label: "Relatórios", icon: BarChart3, href: "/?tab=Relatórios" },
   { label: "Mensagens", icon: MessageSquare, href: "/messages" },
   { label: "Imóveis", icon: Home, href: "/properties" },
+  { label: "Vitrine", icon: Globe, href: "/vitrine" },
   { label: "Empresas", icon: Building2, href: "/companies" },
   { label: "Usuários", icon: UserCircle, href: "/users" },
 ];

@@ -13,6 +13,9 @@ export async function GET(req: NextRequest) {
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
+    if (!user) {
+      return NextResponse.json([]);
+    }
     const activeTenantId = await getActiveTenantId(supabase, user);
 
     if (id && id !== 'undefined' && id !== 'null') {

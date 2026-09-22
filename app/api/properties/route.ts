@@ -78,20 +78,30 @@ export async function GET(req: NextRequest) {
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user);
 
+    const isPublic = searchParams.get('public') === 'true';
+    const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
+    const effectiveTenantId = activeTenantId || (isPublic ? tenantParam : null);
+
     let query = supabase
       .from('properties')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (activeTenantId) {
-      query = query.eq('tenant_id', activeTenantId);
+    if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
+      query = query.eq('tenant_id', effectiveTenantId);
     }
 
-    if (ownerId && ownerId !== 'undefined') {
+    if (isPublic) {
+      // Vitrine pública: só exibe imóveis ativos e disponíveis ou reservados
+      query = query.neq('status', 'inactive').neq('status', 'deleted');
+    }
+
+    if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
       query = query.eq('owner_id', ownerId);
     }
 
-    const { data: properties, error } = await query.limit(60);
+    const limitParam = Number(searchParams.get('limit')) || (isPublic ? 150 : 60);
+    const { data: properties, error } = await query.limit(limitParam);
 
     if (error) throw error;
     if (!properties || properties.length === 0) return NextResponse.json([]);

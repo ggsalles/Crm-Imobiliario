@@ -252,9 +252,22 @@ export default function PublicPropertyCapturePage() {
               <p className="text-[10px] text-muted-foreground leading-none">Imóvel de Interesse do Cliente</p>
             </div>
           </div>
-          <span className="text-xs font-bold uppercase py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-full">
-            Instagram Link Integrado
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const targetUrl = property?.tenantId ? `/vitrine?tenant=${property.tenantId}` : '/vitrine';
+                router.push(targetUrl);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Voltar para a vitrine com todos os imóveis disponíveis"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Ver Todos os Imóveis</span>
+            </button>
+            <span className="hidden sm:inline-block text-xs font-bold uppercase py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-full">
+              Vitrine Conectada
+            </span>
+          </div>
         </div>
       </header>
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { subscribeToDeals, Deal } from "@/lib/db";
 import { playIcqSound, isSoundEnabled, setSoundEnabled, unlockAudio } from "@/lib/sound";
+import { useAuth } from "@/providers/auth-provider";
 import { toast } from "sonner";
 import { Volume2, VolumeX, Sparkles, ArrowRight, MessageCircle } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -10,6 +11,7 @@ import { useRouter, usePathname } from "next/navigation";
 export function NewLeadSoundNotifier() {
   const router = useRouter();
   const pathname = usePathname();
+  const { user, profile } = useAuth();
   const [soundActive, setSoundActive] = useState(true);
   const knownDealIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
@@ -31,6 +33,8 @@ export function NewLeadSoundNotifier() {
   }, []);
 
   const triggerLeadAlert = useCallback((lead: any, totalCount: number) => {
+    // Only alert if user is actively authenticated and sound is enabled
+    if (!user) return;
     unlockAudio();
     playIcqSound();
 
@@ -65,7 +69,7 @@ export function NewLeadSoundNotifier() {
               toast.dismiss(t);
               router.push("/pipeline");
             }}
-            className="flex-1 py-1.5 px-3 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+            className="flex-1 py-1.5 px-3 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
           >
             Abrir no Funil
             <ArrowRight className="w-3 h-3" />
@@ -73,17 +77,36 @@ export function NewLeadSoundNotifier() {
         </div>
       </div>
     ), { duration: 8000 });
-  }, [router]);
+  }, [router, user]);
+
+  // Reset tracking state whenever user ID or tenant ID changes
+  useEffect(() => {
+    knownDealIdsRef.current.clear();
+    isInitialLoadRef.current = true;
+  }, [user?.id, profile?.tenantId]);
 
   // Listen for new deals entering the pipeline
   useEffect(() => {
-    // Avoid running on public landing page /p/[id]
-    if (pathname?.startsWith("/p/")) return;
+    // Strictly disable on public landing pages or auth screens or when not logged in
+    const isPublicOrAuthPage = 
+      !user || 
+      pathname?.startsWith("/p/") || 
+      pathname?.startsWith("/vitrine") || 
+      pathname?.startsWith("/login") || 
+      pathname?.startsWith("/register") || 
+      pathname?.startsWith("/forgot-password") || 
+      pathname?.startsWith("/reset-password");
+
+    if (isPublicOrAuthPage) {
+      knownDealIdsRef.current.clear();
+      isInitialLoadRef.current = true;
+      return;
+    }
 
     const unsub = subscribeToDeals((deals: Deal[]) => {
       if (!deals || !Array.isArray(deals)) return;
 
-      // On first load, seed the known deals set without triggering audio
+      // On first load of current session, seed the known deals set without triggering audio
       if (isInitialLoadRef.current) {
         deals.forEach(d => {
           if (d.id) knownDealIdsRef.current.add(d.id);
@@ -113,6 +136,7 @@ export function NewLeadSoundNotifier() {
 
     // Also listen for manual test / direct events
     const handleManualLeadEvent = (e: any) => {
+      if (!user) return;
       const deal = e.detail?.deal || {
         title: "Lead Via Link Público - Carlos Eduardo (Edifício Horizon)",
         value: 1250000,
@@ -127,7 +151,7 @@ export function NewLeadSoundNotifier() {
       unsub();
       window.removeEventListener("crm-new-lead-event", handleManualLeadEvent);
     };
-  }, [pathname, triggerLeadAlert]);
+  }, [pathname, user, profile?.tenantId, triggerLeadAlert]);
 
   return null;
 }
