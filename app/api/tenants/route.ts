@@ -48,7 +48,8 @@ export async function GET(req: NextRequest) {
       if (error) throw error;
       if (!data) return NextResponse.json(null);
 
-      const billingResult = getTenantBillingStatus(config, data.id, new Date(), data.created_at);
+      const dueDay = config.dueDays?.[data.id] ?? data.due_day ?? 10;
+      const billingResult = getTenantBillingStatus(config, data.id, new Date(), data.created_at, dueDay);
       const isManuallyUnlocked = Boolean(
         billingResult.isManuallyUnlocked || 
         (config.unlockedTenantIds && config.unlockedTenantIds.includes(data.id))
@@ -62,7 +63,6 @@ export async function GET(req: NextRequest) {
       const adminLimit = data.admin_limit !== undefined && data.admin_limit !== null ? Number(data.admin_limit) : 1;
       const basePlanSlots = brokerLimit + adminLimit;
       const userLimit = data.user_limit ?? config.userLimits?.[data.id] ?? basePlanSlots;
-      const dueDay = data.due_day ?? billingResult.dueDay;
 
       return NextResponse.json({
         id: data.id,
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: data.due_day ?? billingResult.dueDay,
+        dueDay,
         diffDays: billingResult.diffDays,
         overdueCount: billingResult.overdueCount || 0,
         oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || '',
@@ -123,7 +123,8 @@ export async function GET(req: NextRequest) {
     }
 
     const items = finalTenants.map((item: any) => {
-      const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at);
+      const dueDay = config.dueDays?.[item.id] ?? item.due_day ?? 10;
+      const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at, dueDay);
       const isManuallyUnlocked = Boolean(
         billingResult.isManuallyUnlocked || 
         (config.unlockedTenantIds && config.unlockedTenantIds.includes(item.id))
@@ -137,7 +138,6 @@ export async function GET(req: NextRequest) {
       const adminLimit = item.admin_limit !== undefined && item.admin_limit !== null ? Number(item.admin_limit) : 1;
       const basePlanSlots = brokerLimit + adminLimit;
       const userLimit = item.user_limit ?? config.userLimits?.[item.id] ?? basePlanSlots;
-      const dueDay = item.due_day ?? billingResult.dueDay;
 
       return {
         id: item.id,
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
         userLimit,
         billingStatus: billingResult.status,
         billingSuspensionDate: billingResult.suspendedUntilStr,
-        dueDay: item.due_day ?? billingResult.dueDay,
+        dueDay,
         diffDays: billingResult.diffDays,
         overdueCount: billingResult.overdueCount || 0,
         oldestOverdueMonthKey: billingResult.oldestOverdueMonthKey || '',

@@ -193,6 +193,18 @@ export default function AdminBillingPage() {
     return `${first.label} até ${last.label} (${displayedMonths.length} meses)`;
   }, [displayedMonths]);
 
+  function notifyBillingChange() {
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('saas-billing-updated'));
+        localStorage.setItem('saas-billing-timestamp', String(Date.now()));
+        const bc = new BroadcastChannel('saas_billing_channel');
+        bc.postMessage({ type: 'BILLING_UPDATED', timestamp: Date.now() });
+        bc.close();
+      } catch {}
+    }
+  }
+
   // Handle master Block/Unblock actions
   async function toggleTenantBlock(tenantId: string, currentStatus: boolean) {
     if (!config) return;
@@ -244,6 +256,7 @@ export default function AdminBillingPage() {
           ? "Acesso da imobiliária bloqueado manualmente!" 
           : "Acesso da imobiliária liberado com sucesso!"
       );
+      notifyBillingChange();
       await loadAllData();
     } catch (err) {
       console.error("Failed to toggle tenant block:", err);
@@ -311,6 +324,7 @@ export default function AdminBillingPage() {
 
       toast.success(`Fatura quitada e acesso de "${tenant.name}" liberado com sucesso!`);
       setUnlockModalTenant(null);
+      notifyBillingChange();
       await loadAllData();
     } catch (err) {
       console.error("Failed to confirm payment and unlock:", err);
@@ -355,6 +369,7 @@ export default function AdminBillingPage() {
 
       toast.success(`Acesso de "${tenant.name}" liberado sob carência administrativa!`);
       setUnlockModalTenant(null);
+      notifyBillingChange();
       await loadAllData();
     } catch (err) {
       console.error("Failed to grant grace period:", err);
@@ -417,7 +432,7 @@ export default function AdminBillingPage() {
     // Optimistically update tenant billing status
     const tenant = tenants.find(t => t.id === tenantId);
     if (tenant) {
-      const newBilling = getTenantBillingStatus(updatedConfig, tenantId, new Date(), tenant.createdAt);
+      const newBilling = getTenantBillingStatus(updatedConfig, tenantId, new Date(), tenant.createdAt, tenant.dueDay);
       setTenants(prev => prev.map(t => t.id === tenantId ? {
         ...t,
         billingStatus: newBilling.status,
@@ -434,6 +449,7 @@ export default function AdminBillingPage() {
         body: JSON.stringify(updatedConfig)
       });
       toast.success(`Mensalidade de ${monthKey} atualizada para ${nextStatus.toUpperCase()}!`);
+      notifyBillingChange();
       await loadAllData();
     } catch (err) {
       console.error("Failed to cycle payment status:", err);
@@ -463,7 +479,12 @@ export default function AdminBillingPage() {
         method: "POST",
         body: JSON.stringify(updatedConfig)
       });
+      await apiFetch(`/api/tenants?id=${tenantId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ due_day: newDay })
+      });
       toast.success(`Dia de vencimento alterado para dia ${newDay}!`);
+      notifyBillingChange();
       loadAllData();
     } catch (err) {
       console.error("Failed to update tenant due day:", err);
@@ -535,6 +556,7 @@ export default function AdminBillingPage() {
       });
       setConfig(updatedConfig);
       toast.success("Configuração de prazos e bloqueios atualizada com sucesso!");
+      notifyBillingChange();
       loadAllData();
     } catch (err) {
       console.error("Failed to save billing rules:", err);

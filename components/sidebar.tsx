@@ -204,6 +204,16 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
     if (profile) {
       loadTenants();
     }
+
+    const handleBillingUpdate = () => {
+      if (profile) {
+        loadTenants();
+      }
+    };
+    window.addEventListener('saas-billing-updated', handleBillingUpdate);
+    return () => {
+      window.removeEventListener('saas-billing-updated', handleBillingUpdate);
+    };
   }, [profile]);
 
   const handleLogout = async () => {
@@ -320,14 +330,14 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
       )}
 
       {/* Billing Alert Badges */}
-      {!isCollapsed && (
+      {!isCollapsed && billingStatus && billingStatus !== 'regular' && (
         <>
           {billingStatus === 'bloqueado' && (
             <div className="mx-2 mb-1.5 p-2 bg-rose-500/15 border border-rose-500/30 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-[8px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
-                  Bloqueado (D+{diffDays || 8})
+                  Bloqueado (D+{diffDays !== undefined && diffDays !== null ? diffDays : 7})
                 </span>
                 <span className="text-[7.5px] font-bold text-rose-300 bg-rose-500/20 px-1 py-0.5 rounded font-mono">
                   Dia {dueDay || 10}
@@ -355,7 +365,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
                   Aviso Crítico
                 </span>
                 <span className="text-[7.5px] font-bold text-amber-300 bg-amber-500/20 px-1 py-0.5 rounded font-mono">
-                  D+{diffDays || 5}
+                  D+{diffDays !== undefined && diffDays !== null ? diffDays : 5}
                 </span>
               </div>
               <p className="text-[8.5px] text-amber-200/90 mt-1 leading-snug font-medium">
@@ -372,15 +382,28 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             </div>
           )}
 
-          {billingStatus === 'aviso_sutil' && (
+          {billingStatus === 'aviso_sutil' && Boolean(billingSuspensionDate) && (
             <div className="mx-2 mb-1.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl relative overflow-hidden backdrop-blur-sm shadow-inner text-left select-none">
-              <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Pendência
-              </span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Aviso Sutil
+                </span>
+                <span className="text-[7.5px] font-bold text-amber-400 bg-amber-500/20 px-1 py-0.5 rounded font-mono">
+                  D+{diffDays !== undefined && diffDays !== null ? diffDays : 1}
+                </span>
+              </div>
               <p className="text-[8.5px] text-muted-foreground mt-0.5 leading-snug font-semibold">
-                Fatura pendente até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
+                Fatura pendente ({diffDays !== undefined && diffDays !== null ? diffDays : 1}d atraso) até <span className="text-amber-400 font-bold">{billingSuspensionDate}</span>.
               </p>
+              {isPlatformAdmin(profile?.email) && (
+                <Link
+                  href="/admin/billing"
+                  className="mt-1 text-[8.5px] font-bold text-amber-400 hover:text-amber-300 transition-colors underline flex items-center gap-0.5"
+                >
+                  Cobrança SaaS →
+                </Link>
+              )}
             </div>
           )}
         </>

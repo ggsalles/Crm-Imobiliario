@@ -44,7 +44,7 @@ export function BillingAlertBanner() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-500/30 text-rose-300 border border-rose-500/40 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
-                  Acesso Bloqueado (D+{diffDays || 8})
+                  Acesso Bloqueado (D+{diffDays !== undefined && diffDays !== null ? diffDays : 7})
                 </span>
                 <span className="font-bold text-sm text-white">
                   {isMaster
@@ -55,7 +55,7 @@ export function BillingAlertBanner() {
               <p className="text-xs text-rose-200/90 mt-0.5 leading-relaxed">
                 {isMaster ? (
                   <>
-                    A fatura com vencimento no dia <strong>{dueDay || 10}</strong> está em atraso há <strong>{diffDays || 8} dias</strong>. Os corretores e administradores comuns desta empresa estão bloqueados. Seu acesso está liberado por ser Administrador da Plataforma.
+                    A fatura com vencimento no dia <strong>{dueDay || 10}</strong> está em atraso há <strong>{diffDays !== undefined && diffDays !== null ? diffDays : 7} dias</strong>. Os corretores e administradores comuns desta empresa estão bloqueados. Seu acesso está liberado por ser Administrador da Plataforma.
                   </>
                 ) : (
                   <>
@@ -118,7 +118,7 @@ export function BillingAlertBanner() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  Vencimento em Aberto (D+{diffDays || 5})
+                  Vencimento em Aberto (D+{diffDays !== undefined && diffDays !== null ? diffDays : 5})
                 </span>
                 <span className="font-bold text-sm text-white">
                   {`Atenção: Mensalidade da imobiliária "${tenantName || 'SalesScore'}" vencida`}
@@ -177,7 +177,7 @@ export function BillingAlertBanner() {
           <div className="flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
             <p className="text-xs text-amber-200/90 leading-snug">
-              <span className="font-semibold text-white">Lembrete Financeiro:</span> Mensalidade com vencimento recente no dia <strong>{dueDay || 10}</strong> em aberto. Regularize até {billingSuspensionDate} para evitar interrupções.
+              <span className="font-semibold text-white">Lembrete Financeiro {diffDays ? `(D+${diffDays})` : ''}:</span> Mensalidade da imobiliária &quot;{tenantName || 'SalesScore'}&quot; com vencimento no dia <strong>{dueDay || 10}</strong> em aberto ({diffDays} dia{diffDays === 1 ? '' : 's'} de atraso). Regularize até <strong>{billingSuspensionDate}</strong> para evitar interrupções.
             </p>
           </div>
 

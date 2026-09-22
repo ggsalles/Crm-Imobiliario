@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef, useCallback } from "react";
 
 let isPageUnloading = false;
 if (typeof window !== "undefined") {
@@ -107,6 +107,7 @@ interface AuthContextType {
   diffDays?: number;
   tenantName?: string;
   isTenantBlocked?: boolean;
+  refreshTenantBilling?: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -124,6 +125,7 @@ const AuthContext = createContext<AuthContextType>({
   diffDays: 0,
   tenantName: '',
   isTenantBlocked: false,
+  refreshTenantBilling: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -329,100 +331,142 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    let intervalKey: NodeJS.Timeout;
-
-    async function checkTenantBlock() {
-      if (!profile || !profile.tenantId) {
-        if (active) {
-          setIsTenantBlocked(false);
-          setBillingStatus('regular');
-        }
-        return;
-      }
-      
-      try {
-        const res = await fetch(`/api/tenants?id=${profile.tenantId}&t=${Date.now()}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        if (res.ok && active) {
-          const tenantData = await res.json();
-          if (tenantData) {
-            const status = (tenantData.billingStatus || 'regular') as 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
-            const days = tenantData.diffDays || 0;
-            const due = tenantData.dueDay !== undefined ? tenantData.dueDay : 10;
-            const tName = tenantData.name || "SalesScore";
-
-            setBillingStatus(status);
-            setBillingSuspensionDate(tenantData.billingSuspensionDate || '');
-            setDueDay(due);
-            setDiffDays(days);
-            setTenantName(tName);
-            setBlockedTenantName(tName);
-
-            // Emite notificação de alerta imediato caso haja pendência de faturamento
-            if (status === 'bloqueado') {
-              if (isPlatformAdmin(profile.email)) {
-                toast.error(
-                  `Alerta Master: A empresa "${tName}" está com o faturamento BLOQUEADO (vencido no dia ${due} - D+${days}).`,
-                  { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
-                );
-              }
-            } else if (status === 'aviso_critico') {
-              toast.warning(
-                `Alerta Financeiro: Fatura da empresa "${tName}" vencida no dia ${due}. Suspensão em ${tenantData.billingSuspensionDate}.`,
-                { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
-              );
-            } else if (status === 'aviso_sutil') {
-              toast.warning(
-                `Aviso Financeiro: Fatura da empresa "${tName}" em aberto com vencimento recente no dia ${due}.`,
-                { id: `billing-alert-toast-${profile.tenantId}`, duration: 6000 }
-              );
-            }
-
-            // Platform admin never gets locked out of the CRM
-            if (isPlatformAdmin(profile.email)) {
-              setIsTenantBlocked(false);
-              return;
-            }
-
-            if (tenantData.isBlocked || status === 'bloqueado') {
-              setIsTenantBlocked(true);
-              setBlockedTenantName(tName);
-              return;
-            } else {
-              setIsTenantBlocked(false);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error checking tenant block:", err);
-        // Do NOT set isTenantBlocked to false here to protect against transient drops
-      }
+  const checkTenantBlock = useCallback(async () => {
+    if (!profile || !profile.tenantId) {
+      setIsTenantBlocked(false);
+      setBillingStatus('regular');
+      setBillingSuspensionDate('');
+      setDiffDays(0);
+      return;
     }
     
-    // Check immediately on profile change
+    try {
+      const res = await fetch(`/api/tenants?id=${profile.tenantId}&t=${Date.now()}`, { 
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      if (res.ok) {
+        const tenantData = await res.json();
+        if (tenantData) {
+          const status = (tenantData.billingStatus || 'regular') as 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
+          const days = tenantData.diffDays || 0;
+          const due = tenantData.dueDay !== undefined ? tenantData.dueDay : 10;
+          const tName = tenantData.name || "SalesScore";
+
+          setBillingStatus(status);
+          setDueDay(due);
+          setDiffDays(days);
+          setTenantName(tName);
+          setBlockedTenantName(tName);
+
+          if (status === 'regular') {
+            setBillingSuspensionDate('');
+            // Remove qualquer alerta pendente anterior
+            toast.dismiss(`billing-alert-toast-${profile.tenantId}`);
+          } else {
+            setBillingSuspensionDate(tenantData.billingSuspensionDate || '');
+          }
+
+          // Emite notificação de alerta imediato caso haja pendência de faturamento
+          if (status === 'bloqueado') {
+            if (isPlatformAdmin(profile.email)) {
+              toast.error(
+                `Alerta Master: A empresa "${tName}" está com o faturamento BLOQUEADO (vencido no dia ${due} - D+${days}).`,
+                { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
+              );
+            }
+          } else if (status === 'aviso_critico') {
+            toast.warning(
+              `Alerta Financeiro: Fatura da empresa "${tName}" vencida no dia ${due}. Suspensão em ${tenantData.billingSuspensionDate}.`,
+              { id: `billing-alert-toast-${profile.tenantId}`, duration: 8000 }
+            );
+          } else if (status === 'aviso_sutil') {
+            toast.warning(
+              `Aviso Financeiro: Fatura da empresa "${tName}" em aberto com vencimento recente no dia ${due}.`,
+              { id: `billing-alert-toast-${profile.tenantId}`, duration: 6000 }
+            );
+          }
+
+          // Platform admin never gets locked out of the CRM
+          if (isPlatformAdmin(profile.email)) {
+            setIsTenantBlocked(false);
+            return;
+          }
+
+          if (tenantData.isBlocked || status === 'bloqueado') {
+            setIsTenantBlocked(true);
+            setBlockedTenantName(tName);
+            return;
+          } else {
+            setIsTenantBlocked(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error checking tenant block:", err);
+      // Do NOT set isTenantBlocked to false here to protect against transient drops
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    // Check immediately on profile change or navigation
     checkTenantBlock();
 
-    // Check periodically every 90 seconds for robust real-time block and to recover from failed transitional calls
-    intervalKey = setInterval(() => {
+    // Check periodically every 30 seconds for robust background sync
+    const intervalKey = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         return;
       }
       checkTenantBlock();
-    }, 90000);
+    }, 30000);
+
+    // Event listeners for instant billing synchronization
+    const handleCustomBillingEvent = () => {
+      checkTenantBlock();
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'saas-billing-timestamp') {
+        checkTenantBlock();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkTenantBlock();
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('saas_billing_channel');
+      bc.onmessage = () => {
+        checkTenantBlock();
+      };
+    } catch {}
+
+    window.addEventListener('saas-billing-updated', handleCustomBillingEvent);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', checkTenantBlock);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      active = false;
       clearInterval(intervalKey);
+      window.removeEventListener('saas-billing-updated', handleCustomBillingEvent);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', checkTenantBlock);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (bc) {
+        try {
+          bc.close();
+        } catch {}
+      }
     };
-  }, [profile?.tenantId, profile?.email]);
+  }, [checkTenantBlock, pathname]);
 
   useEffect(() => {
     if (!user) {
@@ -1081,8 +1125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dueDay,
     diffDays,
     tenantName,
-    isTenantBlocked
-  }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay, diffDays, tenantName, isTenantBlocked]);
+    isTenantBlocked,
+    refreshTenantBilling: checkTenantBlock
+  }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay, diffDays, tenantName, isTenantBlocked, checkTenantBlock]);
 
   const isPublicPath = pathname === '/login' || 
     pathname === '/register' || 

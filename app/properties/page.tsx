@@ -53,6 +53,7 @@ import {
   createTimelineEvent
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber, formatCEP } from "@/lib/utils";
+import { PropertyValuationCard, ValuationResult } from "@/components/PropertyValuationCard";
 import Image from "next/image";
 import { toast } from "sonner";
 
@@ -74,6 +75,10 @@ export default function PropertiesPage() {
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [displayPrice, setDisplayPrice] = useState("");
   const [cep, setCep] = useState("");
+  const [areaInput, setAreaInput] = useState<string>("");
+  const [isEstimatingPrice, setIsEstimatingPrice] = useState(false);
+  const [valuationResult, setValuationResult] = useState<ValuationResult | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [activeMapProperty, setActiveMapProperty] = useState<Property | null>(null);
   const [sharingProperty, setSharingProperty] = useState<Property | null>(null);
   const [sharingText, setSharingText] = useState("");
@@ -256,6 +261,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       setDisplayPrice(formatCurrencyBRL(editingProperty?.price || 0));
       setImageUrls(editingProperty?.imageUrls || []);
       setCep(formatCEP(editingProperty?.cep || ""));
+      setAreaInput(editingProperty?.area ? String(editingProperty.area) : "");
+      setValuationResult(null);
     }
     // Only reset when switching TO form view or editing a different property
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,6 +313,87 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     } finally {
       setIsFetchingCep(false);
     }
+  };
+
+  const handleSuggestPrice = async () => {
+    if (!formRef.current) return;
+    const form = formRef.current;
+    const formElements = form.elements as any;
+
+    const propertyType = formElements.type?.value || editingProperty?.type || "apartamento";
+    const neighborhood = addressData.neighborhood || formElements.neighborhood?.value || "";
+    const city = addressData.city || formElements.city?.value || "";
+    const state = addressData.state || formElements.state?.value || "";
+    const area = parseFloat(areaInput || formElements.area?.value || "0") || 0;
+    const bedrooms = parseInt(formElements.bedrooms?.value || "0") || 0;
+    const bathrooms = parseInt(formElements.bathrooms?.value || "0") || 0;
+    const parkingSpots = parseInt(formElements.parkingSpots?.value || "0") || 0;
+    const acceptsFinancing = formElements.acceptsFinancing?.checked ?? true;
+    const currentPriceNum = parseCurrencyBRLToNumber(displayPrice);
+
+    if (!city && !neighborhood && area <= 0) {
+      toast.warning("Para estimar o valor com precisão, preencha ao menos o Bairro/Cidade ou a Área (m²).");
+      return;
+    }
+
+    setIsEstimatingPrice(true);
+    const toastId = toast.loading("Consultando inteligência de mercado imobiliário...");
+
+    try {
+      // Calcular a média da carteira da imobiliária para este tipo/região
+      const similarInPortfolio = properties.filter(p => 
+        p.area > 0 && p.price > 0 && (
+          (neighborhood && p.neighborhood?.toLowerCase() === neighborhood.toLowerCase()) ||
+          (city && p.city?.toLowerCase() === city.toLowerCase()) ||
+          p.type === propertyType
+        )
+      );
+
+      let portfolioAvgM2: number | null = null;
+      if (similarInPortfolio.length > 0) {
+        const sumM2 = similarInPortfolio.reduce((acc, p) => acc + (p.price / p.area), 0);
+        portfolioAvgM2 = Math.round(sumM2 / similarInPortfolio.length);
+      }
+
+      const res = await fetch("/api/properties/valuation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: propertyType,
+          neighborhood,
+          city,
+          state,
+          area,
+          bedrooms,
+          bathrooms,
+          parkingSpots,
+          acceptsFinancing,
+          currentPrice: currentPriceNum,
+          portfolioAverageM2: portfolioAvgM2
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Falha na estimativa de valor.");
+      }
+
+      const data: ValuationResult = await res.json();
+      data.portfolioAvgM2 = portfolioAvgM2;
+      data.matchingPropertiesCount = similarInPortfolio.length;
+
+      setValuationResult(data);
+      toast.success("Avaliação de mercado gerada com sucesso!", { id: toastId });
+    } catch (err: any) {
+      console.error("Erro na avaliação:", err);
+      toast.error(err.message || "Não foi possível gerar a sugestão de preço.", { id: toastId });
+    } finally {
+      setIsEstimatingPrice(false);
+    }
+  };
+
+  const handleApplyValuationPrice = (priceVal: number) => {
+    setDisplayPrice(formatCurrencyBRL(priceVal));
   };
 
   useEffect(() => {
@@ -747,6 +835,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   editingProperty ? "xl:col-span-8" : "w-full"
                 )}>
                   <form 
+                    ref={formRef}
                     key={editingProperty?.id || 'new-property'}
                     onSubmit={handleCreateOrUpdate} 
                     className={cn(
@@ -803,7 +892,30 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     </div>
 
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Preço de Venda (R$)</label>
+                      <div className="flex items-center justify-between pl-1">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                          Preço de Venda (R$)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleSuggestPrice}
+                          disabled={isEstimatingPrice}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all border border-primary/25 disabled:opacity-50 cursor-pointer shadow-xs"
+                          title="Calcular estimativa de preço de mercado com base em dados imobiliários e IA"
+                        >
+                          {isEstimatingPrice ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                              <span>Analisando mercado...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-primary" />
+                              <span>Sugerir Preço (IA)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                       <input 
                         name="price"
                         required
@@ -813,6 +925,14 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                         placeholder="R$ 0,00"
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-black text-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                       />
+                      {parseFloat(areaInput || "0") > 0 && parseCurrencyBRLToNumber(displayPrice) > 0 && (
+                        <p className="text-[11px] font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                          <span>Preço por m²:</span>
+                          <span className="font-bold text-foreground font-mono">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.round(parseCurrencyBRLToNumber(displayPrice) / parseFloat(areaInput)))} / m²
+                          </span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -832,6 +952,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                         style={{ backgroundColor: '#111827' }}
                       />
                     </div>
+
+                    {valuationResult && (
+                      <div className="md:col-span-2">
+                        <PropertyValuationCard
+                          valuation={valuationResult}
+                          currentPrice={parseCurrencyBRLToNumber(displayPrice)}
+                          onApplyPrice={handleApplyValuationPrice}
+                          onClose={() => setValuationResult(null)}
+                          propertyTitle={title || "Novo Imóvel"}
+                        />
+                      </div>
+                    )}
 
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
                       <div className="md:col-span-3 space-y-3">
@@ -909,7 +1041,14 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     <div className="grid grid-cols-2 md:grid-cols-4 md:col-span-2 gap-6">
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Área (m²)</label>
-                        <input name="area" type="number" defaultValue={editingProperty?.area} className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-bold outline-none" />
+                        <input 
+                          name="area" 
+                          type="number" 
+                          value={areaInput}
+                          onChange={(e) => setAreaInput(e.target.value)}
+                          placeholder="Ex: 85"
+                          className="w-full px-5 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" 
+                        />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Dormitórios</label>
@@ -1421,6 +1560,14 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price)}
               </p>
             </div>
+            {property.area > 0 && property.price > 0 && (
+              <div className="text-right">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider leading-none mb-0.5">Média m²</p>
+                <p className="text-xs font-bold text-primary font-mono">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Math.round(property.price / property.area))}/m²
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-border/40">

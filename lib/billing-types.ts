@@ -31,7 +31,8 @@ export function getTenantBillingStatus(
   config: SaaSAdminConfig,
   tenantId: string,
   currentDate = new Date(),
-  tenantCreatedAt?: string
+  tenantCreatedAt?: string,
+  tenantDueDay?: number
 ): BillingStatusResult {
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1;
@@ -40,13 +41,14 @@ export function getTenantBillingStatus(
   const suttleStart = config.suttleStart !== undefined ? config.suttleStart : 1;
   const criticalStart = config.criticalStart !== undefined ? config.criticalStart : 5;
   const blockStart = config.blockStart !== undefined ? config.blockStart : 7;
+  const dueDay = config.dueDays?.[tenantId] ?? tenantDueDay ?? 10;
 
   // 1. Verificação prioritária de bloqueio manual (imediato)
   if (config.blockedTenantIds && config.blockedTenantIds.includes(tenantId)) {
     return {
       status: 'bloqueado',
       diffDays: 99,
-      dueDay: 10,
+      dueDay,
       currentMonthKey,
       dueDate: new Date(),
       suspendedUntilStr: 'Imediatamente (Manual)',
@@ -56,7 +58,6 @@ export function getTenantBillingStatus(
   }
 
   const record = config.payments?.[tenantId] || {};
-  const dueDay = config.dueDays?.[tenantId] ?? 10;
   const todayMidnight = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
 
   // Determinar o mês inicial a ser considerado (não cobrar meses anteriores ao cadastro ou ao histórico existente)
@@ -105,7 +106,8 @@ export function getTenantBillingStatus(
     const isMarkedOverdue = monthStatus === 'atrasado';
 
     if (isPastDue || isMarkedOverdue) {
-      const effectiveOverdueDays = isMarkedOverdue ? Math.max(diffDays, criticalStart) : diffDays;
+      // O atraso em dias considera a diferença real de calendário em relação ao vencimento
+      const effectiveOverdueDays = isMarkedOverdue ? Math.max(diffDays, suttleStart) : diffDays;
       
       if (effectiveOverdueDays >= suttleStart || isMarkedOverdue) {
         overdueInvoicesCount++;
@@ -144,7 +146,22 @@ export function getTenantBillingStatus(
     calculatedStatus = 'aviso_sutil';
   }
 
-  // Data de referência para cálculo da string de suspensão
+  // Se o status final for regular, não há data de suspensão pendente nem meses em atraso
+  if (calculatedStatus === 'regular') {
+    return {
+      status: 'regular',
+      diffDays: 0,
+      dueDay,
+      currentMonthKey,
+      dueDate: new Date(currentYear, currentMonth - 1, dueDay),
+      suspendedUntilStr: '',
+      overdueCount: 0,
+      oldestOverdueMonthKey: undefined,
+      isManuallyUnlocked
+    };
+  }
+
+  // Data de referência para cálculo da string de suspensão somente quando há inadimplência
   const targetDueDate = oldestDueDate || new Date(currentYear, currentMonth - 1, dueDay);
   const suspenseDate = new Date(targetDueDate.getFullYear(), targetDueDate.getMonth(), targetDueDate.getDate() + blockStart, 0, 0, 0);
 
@@ -160,7 +177,7 @@ export function getTenantBillingStatus(
     dueDate: targetDueDate,
     suspendedUntilStr: formattedSuspendedStr,
     overdueCount: overdueInvoicesCount,
-    oldestOverdueMonthKey: oldestMonthKey || currentMonthKey,
+    oldestOverdueMonthKey: oldestMonthKey || undefined,
     isManuallyUnlocked
   };
 }
