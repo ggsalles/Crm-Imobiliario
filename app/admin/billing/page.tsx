@@ -20,6 +20,8 @@ import {
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Filter,
   Eye,
   RefreshCw,
@@ -80,10 +82,18 @@ export default function AdminBillingPage() {
   const [unlockModalTenant, setUnlockModalTenant] = useState<TenantItem | null>(null);
   const [isUnlocking, setIsUnlocking] = useState(false);
 
-  // Period management (default: 6-month block)
-  // periodMode: 'current_6' | 's1_2026' | 's2_2026' | 's1_2025' | 's2_2025' | 'full_year_2026' | 'custom'
-  const [periodMode, setPeriodMode] = useState<string>("current_6");
-  const [monthOffset, setMonthOffset] = useState<number>(0); // In steps of 6 months for custom navigation
+  // Period management (default: 6-month block centered around current month)
+  const [startDate, setStartDate] = useState<Date>(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth() - 4, 1);
+  });
+  const [windowSize, setWindowSize] = useState<number>(6);
+
+  // Dynamic years for presets (automatically adapts on year turnover)
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const prevYear = currentYear - 1;
+  const curYearShort = String(currentYear).slice(-2);
+  const prevYearShort = String(prevYear).slice(-2);
 
   // Dynamic Rule customization states
   const [suttleStart, setSuttleStart] = useState<number>(1);
@@ -132,58 +142,70 @@ export default function AdminBillingPage() {
     }
   }, [profile]);
 
-  // Generate the displayed months based on period selection
+  // Helper to step in months (positive = future, negative = past)
+  const stepMonths = (count: number) => {
+    setStartDate(prev => new Date(prev.getFullYear(), prev.getMonth() + count, 1));
+  };
+
+  // Helper to return to the current month default window
+  const goToCurrentPeriod = () => {
+    const today = new Date();
+    setStartDate(new Date(today.getFullYear(), today.getMonth() - 4, 1));
+    setWindowSize(6);
+  };
+
+  // Helper to select preset (semester 1, 2 or full year 12)
+  const selectPreset = (year: number, semester: 1 | 2 | 12) => {
+    if (semester === 12) {
+      setStartDate(new Date(year, 0, 1));
+      setWindowSize(12);
+    } else if (semester === 1) {
+      setStartDate(new Date(year, 0, 1));
+      setWindowSize(6);
+    } else {
+      setStartDate(new Date(year, 6, 1));
+      setWindowSize(6);
+    }
+  };
+
+  // Check if current month view is active
+  const isCurrentMonthView = useMemo(() => {
+    const today = new Date();
+    const defaultStart = new Date(today.getFullYear(), today.getMonth() - 4, 1);
+    return (
+      windowSize === 6 &&
+      startDate.getFullYear() === defaultStart.getFullYear() &&
+      startDate.getMonth() === defaultStart.getMonth()
+    );
+  }, [startDate, windowSize]);
+
+  // Check if a specific preset is active
+  const isPresetActive = (year: number, semester: 1 | 2 | 12) => {
+    const y = startDate.getFullYear();
+    const m = startDate.getMonth();
+    if (semester === 12) {
+      return windowSize === 12 && y === year && m === 0;
+    }
+    if (semester === 1) {
+      return windowSize === 6 && y === year && m === 0;
+    }
+    return windowSize === 6 && y === year && m === 6;
+  };
+
+  // Generate the displayed months strictly chronologically based on startDate and windowSize
   const displayedMonths = useMemo((): MonthColumn[] => {
     const today = new Date();
     const currentKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-    if (periodMode === "s1_2026") {
-      return [0, 1, 2, 3, 4, 5].map(m => {
-        const key = `2026-${String(m + 1).padStart(2, '0')}`;
-        return { key, label: `${MONTH_NAMES[m]}/26`, isCurrent: key === currentKey };
-      });
-    }
-
-    if (periodMode === "s2_2026") {
-      return [6, 7, 8, 9, 10, 11].map(m => {
-        const key = `2026-${String(m + 1).padStart(2, '0')}`;
-        return { key, label: `${MONTH_NAMES[m]}/26`, isCurrent: key === currentKey };
-      });
-    }
-
-    if (periodMode === "s1_2025") {
-      return [0, 1, 2, 3, 4, 5].map(m => {
-        const key = `2025-${String(m + 1).padStart(2, '0')}`;
-        return { key, label: `${MONTH_NAMES[m]}/25`, isCurrent: key === currentKey };
-      });
-    }
-
-    if (periodMode === "s2_2025") {
-      return [6, 7, 8, 9, 10, 11].map(m => {
-        const key = `2025-${String(m + 1).padStart(2, '0')}`;
-        return { key, label: `${MONTH_NAMES[m]}/25`, isCurrent: key === currentKey };
-      });
-    }
-
-    if (periodMode === "full_year_2026") {
-      return Array.from({ length: 12 }, (_, m) => {
-        const key = `2026-${String(m + 1).padStart(2, '0')}`;
-        return { key, label: `${MONTH_NAMES[m]}/26`, isCurrent: key === currentKey };
-      });
-    }
-
-    // Default: 'current_6' or 'custom' with monthOffset (sliding window of 6 months)
-    // Base is 4 months past + current month + 1 future month, shifted by monthOffset
-    const baseOffset = monthOffset * 6;
     const list: MonthColumn[] = [];
-    for (let i = 4 - baseOffset; i >= -1 - baseOffset; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+
+    for (let i = 0; i < windowSize; i++) {
+      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = `${MONTH_NAMES[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`;
       list.push({ key, label, isCurrent: key === currentKey });
     }
     return list;
-  }, [periodMode, monthOffset]);
+  }, [startDate, windowSize]);
 
   // Period label description
   const periodDescription = useMemo(() => {
@@ -882,7 +904,7 @@ export default function AdminBillingPage() {
                   <h2 className="text-xs sm:text-sm font-bold tracking-tight text-slate-100 flex items-center gap-2">
                     Lista de Clientes & Histórico de Parcelas
                     <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-normal">
-                      6 em 6 meses
+                      {windowSize === 12 ? "Ano Completo (12M)" : "6 em 6 meses"}
                     </span>
                   </h2>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -937,44 +959,54 @@ export default function AdminBillingPage() {
               {/* Period Selector and 6-Month Navigation */}
               <div className="pt-2 border-t border-slate-900/60 flex flex-wrap items-center justify-between gap-2 text-xs">
                 
-                {/* 6-Month Stepper Navigation */}
+                {/* Stepper Navigation */}
                 <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-800 rounded-lg p-0.5">
                   <button
-                    onClick={() => {
-                      setPeriodMode("custom");
-                      setMonthOffset(prev => prev + 1);
-                    }}
-                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px]"
-                    title="Retroceder 6 meses no tempo"
+                    onClick={() => stepMonths(-6)}
+                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-0.5 font-bold text-[10px]"
+                    title="Retroceder 6 meses no tempo (-6 Meses)"
                   >
-                    <ChevronLeft className="w-3 h-3" />
+                    <ChevronsLeft className="w-3.5 h-3.5" />
                     <span>6 Meses Ant.</span>
                   </button>
 
                   <button
-                    onClick={() => {
-                      setPeriodMode("current_6");
-                      setMonthOffset(0);
-                    }}
+                    onClick={() => stepMonths(-1)}
+                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-0.5 font-bold text-[10px]"
+                    title="Retroceder 1 mês (-1 Mês)"
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                    <span className="hidden sm:inline">Mês Ant.</span>
+                  </button>
+
+                  <button
+                    onClick={goToCurrentPeriod}
                     className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
-                      periodMode === "current_6" && monthOffset === 0
-                        ? "bg-indigo-600 text-white" 
+                      isCurrentMonthView
+                        ? "bg-indigo-600 text-white shadow-xs" 
                         : "text-slate-300 hover:bg-slate-800 hover:text-white"
                     }`}
+                    title="Retornar para o período atual (centralizado no mês de hoje)"
                   >
                     Mês Atual
                   </button>
 
                   <button
-                    onClick={() => {
-                      setPeriodMode("custom");
-                      setMonthOffset(prev => prev - 1);
-                    }}
-                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-1 font-bold text-[10px]"
-                    title="Avançar 6 meses no tempo"
+                    onClick={() => stepMonths(1)}
+                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-0.5 font-bold text-[10px]"
+                    title="Avançar 1 mês (+1 Mês)"
+                  >
+                    <span className="hidden sm:inline">Próx. Mês</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+
+                  <button
+                    onClick={() => stepMonths(6)}
+                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer flex items-center gap-0.5 font-bold text-[10px]"
+                    title="Avançar 6 meses no tempo (+6 Meses)"
                   >
                     <span>Próximos 6M</span>
-                    <ChevronRight className="w-3 h-3" />
+                    <ChevronsRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
@@ -983,47 +1015,75 @@ export default function AdminBillingPage() {
                   <span className="text-[10px] text-slate-500 font-mono mr-0.5">Período:</span>
                   
                   <button
-                    onClick={() => { setPeriodMode("s1_2026"); setMonthOffset(0); }}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border ${
-                      periodMode === "s1_2026" 
-                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300" 
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    onClick={() => selectPreset(currentYear, 1)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(currentYear, 1)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                     }`}
+                    title={`1º Semestre de ${currentYear} (Jan a Jun/${curYearShort})`}
                   >
-                    1º Sem/26
+                    1º Sem/{curYearShort}
                   </button>
 
                   <button
-                    onClick={() => { setPeriodMode("s2_2026"); setMonthOffset(0); }}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border ${
-                      periodMode === "s2_2026" 
-                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300" 
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    onClick={() => selectPreset(currentYear, 2)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(currentYear, 2)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                     }`}
+                    title={`2º Semestre de ${currentYear} (Jul a Dez/${curYearShort})`}
                   >
-                    2º Sem/26
+                    2º Sem/{curYearShort}
                   </button>
 
                   <button
-                    onClick={() => { setPeriodMode("full_year_2026"); setMonthOffset(0); }}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border ${
-                      periodMode === "full_year_2026" 
-                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300" 
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    onClick={() => selectPreset(currentYear, 12)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(currentYear, 12)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                     }`}
+                    title={`Ano Completo de ${currentYear} (12 Meses)`}
                   >
-                    Ano 2026
+                    Ano {currentYear}
                   </button>
 
                   <button
-                    onClick={() => { setPeriodMode("s2_2025"); setMonthOffset(0); }}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border ${
-                      periodMode === "s2_2025" 
-                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300" 
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    onClick={() => selectPreset(prevYear, 2)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(prevYear, 2)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                     }`}
+                    title={`2º Semestre de ${prevYear} (Jul a Dez/${prevYearShort})`}
                   >
-                    2º Sem/25
+                    2º Sem/{prevYearShort}
+                  </button>
+
+                  <button
+                    onClick={() => selectPreset(prevYear, 1)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(prevYear, 1)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                    }`}
+                    title={`1º Semestre de ${prevYear} (Jan a Jun/${prevYearShort})`}
+                  >
+                    1º Sem/{prevYearShort}
+                  </button>
+
+                  <button
+                    onClick={() => selectPreset(prevYear, 12)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all border cursor-pointer ${
+                      isPresetActive(prevYear, 12)
+                        ? "bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-xs" 
+                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                    }`}
+                    title={`Ano Completo de ${prevYear} (12 Meses)`}
+                  >
+                    Ano {prevYear}
                   </button>
                 </div>
               </div>
