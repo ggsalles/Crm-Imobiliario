@@ -796,20 +796,28 @@ function DashboardContent() {
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
         {/* Header */}
-        <header className="h-auto md:h-16 lg:h-18 bg-card/80 backdrop-blur-md border-b border-border px-4 md:px-6 py-3 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-3">
-          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-8 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <h2 className="text-base md:text-lg font-black text-foreground shrink-0">Dashboard</h2>
-                <p className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider leading-none">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
+        <header className="h-auto md:h-16 lg:h-18 bg-card/80 backdrop-blur-md border-b border-border px-3 sm:px-4 md:px-6 py-2.5 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-20 gap-2.5 md:gap-3">
+          <div className="flex flex-col md:flex-row md:items-center gap-2.5 md:gap-8 flex-1">
+            {/* Top row with Title, Greeting, Reload and Sound Button on Mobile */}
+            <div className="flex items-center justify-between pl-11 sm:pl-12 md:pl-0 w-full md:w-auto">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="flex flex-col">
+                  <h2 className="text-base md:text-lg font-black text-foreground shrink-0 leading-tight">Dashboard</h2>
+                  <p className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider leading-none mt-0.5">Bem-vindo, {profile?.displayName?.split(' ')[0]}</p>
+                </div>
+                <button 
+                  onClick={() => refreshData()}
+                  className="p-1.5 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-primary cursor-pointer"
+                  title="Recarregar Dados"
+                >
+                  <TrendingUp className={cn("w-4 h-4", loading && "animate-pulse")} />
+                </button>
               </div>
-              <button 
-                onClick={() => refreshData()}
-                className="p-1.5 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
-                title="Recarregar Dados"
-              >
-                <TrendingUp className={cn("w-4 h-4", loading && "animate-pulse")} />
-              </button>
+
+              {/* Mobile quick sound control */}
+              <div className="flex items-center gap-2 md:hidden">
+                <SoundControlButton />
+              </div>
             </div>
             
             {errorStatus && (
@@ -850,7 +858,7 @@ function DashboardContent() {
             </nav>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-border">
+          <div className="hidden md:flex items-center justify-end gap-3">
             <SoundControlButton />
           </div>
         </header>

@@ -531,7 +531,7 @@ export default function PipelinePage() {
       <main className="flex-1 flex flex-col min-w-0">
         <header className="px-4 py-3 md:px-6 md:py-3.5 bg-card/15 border-b border-border/50">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2.5 gap-3">
-            <div>
+            <div className="pl-11 sm:pl-12 md:pl-0">
               <h1 className="text-xl md:text-2xl font-black tracking-tight">Pipeline de Vendas</h1>
               <p className="text-muted-foreground text-xs font-medium">Visualize e gerencie seus negócios em andamento.</p>
             </div>
@@ -596,12 +596,12 @@ export default function PipelinePage() {
               />
             </div>
 
-            {/* Health Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0">
+            {/* Health Filter Chips - Wraps gracefully on mobile so all options remain visible */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 sm:pt-0">
               <button
                 onClick={() => setHealthFilter('all')}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
                   healthFilter === 'all'
                     ? "bg-foreground text-background border-foreground shadow-xs"
                     : "bg-card border-border text-muted-foreground hover:bg-muted"
@@ -612,7 +612,7 @@ export default function PipelinePage() {
               <button
                 onClick={() => setHealthFilter('active')}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
                   healthFilter === 'active'
                     ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                     : "bg-card border-border text-muted-foreground hover:bg-muted"
@@ -624,7 +624,7 @@ export default function PipelinePage() {
               <button
                 onClick={() => setHealthFilter('stale')}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                  "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
                   healthFilter === 'stale'
                     ? "bg-amber-500 text-white border-amber-500 shadow-xs"
                     : "bg-card border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
@@ -645,7 +645,7 @@ export default function PipelinePage() {
                 <button
                   onClick={() => setHealthFilter('critical')}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                    "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
                     healthFilter === 'critical'
                       ? "bg-rose-600 text-white border-rose-600 shadow-xs"
                       : "bg-card border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
@@ -659,7 +659,7 @@ export default function PipelinePage() {
                 <button
                   onClick={() => setHealthFilter('lost')}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                    "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer",
                     healthFilter === 'lost'
                       ? "bg-rose-800 text-white border-rose-800 shadow-xs"
                       : "bg-card border-border text-muted-foreground hover:bg-muted"

@@ -85,15 +85,15 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Toggle Button */}
-      <div className="fixed top-4 left-4 z-40 md:hidden">
+      <div className="fixed top-2.5 left-2.5 z-40 md:hidden">
         <button 
           onClick={() => setIsMobileMenuOpen(true)}
-          className="p-3 bg-[#0f172a] text-white rounded-xl shadow-xl border border-white/10 relative"
+          className="p-2 bg-card/95 hover:bg-card text-foreground rounded-xl shadow-md border border-border backdrop-blur-md flex items-center justify-center relative cursor-pointer active:scale-95 transition-all"
           aria-label="Abrir menu de navegação"
         >
-          <Menu className="w-6 h-6" />
+          <Menu className="w-5 h-5 text-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-lg shadow-red-500/50 animate-pulse border-2 border-[#0f172a]">
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-red-500 text-[9px] font-black text-white shadow-lg shadow-red-500/50 animate-pulse border-2 border-background">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
