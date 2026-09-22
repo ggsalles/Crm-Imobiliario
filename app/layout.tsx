@@ -6,6 +6,7 @@ import { AuthProvider } from "@/providers/auth-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { DatabaseStatusBanner } from "@/components/DatabaseStatusBanner";
 import { BillingAlertBanner } from "@/components/BillingAlertBanner";
+import { NewLeadSoundNotifier } from "@/components/NewLeadSoundNotifier";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
           <AuthProvider>
             <DatabaseStatusBanner />
             <BillingAlertBanner />
+            <NewLeadSoundNotifier />
             {children}
             <Toaster position="top-right" />
           </AuthProvider>

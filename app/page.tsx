@@ -101,6 +101,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { Suspense } from "react";
 import { IntelligenceWidget } from "@/components/IntelligenceWidget";
+import { SoundControlButton } from "@/components/NewLeadSoundNotifier";
 
 const STAGES = [
   { id: "lead", title: "Novo Lead", color: "blue" },
@@ -849,8 +850,8 @@ function DashboardContent() {
             </nav>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-4 md:pt-0 border-border">
-            {/* Notifications removed as per user request */}
+          <div className="flex items-center justify-between md:justify-end gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-border">
+            <SoundControlButton />
           </div>
         </header>
 

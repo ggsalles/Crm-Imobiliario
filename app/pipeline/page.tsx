@@ -32,6 +32,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { SoundControlButton } from "@/components/NewLeadSoundNotifier";
 import { 
   Deal, 
   Company, 
@@ -557,6 +558,7 @@ export default function PipelinePage() {
                   <Plus className="w-3.5 h-3.5" />
                   Novo Negócio
                 </button>
+                <SoundControlButton />
               </div>
               
               {/* Goal Progress Bar */}
