@@ -616,6 +616,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setFilterType("all");
     setSelectedFilterTags([]);
     setOnlyFeaturedFilter(false);
+    recordAuditEvent({
+      action: 'SEARCH_PROPERTIES',
+      title: 'Limpeza de Filtros do Catálogo',
+      content: 'Usuário limpou todos os filtros aplicados no catálogo de imóveis.',
+      severity: 'low',
+      category: 'modification'
+    });
   }, []);
 
   const handleToggleFeatured = async (property: Property) => {
@@ -1150,7 +1157,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                           </label>
                           <select
                             value={selectedNeighborhood}
-                            onChange={(e) => setSelectedNeighborhood(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedNeighborhood(val);
+                              recordAuditEvent({
+                                action: 'SEARCH_PROPERTIES',
+                                title: val === 'all' ? 'Filtro de Bairro Removido' : `Filtro por Bairro: ${val}`,
+                                content: val === 'all' 
+                                  ? 'Filtro de localização por bairro desativado.' 
+                                  : `Usuário filtrou imóveis situados no bairro: "${val}".`,
+                                severity: 'low',
+                                category: 'modification',
+                                metadata: {
+                                  neighborhood: val
+                                }
+                              });
+                            }}
                             className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                           >
                             <option value="all">Todos os bairros ({availableNeighborhoods.length})</option>
@@ -1171,6 +1193,20 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                               placeholder="Ex: Av. Brasil, Rua 15..."
                               value={searchStreet}
                               onChange={(e) => setSearchStreet(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && searchStreet.trim().length >= 2) {
+                                  recordAuditEvent({
+                                    action: 'SEARCH_PROPERTIES',
+                                    title: 'Filtro por Logradouro / Rua',
+                                    content: `Filtro de rua aplicado: "${searchStreet.trim()}".`,
+                                    severity: 'low',
+                                    category: 'modification',
+                                    metadata: {
+                                      street: searchStreet.trim()
+                                    }
+                                  });
+                                }
+                              }}
                               className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-medium text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                             />
                             {searchStreet && (
@@ -1201,7 +1237,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                               <button
                                 key={item.id}
                                 type="button"
-                                onClick={() => setBedroomsFilter(item.id)}
+                                onClick={() => {
+                                  if (bedroomsFilter === item.id) return;
+                                  setBedroomsFilter(item.id);
+                                  recordAuditEvent({
+                                    action: 'SEARCH_PROPERTIES',
+                                    title: item.id === 'all' ? 'Filtro de Quartos Resetado' : `Filtro por Quartos: ${item.label}`,
+                                    content: item.id === 'all'
+                                      ? 'Filtro por dormitórios resetado.'
+                                      : `Usuário filtrou imóveis com no mínimo ${item.label} dormitórios.`,
+                                    severity: 'low',
+                                    category: 'modification',
+                                    metadata: {
+                                      bedrooms: item.id
+                                    }
+                                  });
+                                }}
                                 className={cn(
                                   "py-1.5 rounded-lg text-xs font-bold transition-all text-center border cursor-pointer",
                                   bedroomsFilter === item.id
@@ -1229,7 +1280,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                               <button
                                 key={item.id}
                                 type="button"
-                                onClick={() => setParkingFilter(item.id)}
+                                onClick={() => {
+                                  if (parkingFilter === item.id) return;
+                                  setParkingFilter(item.id);
+                                  recordAuditEvent({
+                                    action: 'SEARCH_PROPERTIES',
+                                    title: item.id === 'all' ? 'Filtro de Vagas Resetado' : `Filtro por Vagas: ${item.label}`,
+                                    content: item.id === 'all'
+                                      ? 'Filtro por vagas de garagem resetado.'
+                                      : `Usuário filtrou imóveis com no mínimo ${item.label} vagas de garagem.`,
+                                    severity: 'low',
+                                    category: 'modification',
+                                    metadata: {
+                                      parking: item.id
+                                    }
+                                  });
+                                }}
                                 className={cn(
                                   "py-1.5 rounded-lg text-xs font-bold transition-all text-center border cursor-pointer",
                                   parkingFilter === item.id
@@ -1449,7 +1515,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     {filterType !== "all" && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
                         <span>Tipo: {filterType}</span>
-                        <button type="button" onClick={() => setFilterType("all")} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setFilterType("all");
+                            recordAuditEvent({
+                              action: 'SEARCH_PROPERTIES',
+                              title: 'Filtro de Tipo Removido',
+                              content: 'Filtro de categoria de imóvel desativado (exibindo todas as tipologias).',
+                              severity: 'low',
+                              category: 'modification'
+                            });
+                          }} 
+                          className="hover:opacity-70"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
                       </span>
                     )}
                   </div>
@@ -1479,7 +1560,24 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   return (
                     <button
                       key={type.id}
-                      onClick={() => setFilterType(type.id)}
+                      onClick={() => {
+                        if (filterType === type.id) return;
+                        setFilterType(type.id);
+                        recordAuditEvent({
+                          action: 'SEARCH_PROPERTIES',
+                          title: type.id === 'all' ? 'Filtro por Tipo: Todos os Imóveis' : `Filtro por Categoria: ${type.label}`,
+                          content: type.id === 'all'
+                            ? 'Filtro de categoria resetado para exibir todas as tipologias de imóveis.'
+                            : `Usuário aplicou filtro por tipo de unidade: "${type.label}" (${count} disponíveis no inventário).`,
+                          severity: 'low',
+                          category: 'modification',
+                          metadata: {
+                            category: type.id,
+                            label: type.label,
+                            count
+                          }
+                        });
+                      }}
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all cursor-pointer",
                         isActive 
