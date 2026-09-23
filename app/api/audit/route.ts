@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser } from '@/lib/server-auth';
 import { isPlatformAdmin } from '@/lib/constants';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || '';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,14 +99,50 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase(req);
-    const authUser = getAuthenticatedUser(req);
     const body = await req.json();
 
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
                      req.headers.get('x-real-ip') || 
                      '127.0.0.1';
     const userAgent = req.headers.get('user-agent') || body.metadata?.userAgent || 'Desconhecido';
+
+    // 1. Resolve token from header or body
+    const rawHeader = req.headers.get('Authorization');
+    const token = (rawHeader?.startsWith('Bearer ') ? rawHeader.substring(7) : (body.token || '')).trim();
+    const effectiveAuthHeader = token ? `Bearer ${token}` : rawHeader;
+
+    // 2. Build authenticated Supabase client
+    let supabase: any;
+    if (supabaseServiceKey) {
+      supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+    } else if (effectiveAuthHeader) {
+      supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: effectiveAuthHeader } },
+        auth: { persistSession: false }
+      });
+    } else {
+      supabase = getSupabase(req);
+    }
+
+    // 3. Resolve authenticated user from JWT token
+    let authUser = getAuthenticatedUser(req);
+    if (!authUser && token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+          const payload = JSON.parse(payloadJson);
+          if (payload?.sub) {
+            authUser = {
+              id: payload.sub,
+              email: payload.email,
+              role: payload.role
+            };
+          }
+        }
+      } catch {}
+    }
 
     let userId = authUser?.id || body.userId;
     let tenantId = body.tenantId;
@@ -168,15 +209,15 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from('timeline')
       .insert(insertPayload)
-      .select()
-      .single();
+      .select('id');
 
     if (error) {
       console.warn('[API/Audit] Falha ao gravar log na timeline:', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, logId: data.id });
+    const logId = Array.isArray(data) && data[0]?.id ? data[0].id : null;
+    return NextResponse.json({ success: true, logId });
   } catch (error: any) {
     console.error('[API/Audit] POST Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

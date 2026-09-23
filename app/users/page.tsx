@@ -248,6 +248,22 @@ export default function UsersPage() {
         tenantId: currentTenantId,
         tenantIds: newUserData.tenantIds && newUserData.tenantIds.length > 0 ? newUserData.tenantIds : [currentTenantId]
       });
+
+      recordAuditEvent({
+        action: 'CREATE_USER',
+        title: 'Cadastro de Novo Usuário',
+        content: `Novo usuário/corretor "${newUserData.displayName}" (${newUserData.email}) cadastrado no sistema com o perfil "${newUserData.role}".`,
+        severity: 'high',
+        category: 'modification',
+        entityType: 'user',
+        metadata: {
+          displayName: newUserData.displayName,
+          email: newUserData.email,
+          role: newUserData.role,
+          tenantId: currentTenantId
+        }
+      });
+
       setShowAddModal(false);
       setNewUserData({ 
         displayName: "", 

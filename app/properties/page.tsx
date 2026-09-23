@@ -696,6 +696,21 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
   const handleEdit = useCallback((property: Property) => {
     setEditingProperty(property);
     setView('form');
+    recordAuditEvent({
+      action: 'VIEW_PROPERTY_DETAILS',
+      title: 'Consulta a Ficha do Imóvel',
+      content: `Usuário consultou os dados cadastrais do imóvel "${property.title}".`,
+      severity: 'low',
+      category: 'modification',
+      relatedId: property.id,
+      entityId: property.id,
+      entityType: 'property',
+      metadata: {
+        title: property.title,
+        price: property.price,
+        location: property.location
+      }
+    });
   }, []);
 
   const processFiles = useCallback(async (incomingFiles: FileList | File[]) => {
@@ -875,8 +890,40 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       console.log("[Properties] Enviando para o banco de dados...");
       if (isEditing && currentPropertyId) {
         await updateProperty(currentPropertyId, data, user.id);
+        recordAuditEvent({
+          action: 'UPDATE_PROPERTY',
+          title: 'Edição de Imóvel',
+          content: `Imóvel "${data.title}" foi editado e atualizado no catálogo.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: currentPropertyId,
+          entityId: currentPropertyId,
+          entityType: 'property',
+          metadata: {
+            title: data.title,
+            price: data.price,
+            location: data.location,
+            type: data.type
+          }
+        });
       } else {
-        await createProperty(data, user.id);
+        const newId = await createProperty(data, user.id);
+        recordAuditEvent({
+          action: 'CREATE_PROPERTY',
+          title: 'Cadastro de Novo Imóvel',
+          content: `Novo imóvel "${data.title}" cadastrado com sucesso no catálogo.`,
+          severity: 'info',
+          category: 'modification',
+          relatedId: newId || undefined,
+          entityId: newId || undefined,
+          entityType: 'property',
+          metadata: {
+            title: data.title,
+            price: data.price,
+            location: data.location,
+            type: data.type
+          }
+        });
       }
       
       console.log("[Properties] Sucesso absoluto!");
@@ -2296,6 +2343,20 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       const publicUrl = `${window.location.origin}/p/${sharingProperty.id}`;
                       navigator.clipboard.writeText(publicUrl);
                       toast.success("Link público de captura copiado!");
+                      recordAuditEvent({
+                        action: 'SHARE_PROPERTY_LINK',
+                        title: 'Link Público Copiado',
+                        content: `Link público da vitrine do imóvel "${sharingProperty.title}" copiado para divulgação.`,
+                        severity: 'low',
+                        category: 'modification',
+                        relatedId: sharingProperty.id,
+                        entityId: sharingProperty.id,
+                        entityType: 'property',
+                        metadata: {
+                          propertyTitle: sharingProperty.title,
+                          publicUrl
+                        }
+                      });
                     }
                   }}
                   className="px-4 py-2 bg-primary hover:bg-opacity-95 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
@@ -2309,6 +2370,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   onClick={() => {
                     navigator.clipboard.writeText(sharingText);
                     toast.success("Ficha do imóvel copiada!");
+                    if (sharingProperty) {
+                      recordAuditEvent({
+                        action: 'SHARE_PROPERTY_LINK',
+                        title: 'Ficha WhatsApp Gerada',
+                        content: `Ficha para WhatsApp do imóvel "${sharingProperty.title}" gerada e copiada.`,
+                        severity: 'low',
+                        category: 'modification',
+                        relatedId: sharingProperty.id,
+                        entityId: sharingProperty.id,
+                        entityType: 'property',
+                        metadata: {
+                          propertyTitle: sharingProperty.title,
+                          type: 'whatsapp'
+                        }
+                      });
+                    }
                   }}
                   className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
                 >
@@ -2425,6 +2502,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                           : (profile?.tenantId ? `${baseUrl}/vitrine?tenant=${profile.tenantId}` : `${baseUrl}/vitrine`);
                         navigator.clipboard.writeText(url);
                         toast.success("Link da vitrine copiado!");
+                        recordAuditEvent({
+                          action: 'SHARE_PROPERTY_LINK',
+                          title: 'Link da Vitrine Copiado',
+                          content: `Link da vitrine pública de imóveis copiado (${vitrineShareMode === 'broker' ? 'modo corretor' : 'modo geral'}).`,
+                          severity: 'low',
+                          category: 'modification',
+                          metadata: {
+                            type: 'vitrine_url',
+                            mode: vitrineShareMode,
+                            url
+                          }
+                        });
                       }}
                       className="px-3.5 py-2 bg-primary text-white hover:opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
                     >

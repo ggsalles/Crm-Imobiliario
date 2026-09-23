@@ -278,6 +278,23 @@ function ContactsContent() {
       if (editingContact) {
         await updateContact(editingContact.id, data);
         
+        recordAuditEvent({
+          action: 'UPDATE_CONTACT',
+          title: 'Edição de Dados de Contato',
+          content: `Dados do contato "${data.name}" foram atualizados.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: editingContact.id,
+          entityId: editingContact.id,
+          entityType: 'contact',
+          metadata: {
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            type: activeTab
+          }
+        });
+
         // Track temperature change for timeline
         if (activeTab === 'cliente' && editingContact.temperature !== data.temperature) {
           const tempLabels: Record<string, string> = {
@@ -318,6 +335,23 @@ function ContactsContent() {
 
         const contactId = await createContact(data);
         if (contactId) {
+          recordAuditEvent({
+            action: 'CREATE_CONTACT',
+            title: 'Cadastro de Novo Contato',
+            content: `Novo contato "${data.name}" (${data.email || 'sem email'}) cadastrado.`,
+            severity: 'info',
+            category: 'modification',
+            relatedId: contactId,
+            entityId: contactId,
+            entityType: 'contact',
+            metadata: {
+              name: data.name,
+              email: data.email,
+              phone: data.phone,
+              type: activeTab
+            }
+          });
+
           await createTimelineEvent({
             type: 'system',
             category: 'contact',

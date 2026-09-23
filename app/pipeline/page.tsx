@@ -266,6 +266,22 @@ export default function PipelinePage() {
       // Log stage change
       const stageName = STAGES.find(s => s.id === newStage)?.title || newStage;
       const deal = deals.find(d => d.id === draggableId);
+
+      recordAuditEvent({
+        action: 'UPDATE_DEAL_STAGE',
+        title: 'Movimentação no Funil de Vendas',
+        content: `Oportunidade "${deal?.title || draggableId}" movida para o estágio "${stageName}".`,
+        severity: 'low',
+        category: 'modification',
+        relatedId: draggableId,
+        entityId: draggableId,
+        entityType: 'deal',
+        metadata: {
+          title: deal?.title,
+          newStage: stageName,
+          value: deal?.value
+        }
+      });
       
       await createTimelineEvent({
         type: 'system',
@@ -403,12 +419,45 @@ export default function PipelinePage() {
     try {
       if (editingDeal?.id) {
         await updateDeal(editingDeal.id, data);
+        
+        recordAuditEvent({
+          action: 'UPDATE_DEAL',
+          title: 'Edição de Oportunidade / Negócio',
+          content: `Negócio "${data.title}" (R$ ${data.value || 0}) foi atualizado.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: editingDeal.id,
+          entityId: editingDeal.id,
+          entityType: 'deal',
+          metadata: {
+            title: data.title,
+            value: data.value,
+            stage: data.stage
+          }
+        });
+
         toast.success("Negócio atualizado!");
       } else {
         const dealId = await createDeal(data);
         if (dealId) {
           const stageName = STAGES.find(s => s.id === data.stage)?.title || data.stage;
           
+          recordAuditEvent({
+            action: 'CREATE_DEAL',
+            title: 'Abertura de Nova Oportunidade',
+            content: `Novo negócio "${data.title}" (R$ ${data.value || 0}) aberto no estágio "${stageName}".`,
+            severity: 'info',
+            category: 'modification',
+            relatedId: dealId,
+            entityId: dealId,
+            entityType: 'deal',
+            metadata: {
+              title: data.title,
+              value: data.value,
+              stage: stageName
+            }
+          });
+
           await createTimelineEvent({
             type: 'system',
             category: 'deal',

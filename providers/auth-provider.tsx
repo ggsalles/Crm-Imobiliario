@@ -248,6 +248,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (event === 'SIGNED_IN' && session?.user) {
+        const lastAudit = typeof window !== 'undefined' ? Number(sessionStorage.getItem('last_login_audit_timestamp') || '0') : 0;
+        if (Date.now() - lastAudit > 12000) {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('last_login_audit_timestamp', String(Date.now()));
+          }
+          recordAuditEvent({
+            action: 'LOGIN_SUCCESS',
+            title: 'Autenticação no Sistema',
+            content: `Usuário autenticado com sucesso: ${session.user.email || 'Usuário'}`,
+            severity: 'info',
+            category: 'auth',
+            userId: session.user.id,
+            userName: session.user.user_metadata?.display_name || session.user.email?.split('@')[0],
+            userEmail: session.user.email || '',
+            tenantId: session.user.user_metadata?.tenant_id,
+            token: session.access_token
+          }).catch(() => {});
+        }
+      }
+
       if (session) {
         if (!authInitializedRef.current) {
           await handleInitialSession(session);
@@ -912,15 +933,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
     }
 
-    // Record login audit event
-    recordAuditEvent({
-      action: 'LOGIN_SUCCESS',
-      title: 'Autenticação no Sistema',
-      content: `Usuário efetuou login com sucesso: ${cleanEmail}`,
-      severity: 'info',
-      category: 'auth',
-      userEmail: cleanEmail
-    });
+    const authData = authResult.data;
+    const authUser = authData?.user;
+    const authSession = authData?.session;
+    const token = authSession?.access_token;
+    const userId = authUser?.id || (preRegResult.preRegisteredUser?.id !== 'admin' ? preRegResult.preRegisteredUser?.id : undefined);
+    const tenantId = authUser?.user_metadata?.tenant_id || preRegResult.preRegisteredUser?.tenant_id;
+    const userName = authUser?.user_metadata?.display_name || preRegResult.preRegisteredUser?.display_name || cleanEmail.split('@')[0];
+
+    // Ensure session is stored in safeStorage immediately so subsequent client calls have it
+    if (authSession) {
+      try {
+        sessionStorage.setItem('crm-imob-session-v5', JSON.stringify(authSession));
+        sessionStorage.setItem('last_login_audit_timestamp', String(Date.now()));
+      } catch {}
+    }
+
+    // Record login audit event and AWAIT it so it finishes before router.push navigates
+    try {
+      await recordAuditEvent({
+        action: 'LOGIN_SUCCESS',
+        title: 'Autenticação no Sistema',
+        content: `Usuário efetuou login com sucesso: ${cleanEmail}`,
+        severity: 'info',
+        category: 'auth',
+        userId,
+        userName,
+        userEmail: cleanEmail,
+        tenantId,
+        token
+      });
+    } catch (auditErr) {
+      console.warn("[AuthProvider] Falha ao registrar log de login:", auditErr);
+    }
   };
 
   const resolveOrCreateTenant = async (email: string, companyName: string): Promise<string> => {

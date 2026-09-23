@@ -344,6 +344,21 @@ export default function ContactDetail360Page() {
         temperature: formTemperature
       });
 
+      recordAuditEvent({
+        action: 'UPDATE_CONTACT',
+        title: 'Atualização de Perfil de Interesse',
+        content: `Perfil de busca e preferências do contato "${contact.name}" foram atualizados.`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: contact.id,
+        entityId: contact.id,
+        entityType: 'contact',
+        metadata: {
+          contactName: contact.name,
+          temperature: formTemperature
+        }
+      });
+
       const refreshed = await getContact(id);
       setContact(refreshed);
       
