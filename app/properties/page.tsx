@@ -38,7 +38,8 @@ import {
   RotateCcw,
   Building2,
   Globe,
-  Tag
+  Tag,
+  Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
@@ -51,6 +52,7 @@ import {
   createProperty, 
   updateProperty, 
   deleteProperty, 
+  togglePropertyFeatured,
   uploadFile,
   Property,
   getContacts,
@@ -82,8 +84,10 @@ export default function PropertiesPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
+  const [onlyFeaturedFilter, setOnlyFeaturedFilter] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [title, setTitle] = useState("");
+  const [isFeatured, setIsFeatured] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -288,6 +292,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       setCep(formatCEP(editingProperty?.cep || ""));
       setAreaInput(editingProperty?.area ? String(editingProperty.area) : "");
       setSelectedTags(editingProperty?.tags || []);
+      setIsFeatured(Boolean(editingProperty?.isFeatured));
       setCustomTagInput("");
       setValuationResult(null);
     }
@@ -464,6 +469,11 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     const maxPriceNum = displayMaxPrice ? parseCurrencyBRLToNumber(displayMaxPrice) : 0;
 
     return properties.filter((p) => {
+      // 0. Filtro de Imóveis em Destaque
+      if (onlyFeaturedFilter && !p.isFeatured) {
+        return false;
+      }
+
       // 1. Universal Omni-Search (Title, Building/Condo, Street, Neighborhood, City, Code/ID)
       if (query) {
         const matchesTitle = (p.title || "").toLowerCase().includes(query);
@@ -562,7 +572,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     displayMaxPrice,
     bedroomsFilter,
     parkingFilter,
-    selectedFilterTags
+    selectedFilterTags,
+    onlyFeaturedFilter
   ]);
 
   const activeFiltersCount = useMemo(() => {
@@ -576,6 +587,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     if (parkingFilter !== "all") count++;
     if (statusFilter !== "all") count++;
     if (filterType !== "all") count++;
+    if (onlyFeaturedFilter) count++;
     if (selectedFilterTags.length > 0) count += selectedFilterTags.length;
     return count;
   }, [
@@ -588,7 +600,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     parkingFilter,
     statusFilter,
     filterType,
-    selectedFilterTags
+    selectedFilterTags,
+    onlyFeaturedFilter
   ]);
 
   const clearAllFilters = useCallback(() => {
@@ -602,7 +615,30 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setStatusFilter("all");
     setFilterType("all");
     setSelectedFilterTags([]);
+    setOnlyFeaturedFilter(false);
   }, []);
+
+  const handleToggleFeatured = async (property: Property) => {
+    const nextVal = !property.isFeatured;
+    // Otimisticamente atualiza na tela
+    setProperties(prev => prev.map(p => p.id === property.id ? { ...p, isFeatured: nextVal } : p));
+    try {
+      await togglePropertyFeatured(property.id, nextVal);
+      toast.success(nextVal ? "Imóvel marcado como Destaque!" : "Imóvel removido dos Destaques.");
+      recordAuditEvent({
+        action: 'UPDATE_PROPERTY',
+        title: nextVal ? 'Imóvel Destacado' : 'Destaque Removido',
+        content: `Imóvel "${property.title}" ${nextVal ? 'foi destacado na vitrine.' : 'teve o destaque removido.'}`,
+        severity: 'low',
+        entityId: property.id,
+        entityType: 'property'
+      });
+    } catch (err: any) {
+      // Reverter atualização otimista em caso de erro
+      setProperties(prev => prev.map(p => p.id === property.id ? { ...p, isFeatured: property.isFeatured } : p));
+      toast.error("Não foi possível atualizar o status de destaque.");
+    }
+  };
 
   const setPricePreset = useCallback((min: number | null, max: number | null) => {
     setDisplayMinPrice(min ? formatCurrencyBRL(min) : "");
@@ -827,6 +863,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         bathrooms: Number(formData.get("bathrooms") || 0),
         parkingSpots: Number(formData.get("parkingSpots") || 0),
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
+        isFeatured: formData.get("isFeatured") === "on" || isFeatured,
         notes: String(formData.get("notes") || "").substring(0, 2000),
         description: String(formData.get("description") || "").substring(0, 5000),
         tags: selectedTags,
@@ -848,6 +885,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       
       setEditingProperty(null);
       setSelectedTags([]);
+      setIsFeatured(false);
       setCustomTagInput("");
       setImageUrls([]);
       setView('list');
@@ -963,6 +1001,21 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
 
                   {/* Botões de Ação de Filtragem */}
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setOnlyFeaturedFilter(!onlyFeaturedFilter)}
+                      className={cn(
+                        "flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer",
+                        onlyFeaturedFilter
+                          ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                          : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-amber-500 border-border"
+                      )}
+                      title={onlyFeaturedFilter ? "Exibindo apenas destaques (clique para ver todos)" : "Filtrar apenas imóveis em destaque / melhores oportunidades"}
+                    >
+                      <Star className={cn("w-3.5 h-3.5", onlyFeaturedFilter ? "fill-white text-white" : "text-amber-500")} />
+                      <span className="hidden sm:inline">Destaques</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -1245,6 +1298,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                 {activeFiltersCount > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-1">Filtros ativos:</span>
+                    {onlyFeaturedFilter && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/25">
+                        <Star className="w-2.5 h-2.5 fill-current" />
+                        <span>Apenas Destaques</span>
+                        <button type="button" onClick={() => setOnlyFeaturedFilter(false)} className="hover:opacity-70"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    )}
                     {selectedFilterTags.map((tag) => (
                       <span
                         key={tag}
@@ -1406,6 +1466,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       onDelete={() => handleDelete(property.id)}
                       onShowMap={() => setActiveMapProperty(property)}
                       onShare={() => setSharingProperty(property)}
+                      onToggleFeatured={() => handleToggleFeatured(property)}
                     />
                   ))}
                 </AnimatePresence>
@@ -1739,17 +1800,47 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       </div>
                     </div>
 
-                    <div className="md:col-span-2 flex items-center gap-3 p-6 bg-muted/20 border border-border rounded-3xl">
-                      <input 
-                        type="checkbox" 
-                        name="acceptsFinancing" 
-                        id="acceptsFinancing"
-                        defaultChecked={editingProperty?.acceptsFinancing}
-                        className="w-5 h-5 accent-primary cursor-pointer"
-                      />
-                      <label htmlFor="acceptsFinancing" className="text-sm font-bold cursor-pointer select-none">
-                        Aceita Financiamento Bancário
-                      </label>
+                    <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3 p-5 bg-muted/20 border border-border rounded-3xl">
+                        <input 
+                          type="checkbox" 
+                          name="acceptsFinancing" 
+                          id="acceptsFinancing"
+                          defaultChecked={editingProperty?.acceptsFinancing}
+                          className="w-5 h-5 accent-primary cursor-pointer"
+                        />
+                        <label htmlFor="acceptsFinancing" className="text-sm font-bold cursor-pointer select-none">
+                          Aceita Financiamento Bancário
+                        </label>
+                      </div>
+
+                      <div 
+                        onClick={() => setIsFeatured(!isFeatured)}
+                        className={cn(
+                          "flex items-center gap-3 p-5 border rounded-3xl transition-all cursor-pointer",
+                          isFeatured 
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-400" 
+                            : "bg-muted/20 border-border text-foreground hover:bg-muted/30"
+                        )}
+                      >
+                        <input 
+                          type="checkbox" 
+                          name="isFeatured" 
+                          id="isFeatured"
+                          checked={isFeatured}
+                          onChange={(e) => setIsFeatured(e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-5 h-5 accent-amber-500 cursor-pointer"
+                        />
+                        <label 
+                          htmlFor="isFeatured" 
+                          className="text-sm font-bold cursor-pointer select-none flex items-center gap-2" 
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Star className={cn("w-4 h-4", isFeatured ? "fill-amber-500 text-amber-500" : "text-muted-foreground")} />
+                          <span>Destaque / Melhores Oportunidades</span>
+                        </label>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2 space-y-3">
@@ -2414,7 +2505,14 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
   );
 }
 
-function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { property: Property; onEdit: () => void; onDelete: () => void; onShowMap: () => void; onShare: () => void }) {
+function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare, onToggleFeatured }: { 
+  property: Property; 
+  onEdit: () => void; 
+  onDelete: () => void; 
+  onShowMap: () => void; 
+  onShare: () => void;
+  onToggleFeatured: () => void;
+}) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   
@@ -2499,7 +2597,31 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
           </>
         )}
 
+        {/* Botão de Destaque Rápido */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFeatured();
+          }}
+          className={cn(
+            "absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md cursor-pointer",
+            property.isFeatured
+              ? "bg-amber-500 text-white shadow-amber-500/40 hover:scale-110 hover:bg-amber-600 ring-2 ring-white/50"
+              : "bg-black/50 text-white/70 hover:text-amber-400 hover:bg-black/70 hover:scale-105"
+          )}
+          title={property.isFeatured ? "Remover dos Destaques" : "Marcar como Destaque / Melhor Oportunidade"}
+        >
+          <Star className={cn("w-4 h-4 transition-transform", property.isFeatured && "fill-white text-white")} />
+        </button>
+
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none">
+          {property.isFeatured && (
+            <span className="px-2 py-0.5 bg-amber-500 text-white border border-amber-300/40 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-500/30">
+              <Sparkles className="w-2.5 h-2.5 fill-white" /> Destaque
+            </span>
+          )}
           <span className={cn(
             "px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider backdrop-blur-md border",
             property.status === 'disponível' ? "bg-emerald-500/80 text-white border-emerald-400" :
@@ -2615,6 +2737,23 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
 
           <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-border/40">
             <div className="flex items-center gap-1">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleFeatured();
+                }} 
+                className={cn(
+                  "w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer",
+                  property.isFeatured
+                    ? "bg-amber-500 text-white shadow-xs hover:bg-amber-600"
+                    : "bg-muted text-muted-foreground hover:bg-amber-500/10 hover:text-amber-500"
+                )}
+                title={property.isFeatured ? "Remover destaque" : "Marcar como destaque comercial"}
+              >
+                <Star className={cn("w-3.5 h-3.5", property.isFeatured && "fill-current")} />
+              </button>
               <button 
                 type="button"
                 onClick={(e) => {

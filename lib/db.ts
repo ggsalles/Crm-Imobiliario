@@ -88,6 +88,7 @@ export interface Property {
   description?: string;
   tags?: string[];
   imageUrls?: string[];
+  isFeatured?: boolean;
   ownerId: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1511,6 +1512,7 @@ function sanitizePropertyData(data: any, userId: string) {
     notes: data.notes ? String(data.notes).substring(0, 5000) : null,
     description: data.description ? String(data.description).substring(0, 5000) : null,
     tags: Array.isArray(data.tags) ? data.tags.map((t: any) => String(t).trim()).filter(Boolean) : [],
+    is_featured: Boolean(data.isFeatured ?? data.is_featured ?? false),
     owner_id: userId
   };
 
@@ -1599,6 +1601,19 @@ export async function deleteProperty(id: string) {
     return true;
   } catch (error) {
     console.error("[lib/db] Error in deleteProperty Proxy:", error);
+    throw error;
+  }
+}
+
+export async function togglePropertyFeatured(id: string, isFeatured: boolean) {
+  console.log(`[lib/db] togglePropertyFeatured: ID ${id} -> ${isFeatured}`);
+  try {
+    return await apiFetch(`/api/properties?id=${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_featured: isFeatured, isFeatured })
+    });
+  } catch (error) {
+    console.error("[lib/db] Error in togglePropertyFeatured:", error);
     throw error;
   }
 }

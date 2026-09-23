@@ -32,7 +32,8 @@ import {
   Filter,
   Eye,
   Copy,
-  Tag
+  Tag,
+  Star
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/auth-provider';
@@ -54,6 +55,7 @@ interface Property {
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
+  isFeatured?: boolean;
   buildingName?: string | null;
   description?: string | null;
   tags?: string[];
@@ -111,6 +113,7 @@ function VitrineContent() {
   const [minParking, setMinParking] = useState<number | 'all'>('all');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [onlyFeatured, setOnlyFeatured] = useState(false);
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'area_desc'>('relevance');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -257,6 +260,11 @@ function VitrineContent() {
         if (p.price > Number(maxPrice)) return false;
       }
 
+      // Only Featured
+      if (onlyFeatured && !p.isFeatured) {
+        return false;
+      }
+
       return true;
     });
 
@@ -265,11 +273,17 @@ function VitrineContent() {
       if (sortBy === 'price_asc') return a.price - b.price;
       if (sortBy === 'price_desc') return b.price - a.price;
       if (sortBy === 'area_desc') return (b.area || 0) - (a.area || 0);
+
+      // Prioritize featured properties!
+      const aFeatured = a.isFeatured ? 1 : 0;
+      const bFeatured = b.isFeatured ? 1 : 0;
+      if (bFeatured !== aFeatured) return bFeatured - aFeatured;
+
       return 0; // relevance / default order
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, minBedrooms, minParking, maxPrice, selectedTags, sortBy]);
+  }, [properties, searchTerm, selectedType, minBedrooms, minParking, maxPrice, selectedTags, onlyFeatured, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
@@ -279,6 +293,7 @@ function VitrineContent() {
     setMinParking('all');
     setMaxPrice('');
     setSelectedTags([]);
+    setOnlyFeatured(false);
     setSortBy('relevance');
   };
 
@@ -287,6 +302,7 @@ function VitrineContent() {
     minBedrooms !== 'all',
     minParking !== 'all',
     maxPrice !== '',
+    onlyFeatured,
     selectedTags.length > 0,
     sortBy !== 'relevance'
   ].filter(Boolean).length;
@@ -467,6 +483,18 @@ function VitrineContent() {
 
           {/* Quick Category Chips */}
           <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap pt-2">
+            <button
+              onClick={() => setOnlyFeatured(!onlyFeatured)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                onlyFeatured
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/25 ring-2 ring-amber-500/20'
+                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-500 hover:bg-muted'
+              }`}
+            >
+              <Star className={`w-3.5 h-3.5 ${onlyFeatured ? 'fill-white text-white' : 'text-amber-500'}`} />
+              <span>⭐ Oportunidades em Destaque</span>
+            </button>
+
             {PROPERTY_TYPES.map((t) => (
               <button
                 key={t.value}
@@ -760,11 +788,18 @@ function VitrineContent() {
 
                     {/* Top Badges */}
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-xs">
-                        {prop.type || 'Imóvel'}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-xs">
+                          {prop.type || 'Imóvel'}
+                        </span>
+                        {prop.isFeatured && (
+                          <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-md shadow-amber-500/30 flex items-center gap-1 border border-amber-300/40">
+                            <Sparkles className="w-2.5 h-2.5 fill-white" /> Destaque
+                          </span>
+                        )}
+                      </div>
 
-                      {prop.status === 'reserved' ? (
+                      {prop.status === 'reserved' || prop.status === 'reservado' ? (
                         <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[10px] font-bold uppercase shadow-xs">
                           Reservado
                         </span>

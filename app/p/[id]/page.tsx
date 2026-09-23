@@ -47,6 +47,7 @@ interface Property {
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
+  isFeatured?: boolean;
   notes?: string | null;
   description?: string | null;
   tags?: string[];
@@ -292,6 +293,11 @@ export default function PublicPropertyCapturePage() {
 
               {/* Badges Overlay */}
               <div className="absolute top-6 left-6 flex flex-wrap gap-2">
+                {property.isFeatured && (
+                  <span className="py-1 px-3.5 bg-amber-500 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-lg shadow-amber-500/30 flex items-center gap-1.5 border border-white/20">
+                    <Sparkles className="w-3.5 h-3.5 fill-white" /> Destaque
+                  </span>
+                )}
                 <span className="capitalize py-1 px-3 bg-white/90 backdrop-blur-sm text-slate-900 rounded-full text-xs font-extrabold shadow-sm">
                   {property.type}
                 </span>
