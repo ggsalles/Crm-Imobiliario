@@ -32,7 +32,8 @@ import {
   X,
   Lock,
   ArrowUpDown,
-  FileText
+  FileText,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -209,6 +210,12 @@ export default function AuditPage() {
   }, [isMaster, selectedTenant, profile?.tenantId]);
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
     if (!authLoading && user && isAdmin) {
       fetchLogs();
     }
@@ -344,8 +351,20 @@ export default function AuditPage() {
     toast.success("Relatório de auditoria exportado com sucesso.");
   };
 
-  // Access check guard
-  if (!authLoading && (!user || !isAdmin)) {
+  // Unauthenticated guard: clean loader while redirecting to /login
+  if (authLoading || !user) {
+    return (
+      <div className="flex h-screen bg-background items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground text-xs">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span>Redirecionando para login...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Access check guard for authenticated non-admin users (e.g. brokers/corretores)
+  if (!isAdmin) {
     return (
       <div className="flex h-screen bg-background text-foreground">
         <Sidebar />

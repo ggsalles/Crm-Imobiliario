@@ -219,8 +219,15 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   }, [profile]);
 
   const handleLogout = async () => {
-    await logout();
-    router.push("/login");
+    try {
+      await logout();
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      } else {
+        router.push("/login");
+      }
+    }
   };
 
   const handleTenantSwitch = async (tenantId: string) => {
