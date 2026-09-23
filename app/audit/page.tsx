@@ -79,8 +79,53 @@ export default function AuditPage() {
   // Selected Log Modal for inspection
   const [inspectingLog, setInspectingLog] = useState<AuditLogItem | null>(null);
 
-  const isMaster = Boolean(profile?.email && isPlatformAdmin(profile.email));
+  // Clear Logs Modal state
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const isMaster = Boolean(
+    (profile?.email && isPlatformAdmin(profile.email)) || 
+    (user?.email && isPlatformAdmin(user.email))
+  );
   const isAdmin = Boolean(profile?.role === "Admin" || profile?.isAdmin || isMaster);
+
+  // Clear audit logs handler
+  const handleClearAuditLogs = async () => {
+    setIsClearing(true);
+    try {
+      let authHeader = "";
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.access_token) {
+          authHeader = `Bearer ${sessionData.session.access_token}`;
+        }
+      } catch (err) {
+        console.warn("Could not get access token for clear:", err);
+      }
+
+      const url = isMaster && selectedTenant && selectedTenant !== 'all'
+        ? `/api/audit?tenantId=${selectedTenant}`
+        : `/api/audit`;
+
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: authHeader ? { Authorization: authHeader } : {}
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Falha ao limpar logs de auditoria.");
+      }
+
+      toast.success("Tabela de logs de auditoria limpa com sucesso!");
+      setIsClearModalOpen(false);
+      await fetchLogs(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao limpar logs de auditoria.");
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   // Load tenants for master
   useEffect(() => {
@@ -372,6 +417,17 @@ export default function AuditPage() {
                 <Download className="w-3 h-3" />
                 Exportar Relatório (CSV)
               </button>
+
+              {isMaster && (
+                <button
+                  onClick={() => setIsClearModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition-all shadow-xs"
+                  title="Limpar registros de auditoria (Exclusivo Master)"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Limpar Logs
+                </button>
+              )}
             </div>
           </div>
 
@@ -710,6 +766,56 @@ export default function AuditPage() {
                 className="px-3.5 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal to Clear Audit Logs - Exclusivo Master */}
+      {isMaster && isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-rose-500/30 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-bold text-foreground">Limpar Histórico de Auditoria?</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Esta ação apagará permanentemente todos os registros de log da tabela de auditoria ({logs.length} registros visíveis).
+                <br /><br />
+                <span className="font-semibold text-foreground">Nota:</span> Seus contatos, negócios no funil, imóveis e notas de clientes não serão afetados — apenas o histórico de acessos e operações será limpo.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(false)}
+                disabled={isClearing}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearAuditLogs}
+                disabled={isClearing}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-md disabled:opacity-50"
+              >
+                {isClearing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    Limpando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Sim, Limpar Tudo
+                  </>
+                )}
               </button>
             </div>
           </div>

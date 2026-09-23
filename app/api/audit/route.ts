@@ -78,6 +78,15 @@ export async function GET(req: NextRequest) {
 
     // Optional post-filter for JSON metadata fields like action or severity
     let filteredLogs = logs || [];
+
+    // Shielding: Non-master administrators should never see platform master actions
+    if (!isMaster) {
+      filteredLogs = filteredLogs.filter((log: any) => {
+        const email = (log.metadata?.userEmail || log.author_name || '').toLowerCase();
+        return !isPlatformAdmin(email);
+      });
+    }
+
     if (actionFilter && actionFilter !== 'all') {
       filteredLogs = filteredLogs.filter((log: any) => log.metadata?.action === actionFilter);
     }
@@ -144,6 +153,13 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Ghost Mode for Master / Platform Admin:
+    // Discard any logs originating from the Platform Admin (Master) so tenant audit logs remain clean and private
+    const resolvedEmail = (authUser?.email || body.userEmail || '').trim().toLowerCase();
+    if (isPlatformAdmin(resolvedEmail)) {
+      return NextResponse.json({ success: true, ghostMode: true, message: 'Ghost mode ativo para o usuário Master.' });
+    }
+
     let userId = authUser?.id || body.userId;
     let tenantId = body.tenantId;
 
@@ -153,6 +169,9 @@ export async function POST(req: NextRequest) {
         .select('tenant_id, display_name, email')
         .eq('id', userId)
         .maybeSingle();
+      if (p?.email && isPlatformAdmin(p.email)) {
+        return NextResponse.json({ success: true, ghostMode: true, message: 'Ghost mode ativo para o usuário Master.' });
+      }
       tenantId = p?.tenant_id;
     }
 
@@ -220,6 +239,70 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, logId });
   } catch (error: any) {
     console.error('[API/Audit] POST Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = getSupabase(req);
+    const authUser = getAuthenticatedUser(req);
+
+    if (!authUser || !authUser.id) {
+      return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+
+    const { data: userProfile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('role, is_admin, tenant_id, email')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (profileErr) {
+      console.warn('[API/Audit] Erro ao carregar perfil:', profileErr);
+    }
+
+    const isMaster = isPlatformAdmin(authUser.email) || isPlatformAdmin(userProfile?.email);
+
+    if (!isMaster) {
+      return NextResponse.json({ 
+        error: 'Acesso restrito. Apenas o usuário master da plataforma (ggsalles) tem permissão para limpar a auditoria.' 
+      }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const requestedTenantId = searchParams.get('tenantId');
+
+    let deleteQuery = supabase
+      .from('timeline')
+      .delete()
+      .eq('category', 'audit');
+
+    if (isMaster) {
+      if (requestedTenantId && requestedTenantId !== 'all') {
+        deleteQuery = deleteQuery.eq('tenant_id', requestedTenantId);
+      }
+    } else {
+      const activeTenantId = userProfile?.tenant_id;
+      if (activeTenantId) {
+        deleteQuery = deleteQuery.eq('tenant_id', activeTenantId);
+      }
+    }
+
+    const { error: deleteErr, count } = await deleteQuery;
+
+    if (deleteErr) {
+      console.error('[API/Audit] Erro ao limpar logs:', deleteErr);
+      return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Logs de auditoria excluídos com sucesso.',
+      count
+    });
+  } catch (error: any) {
+    console.error('[API/Audit] DELETE Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

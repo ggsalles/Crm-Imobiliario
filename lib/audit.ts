@@ -84,6 +84,13 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
       } catch {}
     }
 
+    // Ghost Mode for Master / Platform Admin:
+    // Do not record audit logs for actions performed by the Master user to keep tests and support sessions silent
+    const targetEmail = (event.userEmail || sessionUserEmail || '').trim().toLowerCase();
+    if (isPlatformAdmin(targetEmail)) {
+      return;
+    }
+
     const authHeader = token ? `Bearer ${token}` : null;
 
     const resolvedTenantId = event.tenantId || 
