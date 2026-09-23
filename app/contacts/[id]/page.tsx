@@ -112,7 +112,7 @@ export default function ContactDetail360Page() {
   const [formMinBedrooms, setFormMinBedrooms] = useState("");
   const [formPropertyType, setFormPropertyType] = useState("todos");
   const [formNeighborhoodsText, setFormNeighborhoodsText] = useState("");
-  const [formTemperature, setFormTemperature] = useState<'quente' | 'morno' | 'frio'>('morno');
+  const [formTemperature, setFormTemperature] = useState<'auto' | 'quente' | 'morno' | 'frio'>('auto');
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -415,11 +415,12 @@ export default function ContactDetail360Page() {
 
       if (tempUpdated) {
         const tempLabels: Record<string, string> = {
+          auto: "🤖 Inteligente (Calculado pelo Funil)",
           quente: "🔥 Quente",
           morno: "⚡ Morno",
           frio: "❄️ Frio"
         };
-        const newLabel = tempLabels[formTemperature] || '⚡ Morno';
+        const newLabel = tempLabels[formTemperature] || '🤖 Inteligente';
         await createTimelineEvent({
           type: 'system',
           category: 'contact',
@@ -602,16 +603,25 @@ export default function ContactDetail360Page() {
                     </span>
                     {contact.type === 'cliente' && contact.temperature && (
                       contact.temperature === 'quente' ? (
-                        <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg relative overflow-hidden shrink-0 select-none shadow-[0_0_12px_rgba(239,68,68,0.15)] animate-pulse">
+                        <span 
+                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Proposta ou negociação ativa no funil"}
+                          className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg relative overflow-hidden shrink-0 select-none shadow-[0_0_12px_rgba(239,68,68,0.15)] animate-pulse"
+                        >
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-0.5 animate-ping" />
                           🔥 Quente
                         </span>
                       ) : contact.temperature === 'morno' ? (
-                        <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none shadow-[0_0_8px_rgba(245,158,11,0.1)]">
+                        <span 
+                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Oportunidade em qualificação"}
+                          className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none shadow-[0_0_8px_rgba(245,158,11,0.1)]"
+                        >
                           ⚡ Morno
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none">
+                        <span 
+                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Sem oportunidades ativas no funil"}
+                          className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none"
+                        >
                           ❄️ Frio
                         </span>
                       )
@@ -720,7 +730,11 @@ export default function ContactDetail360Page() {
                             setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
                             setFormPropertyType(currentProfile.propertyType || "todos");
                             setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
-                            setFormTemperature((contact.temperature as any) || "morno");
+                            setFormTemperature(
+                              (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
+                              (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
+                              (contact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
+                            );
                             setIsProfileModalOpen(true);
                           }}
                           className="w-10 h-10 rounded-xl bg-muted hover:bg-muted/80 flex items-center justify-center transition-all border border-border cursor-pointer group"
@@ -797,7 +811,11 @@ export default function ContactDetail360Page() {
                           setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
                           setFormPropertyType(currentProfile.propertyType || "todos");
                           setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
-                          setFormTemperature((contact.temperature as any) || "morno");
+                          setFormTemperature(
+                            (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
+                            (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
+                            (contact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
+                          );
                           setIsProfileModalOpen(true);
                         }}
                         className="w-full py-3 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all gap-2 flex items-center justify-center border border-primary/20 cursor-pointer"
@@ -1099,9 +1117,10 @@ export default function ContactDetail360Page() {
                       onChange={(e) => setFormTemperature(e.target.value as any)}
                       className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold font-sans"
                     >
-                      <option value="quente">🔥 Quente (Engajado e Ativo)</option>
-                      <option value="morno">⚡ Morno (Em contato / Negociação)</option>
-                      <option value="frio">❄️ Frio (Adormecido / Estagnado)</option>
+                      <option value="auto">🤖 Inteligente (Calculado pelo Funil)</option>
+                      <option value="quente">🔥 Forçar Quente</option>
+                      <option value="morno">⚡ Forçar Morno</option>
+                      <option value="frio">❄️ Forçar Frio</option>
                     </select>
                   </div>
 

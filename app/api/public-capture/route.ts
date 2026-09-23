@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         email,
         phone,
         type: 'cliente',
-        role: 'quente', // Leads from Instagram represent real active intent!
+        role: null, // Smart Temperature will dynamically evaluate based on creation time (<48h) and deal progress
         source: 'Instagram - Captura Pública',
         owner_id: ownerId,
       };

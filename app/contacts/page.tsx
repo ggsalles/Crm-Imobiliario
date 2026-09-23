@@ -592,13 +592,18 @@ function ContactsContent() {
                         <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Temperatura do Lead</label>
                         <select 
                           name="temperature"
-                          defaultValue={editingContact?.temperature || 'morno'} 
+                          defaultValue={
+                            (editingContact as any)?.rawRole === 'manual_quente' ? 'quente' :
+                            (editingContact as any)?.rawRole === 'manual_morno' ? 'morno' :
+                            (editingContact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
+                          } 
                           className="w-full pl-3 pr-8 py-2 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em] text-xs font-medium"
                           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
                         >
-                          <option value="quente" className="bg-card">🔥 Quente (Engajado)</option>
-                          <option value="morno" className="bg-card">⚡ Morno (Negociação)</option>
-                          <option value="frio" className="bg-card">❄️ Frio (Adormecido)</option>
+                          <option value="auto" className="bg-card">🤖 Inteligente (Baseado no Funil)</option>
+                          <option value="quente" className="bg-card">🔥 Forçar Quente</option>
+                          <option value="morno" className="bg-card">⚡ Forçar Morno</option>
+                          <option value="frio" className="bg-card">❄️ Forçar Frio</option>
                         </select>
                       </div>
                     </>
@@ -708,16 +713,25 @@ function ContactCard({
                 <h3 className="font-bold text-sm md:text-base truncate text-foreground" title={contact.name}>{contact.name}</h3>
                 {!isActiveTabEquipe && contact.temperature && (
                   contact.temperature === 'quente' ? (
-                    <span className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded relative select-none animate-pulse">
+                    <span 
+                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Negociação ou proposta ativa no funil"}
+                      className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded relative select-none animate-pulse"
+                    >
                       <span className="w-1 h-1 rounded-full bg-red-500 animate-ping inline-block" />
                       Quente
                     </span>
                   ) : contact.temperature === 'morno' ? (
-                    <span className="inline-flex items-center gap-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none">
+                    <span 
+                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Oportunidade em qualificação"}
+                      className="inline-flex items-center gap-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none"
+                    >
                       Morno
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-0.5 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none">
+                    <span 
+                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Sem oportunidades ativas no funil"}
+                      className="inline-flex items-center gap-0.5 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none"
+                    >
                       Frio
                     </span>
                   )

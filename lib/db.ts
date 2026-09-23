@@ -116,6 +116,7 @@ export interface Contact {
   name: string;
   role: string;
   temperature?: 'quente' | 'morno' | 'frio';
+  rawRole?: string | null;
   email: string;
   phone: string;
   type: 'cliente' | 'equipe';
