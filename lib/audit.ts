@@ -21,7 +21,8 @@ export type AuditAction =
   | 'VIEW_PROPERTY_DETAILS'
   | 'CREATE_DEAL'
   | 'UPDATE_DEAL'
-  | 'CREATE_USER';
+  | 'CREATE_USER'
+  | 'SEARCH_PROPERTIES';
 
 export type AuditSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -164,6 +165,8 @@ export function getActionMeta(action: string): { label: string; severity: AuditS
       return { label: 'Edição de Oportunidade / Negócio', severity: 'medium', color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20' };
     case 'CREATE_USER':
       return { label: 'Cadastro de Novo Usuário', severity: 'high', color: 'text-purple-500', bg: 'bg-purple-500/10 border-purple-500/20' };
+    case 'SEARCH_PROPERTIES':
+      return { label: 'Pesquisa / Filtro de Imóveis', severity: 'low', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/20' };
     default:
       return { label: action, severity: 'info', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' };
   }

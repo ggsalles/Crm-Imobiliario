@@ -1032,11 +1032,25 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       placeholder="Buscar por nome, edifício/condomínio, rua, bairro, código..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && search.trim().length >= 2) {
+                          recordAuditEvent({
+                            action: 'SEARCH_PROPERTIES',
+                            title: 'Busca Textual no Catálogo',
+                            content: `Pesquisa realizada no catálogo de imóveis pelo termo: "${search.trim()}".`,
+                            severity: 'low',
+                            category: 'modification',
+                            metadata: {
+                              query: search.trim()
+                            }
+                          });
+                        }
+                      }}
                       className="w-full pl-10 pr-9 py-2.5 bg-background border border-border rounded-xl text-xs sm:text-sm font-medium text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                     />
                     {search && (
                       <button 
-                        type="button"
+                        type="button" 
                         onClick={() => setSearch("")}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors"
                         title="Limpar busca"
@@ -1050,7 +1064,23 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setOnlyFeaturedFilter(!onlyFeaturedFilter)}
+                      onClick={() => {
+                        const nextState = !onlyFeaturedFilter;
+                        setOnlyFeaturedFilter(nextState);
+                        if (nextState) {
+                          recordAuditEvent({
+                            action: 'SEARCH_PROPERTIES',
+                            title: 'Pesquisa por Imóveis em Destaque',
+                            content: 'Usuário aplicou o filtro de consulta para visualizar apenas Imóveis em Destaque.',
+                            severity: 'low',
+                            category: 'modification',
+                            metadata: {
+                              filter: 'onlyFeatured',
+                              active: true
+                            }
+                          });
+                        }
+                      }}
                       className={cn(
                         "flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer",
                         onlyFeaturedFilter
