@@ -27,6 +27,7 @@ import {
   updateCompany, 
   deleteCompany 
 } from "@/lib/db";
+import { recordAuditEvent } from "@/lib/audit";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -81,7 +82,22 @@ export default function CompaniesPage() {
 
   const handleDelete = async (id: string) => {
     try {
+      const targetCompany = companies.find(c => c.id === id);
       await deleteCompany(id);
+      recordAuditEvent({
+        action: 'DELETE_COMPANY',
+        title: 'Exclusão de Empresa',
+        content: `Empresa/Organização "${targetCompany?.name || id}" foi excluída.`,
+        severity: 'high',
+        category: 'deletion',
+        relatedId: id,
+        entityType: 'company',
+        metadata: {
+          name: targetCompany?.name,
+          industry: targetCompany?.industry,
+          website: targetCompany?.website
+        }
+      });
       toast.success("Empresa excluída!");
       setDeleteConfirmId(null);
       await fetchData();
@@ -100,11 +116,39 @@ export default function CompaniesPage() {
     };
 
     try {
-       if (editingCompany) {
+      if (editingCompany) {
         await updateCompany(editingCompany.id, data);
+        recordAuditEvent({
+          action: 'UPDATE_COMPANY',
+          title: 'Edição de Dados da Empresa',
+          content: `Dados da empresa "${data.name}" foram atualizados.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: editingCompany.id,
+          entityType: 'company',
+          metadata: {
+            name: data.name,
+            industry: data.industry,
+            website: data.website
+          }
+        });
         toast.success("Empresa atualizada!");
       } else {
-        await createCompany(data);
+        const newCompanyId = await createCompany(data);
+        recordAuditEvent({
+          action: 'CREATE_COMPANY',
+          title: 'Cadastro de Nova Empresa',
+          content: `Nova empresa parceira/cliente "${data.name}" cadastrada no sistema.`,
+          severity: 'info',
+          category: 'modification',
+          relatedId: typeof newCompanyId === 'string' ? newCompanyId : undefined,
+          entityType: 'company',
+          metadata: {
+            name: data.name,
+            industry: data.industry,
+            website: data.website
+          }
+        });
         toast.success("Empresa criada!");
       }
       await fetchData();

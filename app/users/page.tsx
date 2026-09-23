@@ -127,6 +127,20 @@ export default function UsersPage() {
         body: JSON.stringify({ userLimit: newLimit })
       });
       const targetTenantName = tenants.find(t => t.id === tid)?.name || 'Imobiliária';
+      recordAuditEvent({
+        action: 'UPDATE_SETTINGS',
+        title: 'Alteração de Licenças / Vagas da Imobiliária',
+        content: `Limite de vagas para "${targetTenantName}" alterado para ${newLimit} usuários.`,
+        severity: 'high',
+        category: 'modification',
+        relatedId: tid,
+        entityType: 'tenant',
+        metadata: {
+          tenantId: tid,
+          tenantName: targetTenantName,
+          newLimit
+        }
+      });
       toast.success(`${targetTenantName}: limite de vagas alterado para ${newLimit} usuários!`);
       await fetchTenants();
     } catch (err: any) {
@@ -444,7 +458,20 @@ export default function UsersPage() {
                 if (!newTenantName.trim()) return;
                 setIsCreatingTenant(true);
                 try {
-                  await createTenant({ name: newTenantName });
+                  const createdTenant = await createTenant({ name: newTenantName });
+                  recordAuditEvent({
+                    action: 'CREATE_COMPANY',
+                    title: 'Cadastro de Nova Imobiliária (Inquilino)',
+                    content: `Nova imobiliária "${newTenantName}" provisionada no ecossistema SaaS.`,
+                    severity: 'high',
+                    category: 'modification',
+                    relatedId: createdTenant?.id,
+                    entityType: 'tenant',
+                    metadata: {
+                      name: newTenantName,
+                      tenantId: createdTenant?.id
+                    }
+                  });
                   setNewTenantName("");
                   toast.success("Novo Inquilino cadastrado com sucesso!");
                   fetchTenants();

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Building2, MapPin, Phone, Mail, FileText, Loader2, Check } from 'lucide-react';
 import { Tenant } from '@/lib/db';
 import { toast } from 'sonner';
+import { recordAuditEvent } from '@/lib/audit';
 
 interface EditTenantModalProps {
   isOpen: boolean;
@@ -88,6 +89,16 @@ export function EditTenantModal({ isOpen, onClose, tenant, onSuccess }: EditTena
       }
 
       toast.success('Cadastro da empresa atualizado com sucesso!');
+      recordAuditEvent({
+        action: 'UPDATE_COMPANY',
+        title: 'Atualização Cadastral da Imobiliária (Inquilino)',
+        content: `Dados cadastrais da imobiliária "${formData.name}" (CNPJ: ${formData.cnpj || 'não informado'}) foram atualizados.`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: tenant.id,
+        entityType: 'tenant',
+        metadata: formData
+      });
       try {
         if (onSuccess) onSuccess();
       } catch (cbErr) {

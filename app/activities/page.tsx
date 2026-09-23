@@ -36,6 +36,7 @@ import {
   Contact,
   Deal
 } from "@/lib/db";
+import { recordAuditEvent } from "@/lib/audit";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -165,10 +166,38 @@ export default function ActivitiesPage() {
 
     if (editingActivity) {
       await updateActivity(editingActivity.id, activityData);
+      recordAuditEvent({
+        action: 'UPDATE_ACTIVITY',
+        title: 'Edição de Atividade',
+        content: `Atividade "${formData.title}" (${formData.type}) foi atualizada.`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: editingActivity.id,
+        entityType: 'activity',
+        metadata: {
+          title: formData.title,
+          type: formData.type,
+          date: formData.date
+        }
+      });
     } else {
-      await createActivity({
+      const newActivityId = await createActivity({
         ...activityData,
         status: 'pending',
+      });
+      recordAuditEvent({
+        action: 'CREATE_ACTIVITY',
+        title: 'Criação de Nova Atividade',
+        content: `Nova atividade/tarefa "${formData.title}" (${formData.type}) agendada para ${format(new Date(formData.date), "dd/MM/yyyy HH:mm")}.`,
+        severity: 'info',
+        category: 'modification',
+        relatedId: typeof newActivityId === 'string' ? newActivityId : undefined,
+        entityType: 'activity',
+        metadata: {
+          title: formData.title,
+          type: formData.type,
+          date: formData.date
+        }
       });
     }
 
@@ -176,13 +205,41 @@ export default function ActivitiesPage() {
   };
 
   const toggleStatus = async (activity: Activity) => {
+    const nextStatus = activity.status === 'completed' ? 'pending' : 'completed';
     await updateActivity(activity.id, {
-      status: activity.status === 'completed' ? 'pending' : 'completed'
+      status: nextStatus
+    });
+    recordAuditEvent({
+      action: 'UPDATE_ACTIVITY',
+      title: nextStatus === 'completed' ? 'Atividade Concluída' : 'Atividade Reaberta',
+      content: `Atividade "${activity.title}" foi marcada como ${nextStatus === 'completed' ? 'Concluída' : 'Pendente'}.`,
+      severity: 'low',
+      category: 'modification',
+      relatedId: activity.id,
+      entityType: 'activity',
+      metadata: {
+        title: activity.title,
+        status: nextStatus
+      }
     });
   };
 
   const handleDelete = async (id: string) => {
+    const targetActivity = activities.find(a => a.id === id);
     await deleteActivity(id);
+    recordAuditEvent({
+      action: 'DELETE_ACTIVITY',
+      title: 'Exclusão de Atividade',
+      content: `Atividade "${targetActivity?.title || id}" foi excluída.`,
+      severity: 'high',
+      category: 'deletion',
+      relatedId: id,
+      entityType: 'activity',
+      metadata: {
+        title: targetActivity?.title,
+        type: targetActivity?.type
+      }
+    });
     setDeleteConfirmId(null);
   };
 

@@ -195,6 +195,20 @@ export default function ContactDetail360Page() {
     if (confirm("Tem certeza que deseja excluir este contato? Esta ação não pode ser desfeita.")) {
       try {
         await deleteContact(id);
+        recordAuditEvent({
+          action: 'DELETE_CONTACT',
+          title: 'Exclusão de Contato',
+          content: `Contato "${contact?.name || id}" (${contact?.email || 'sem email'}) foi excluído na página de detalhes.`,
+          severity: 'critical',
+          category: 'deletion',
+          relatedId: id,
+          entityId: id,
+          entityType: 'contact',
+          metadata: {
+            contactName: contact?.name,
+            contactEmail: contact?.email
+          }
+        });
         toast.success("Contato excluído com sucesso!");
         router.push("/contacts");
       } catch (err: any) {
@@ -286,13 +300,30 @@ export default function ContactDetail360Page() {
       const dealTitle = `${property.title} - ${contact.name}`;
       const value = property.price;
       
-      await createDeal({
+      const newDealId = await createDeal({
         title: dealTitle,
         value: value,
         stage: 'lead',
         contactId: contact.id,
         propertyId: property.id,
         ownerId: user.id
+      });
+
+      recordAuditEvent({
+        action: 'CREATE_DEAL',
+        title: 'Abertura de Oportunidade por Cruzamento',
+        content: `Novo negócio "${dealTitle}" (R$ ${value}) aberto a partir de cruzamento de preferências do contato "${contact.name}".`,
+        severity: 'info',
+        category: 'modification',
+        relatedId: typeof newDealId === 'string' ? newDealId : undefined,
+        entityId: typeof newDealId === 'string' ? newDealId : undefined,
+        entityType: 'deal',
+        metadata: {
+          title: dealTitle,
+          value,
+          contactId: contact.id,
+          propertyId: property.id
+        }
       });
 
       await createTimelineEvent({
@@ -362,6 +393,23 @@ export default function ContactDetail360Page() {
       const refreshed = await getContact(id);
       setContact(refreshed);
       
+      recordAuditEvent({
+        action: 'UPDATE_CONTACT',
+        title: 'Atualização de Perfil de Interesse',
+        content: `Preferências de busca e interesse do contato "${contact.name}" foram atualizadas.`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: contact.id,
+        entityId: contact.id,
+        entityType: 'contact',
+        metadata: {
+          contactId: contact.id,
+          propertyType: formPropertyType,
+          maxPrice,
+          temperature: formTemperature
+        }
+      });
+
       toast.success("Perfil de interesse atualizado com sucesso!");
       setIsProfileModalOpen(false);
 
@@ -409,12 +457,28 @@ export default function ContactDetail360Page() {
     };
 
     try {
-      await createActivity({
+      const newActId = await createActivity({
         title: titles[type],
         type: type === 'meeting' ? 'meeting' : (type === 'task' ? 'task' : (type === 'call' ? 'call' : 'other')),
         date: new Date().toISOString(),
         status: 'pending',
         contactId: contact.id
+      });
+
+      recordAuditEvent({
+        action: 'CREATE_ACTIVITY',
+        title: 'Criação de Atividade para o Contato',
+        content: `Atividade "${titles[type]}" vinculada ao contato "${contact.name}".`,
+        severity: 'info',
+        category: 'modification',
+        relatedId: typeof newActId === 'string' ? newActId : undefined,
+        entityType: 'activity',
+        metadata: {
+          title: titles[type],
+          contactId: contact.id,
+          contactName: contact.name,
+          type
+        }
       });
 
       await createTimelineEvent({

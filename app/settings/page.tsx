@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { recordAuditEvent } from "@/lib/audit";
 
 const STAGES_CONFIG = [
   { id: "lead", title: "Novo Lead", defaultProb: 20 },
@@ -77,6 +78,16 @@ export default function SettingsPage() {
   const saveProbabilities = () => {
     localStorage.setItem("pipeline_probabilities", JSON.stringify(probabilities));
     setIsSaved(true);
+    recordAuditEvent({
+      action: 'UPDATE_SETTINGS',
+      title: 'Probabilidades do Funil Alteradas',
+      content: 'Configurações de probabilidade de conversão por estágio do funil foram atualizadas.',
+      severity: 'low',
+      category: 'modification',
+      metadata: {
+        probabilities
+      }
+    });
     setTimeout(() => setIsSaved(false), 2000);
     // Trigger storage event so other tabs/components can update
     window.dispatchEvent(new Event("storage_probabilities_updated"));
@@ -86,6 +97,17 @@ export default function SettingsPage() {
     localStorage.setItem("session_timeout_enabled", String(sessionEnabled));
     localStorage.setItem("session_timeout_minutes", String(sessionMinutes));
     setIsSessionSaved(true);
+    recordAuditEvent({
+      action: 'UPDATE_SETTINGS',
+      title: 'Configurações de Inatividade de Sessão',
+      content: `Tempo limite de inatividade configurado para ${sessionMinutes} minutos (Ativo: ${sessionEnabled ? 'Sim' : 'Não'}).`,
+      severity: 'medium',
+      category: 'modification',
+      metadata: {
+        enabled: sessionEnabled,
+        minutes: sessionMinutes
+      }
+    });
     toast.success("Opção de inatividade salva!");
     setTimeout(() => setIsSessionSaved(false), 2000);
     // Trigger storage event for timeout

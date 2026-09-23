@@ -327,6 +327,21 @@ export default function PipelinePage() {
       await updateDeal(dealId, { stage: 'lost' });
       setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: 'lost' } : d));
 
+      recordAuditEvent({
+        action: 'UPDATE_DEAL',
+        title: 'Oportunidade Marcada como Perdida',
+        content: `Negócio "${dealTitle || dealId}" marcado como Perdido / Desistência. Motivo: ${reasonLabel}.${notesFormatted}`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: dealId,
+        entityType: 'deal',
+        metadata: {
+          stage: 'lost',
+          lostReason: reasonLabel,
+          lostNotes: lostNotes.trim()
+        }
+      });
+
       await createTimelineEvent({
         type: 'system',
         category: 'deal',
@@ -376,6 +391,20 @@ export default function PipelinePage() {
     try {
       await updateDeal(deal.id, { stage: 'lead' });
       setDeals(prev => prev.map(d => d.id === deal.id ? { ...d, stage: 'lead' } : d));
+
+      recordAuditEvent({
+        action: 'UPDATE_DEAL',
+        title: 'Reativação de Oportunidade',
+        content: `Negócio "${deal.title}" reativado para o estágio inicial "Novo Lead".`,
+        severity: 'medium',
+        category: 'modification',
+        relatedId: deal.id,
+        entityType: 'deal',
+        metadata: {
+          previousStage: deal.stage,
+          newStage: 'lead'
+        }
+      });
 
       await createTimelineEvent({
         type: 'system',
@@ -499,6 +528,17 @@ export default function PipelinePage() {
     
     try {
       await setGoal(currentMonth, newStageGoals);
+      recordAuditEvent({
+        action: 'UPDATE_GOALS',
+        title: 'Atualização de Metas do Funil',
+        content: `Metas de desempenho do funil atualizadas para o período ${currentMonth}.`,
+        severity: 'medium',
+        category: 'modification',
+        metadata: {
+          period: currentMonth,
+          goals: newStageGoals
+        }
+      });
       toast.success("Metas atualizadas!");
       await fetchDealsData();
       setIsGoalModalOpen(false);

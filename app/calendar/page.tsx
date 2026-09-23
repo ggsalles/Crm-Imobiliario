@@ -51,6 +51,7 @@ import {
   updateActivity,
   deleteActivity 
 } from "@/lib/db";
+import { recordAuditEvent } from "@/lib/audit";
 
 interface Event {
   id: string;
@@ -338,8 +339,36 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
     try {
       if (editingEvent) {
         await updateActivity(editingEvent.id, activityData);
+        recordAuditEvent({
+          action: 'UPDATE_ACTIVITY',
+          title: 'Edição de Agendamento na Agenda',
+          content: `Compromisso "${newEvent.title}" (${newEvent.type}) atualizado na agenda.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: editingEvent.id,
+          entityType: 'activity',
+          metadata: {
+            title: newEvent.title,
+            type: newEvent.type,
+            time: `${newEvent.time} - ${newEvent.endTime}`
+          }
+        });
       } else {
-        await createActivity(activityData);
+        const newActId = await createActivity(activityData);
+        recordAuditEvent({
+          action: 'CREATE_ACTIVITY',
+          title: 'Novo Agendamento na Agenda',
+          content: `Novo compromisso "${newEvent.title}" (${newEvent.type}) agendado para ${format(activityDate, "dd/MM/yyyy")} às ${newEvent.time}.`,
+          severity: 'info',
+          category: 'modification',
+          relatedId: typeof newActId === 'string' ? newActId : undefined,
+          entityType: 'activity',
+          metadata: {
+            title: newEvent.title,
+            type: newEvent.type,
+            date: activityDate.toISOString()
+          }
+        });
       }
       setIsModalOpen(false);
       setEditingEvent(null);
@@ -358,12 +387,26 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
 
   const handleDeleteEvent = async (id: string) => {
     try {
+      const targetEvent = events.find(e => e.id === id);
       await deleteActivity(id);
+      recordAuditEvent({
+        action: 'DELETE_ACTIVITY',
+        title: 'Cancelamento / Exclusão de Agendamento',
+        content: `Compromisso "${targetEvent?.title || id}" foi excluído da agenda.`,
+        severity: 'high',
+        category: 'deletion',
+        relatedId: id,
+        entityType: 'activity',
+        metadata: {
+          title: targetEvent?.title,
+          type: targetEvent?.type
+        }
+      });
       if (isModalOpen) setIsModalOpen(false);
       setEditingEvent(null);
     } catch (err) {
       console.error("Error deleting activity", err);
-      alert("Erro ao excluir compromisso: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Erro ao excluir compromisso.");
     }
   };
 
@@ -371,6 +414,19 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
     const newStatus = event.status === 'completed' ? 'pending' : 'completed';
     try {
       await updateActivity(event.id, { status: newStatus as any });
+      recordAuditEvent({
+        action: 'UPDATE_ACTIVITY',
+        title: newStatus === 'completed' ? 'Compromisso Concluído' : 'Compromisso Reaberto',
+        content: `Agendamento "${event.title}" marcado como ${newStatus === 'completed' ? 'Realizado/Concluído' : 'Pendente'}.`,
+        severity: 'low',
+        category: 'modification',
+        relatedId: event.id,
+        entityType: 'activity',
+        metadata: {
+          title: event.title,
+          status: newStatus
+        }
+      });
     } catch (err) {
       console.error("Error toggling status", err);
     }

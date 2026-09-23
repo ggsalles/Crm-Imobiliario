@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
 import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, getUserProfile, UserProfile, createActivity, createTimelineEvent } from "@/lib/db";
+import { recordAuditEvent } from "@/lib/audit";
 import { Timeline } from "@/components/Timeline";
 import { formatCurrencyBRL } from "@/lib/utils";
 import Link from "next/link";
@@ -85,7 +86,7 @@ export default function DealDetailPage() {
 
     setIsSavingActivity(true);
     try {
-      await createActivity({
+      const newActId = await createActivity({
         title: activityTitle,
         type: activityType,
         date: new Date(activityDate).toISOString(),
@@ -93,6 +94,22 @@ export default function DealDetailPage() {
         contactId: deal.contactId || null,
         dealId: deal.id,
         description: activityDescription
+      });
+
+      recordAuditEvent({
+        action: 'CREATE_ACTIVITY',
+        title: 'Criação de Atividade no Negócio',
+        content: `Atividade "${activityTitle}" (${activityType}) vinculada ao negócio "${deal.title}".`,
+        severity: 'info',
+        category: 'modification',
+        relatedId: typeof newActId === 'string' ? newActId : undefined,
+        entityType: 'activity',
+        metadata: {
+          title: activityTitle,
+          type: activityType,
+          dealId: deal.id,
+          dealTitle: deal.title
+        }
       });
 
       // Log in deal timeline
@@ -318,6 +335,21 @@ export default function DealDetailPage() {
                       try {
                         setLoading(true);
                         await updateDeal(deal.id, { stage: nextStage.id });
+                        recordAuditEvent({
+                          action: 'UPDATE_DEAL_STAGE',
+                          title: 'Avanço de Etapa no Negócio',
+                          content: `Negócio "${deal.title}" avançado para "${nextStage.title}".`,
+                          severity: 'low',
+                          category: 'modification',
+                          relatedId: deal.id,
+                          entityType: 'deal',
+                          metadata: {
+                            dealId: deal.id,
+                            dealTitle: deal.title,
+                            newStage: nextStage.id,
+                            stageTitle: nextStage.title
+                          }
+                        });
                         toast.success(`Estágio avançado para: ${nextStage.title}`);
                         await refreshData();
                       } catch (err) {

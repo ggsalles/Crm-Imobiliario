@@ -22,7 +22,15 @@ export type AuditAction =
   | 'CREATE_DEAL'
   | 'UPDATE_DEAL'
   | 'CREATE_USER'
-  | 'SEARCH_PROPERTIES';
+  | 'SEARCH_PROPERTIES'
+  | 'CREATE_COMPANY'
+  | 'UPDATE_COMPANY'
+  | 'DELETE_COMPANY'
+  | 'CREATE_ACTIVITY'
+  | 'UPDATE_ACTIVITY'
+  | 'DELETE_ACTIVITY'
+  | 'UPDATE_GOALS'
+  | 'UPDATE_SETTINGS';
 
 export type AuditSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -33,7 +41,7 @@ export interface AuditEventPayload {
   severity?: AuditSeverity;
   category?: 'export' | 'deletion' | 'sensitive_view' | 'auth' | 'modification' | 'system';
   relatedId?: string;
-  entityType?: 'contact' | 'property' | 'deal' | 'user' | 'tenant' | 'auth' | 'system';
+  entityType?: 'contact' | 'property' | 'deal' | 'user' | 'tenant' | 'company' | 'activity' | 'auth' | 'system';
   metadata?: Record<string, any>;
   tenantId?: string;
   userId?: string;
@@ -167,6 +175,22 @@ export function getActionMeta(action: string): { label: string; severity: AuditS
       return { label: 'Cadastro de Novo Usuário', severity: 'high', color: 'text-purple-500', bg: 'bg-purple-500/10 border-purple-500/20' };
     case 'SEARCH_PROPERTIES':
       return { label: 'Pesquisa / Filtro de Imóveis', severity: 'low', color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/20' };
+    case 'CREATE_COMPANY':
+      return { label: 'Cadastro de Empresa', severity: 'info', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
+    case 'UPDATE_COMPANY':
+      return { label: 'Edição de Dados da Empresa', severity: 'medium', color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20' };
+    case 'DELETE_COMPANY':
+      return { label: 'Exclusão de Empresa', severity: 'high', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20' };
+    case 'CREATE_ACTIVITY':
+      return { label: 'Criação de Tarefa / Atividade', severity: 'info', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
+    case 'UPDATE_ACTIVITY':
+      return { label: 'Atualização de Atividade / Tarefa', severity: 'medium', color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20' };
+    case 'DELETE_ACTIVITY':
+      return { label: 'Exclusão de Atividade / Tarefa', severity: 'high', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20' };
+    case 'UPDATE_GOALS':
+      return { label: 'Atualização de Metas do Funil', severity: 'medium', color: 'text-purple-500', bg: 'bg-purple-500/10 border-purple-500/20' };
+    case 'UPDATE_SETTINGS':
+      return { label: 'Alteração de Configurações', severity: 'medium', color: 'text-indigo-500', bg: 'bg-indigo-500/10 border-indigo-500/20' };
     default:
       return { label: action, severity: 'info', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' };
   }
