@@ -31,11 +31,13 @@ import {
   ChevronRight,
   Filter,
   Eye,
-  Copy
+  Copy,
+  Tag
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/auth-provider';
 import { Sidebar } from '@/components/sidebar';
+import { POPULAR_PROPERTY_TAGS } from '@/lib/property-tags';
 
 interface Property {
   id: string;
@@ -54,6 +56,7 @@ interface Property {
   acceptsFinancing?: boolean;
   buildingName?: string | null;
   description?: string | null;
+  tags?: string[];
   imageUrls?: string[];
   ownerId?: string;
   tenantId?: string;
@@ -107,6 +110,7 @@ function VitrineContent() {
   const [minBedrooms, setMinBedrooms] = useState<number | 'all'>('all');
   const [minParking, setMinParking] = useState<number | 'all'>('all');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'area_desc'>('relevance');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -215,9 +219,21 @@ function VitrineContent() {
         const matchCity = p.city?.toLowerCase().includes(q);
         const matchBuilding = p.buildingName?.toLowerCase().includes(q);
         const matchDesc = p.description?.toLowerCase().includes(q);
-        if (!matchTitle && !matchLoc && !matchNeigh && !matchCity && !matchBuilding && !matchDesc) {
+        const matchTags = (p.tags || []).some(t => t.toLowerCase().includes(q));
+        if (!matchTitle && !matchLoc && !matchNeigh && !matchCity && !matchBuilding && !matchDesc && !matchTags) {
           return false;
         }
+      }
+
+      // Selected Tags Filter (Characteristics / Amenities)
+      if (selectedTags.length > 0) {
+        const pTagsLower = (p.tags || []).map(t => t.toLowerCase());
+        const pDescLower = (p.description || '').toLowerCase();
+        const matchAllSelectedTags = selectedTags.every(tag => {
+          const target = tag.toLowerCase();
+          return pTagsLower.includes(target) || pDescLower.includes(target);
+        });
+        if (!matchAllSelectedTags) return false;
       }
 
       // Type
@@ -253,7 +269,7 @@ function VitrineContent() {
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, minBedrooms, minParking, maxPrice, sortBy]);
+  }, [properties, searchTerm, selectedType, minBedrooms, minParking, maxPrice, selectedTags, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
@@ -262,6 +278,7 @@ function VitrineContent() {
     setMinBedrooms('all');
     setMinParking('all');
     setMaxPrice('');
+    setSelectedTags([]);
     setSortBy('relevance');
   };
 
@@ -270,6 +287,7 @@ function VitrineContent() {
     minBedrooms !== 'all',
     minParking !== 'all',
     maxPrice !== '',
+    selectedTags.length > 0,
     sortBy !== 'relevance'
   ].filter(Boolean).length;
 
@@ -597,9 +615,85 @@ function VitrineContent() {
                   </button>
                 </div>
               </div>
+
+              {/* Diferenciais & Comodidades (Tags) */}
+              <div className="pt-3 border-t border-border/80 mt-3 max-w-7xl mx-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Diferenciais & Comodidades ({selectedTags.length} selecionados)
+                    </span>
+                  </div>
+                  {selectedTags.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTags([])}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Limpar tags
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {POPULAR_PROPERTY_TAGS.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTags(prev =>
+                            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                          );
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-card border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                        <span>{tag}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Tags de Filtros Ativos na Barra */}
+        {selectedTags.length > 0 && (
+          <div className="pt-3 border-t border-border/70 mt-2 flex flex-wrap items-center gap-1.5 max-w-7xl mx-auto">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-1 flex items-center gap-1">
+              <Tag className="w-3 h-3 text-primary" /> Tags ativas:
+            </span>
+            {selectedTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-bold border border-primary/20"
+              >
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                  className="hover:opacity-70 cursor-pointer ml-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSelectedTags([])}
+              className="text-[10px] font-bold text-muted-foreground hover:text-destructive hover:underline cursor-pointer ml-1"
+            >
+              Remover todas
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Main Grid Section */}
@@ -718,6 +812,25 @@ function VitrineContent() {
                           {prop.city || prop.location || 'Localização sob consulta'}
                         </span>
                       </div>
+
+                      {/* Diferenciais / Tags Badges */}
+                      {prop.tags && prop.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {prop.tags.slice(0, 3).map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-primary/10 text-primary border border-primary/15 truncate max-w-[120px]"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {prop.tags.length > 3 && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground">
+                              +{prop.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Features Badges */}

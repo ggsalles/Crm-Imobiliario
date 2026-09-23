@@ -155,6 +155,11 @@ export async function GET(req: NextRequest) {
         buildingName: item.building_name ? String(item.building_name) : null,
         notes: item.notes ? String(item.notes) : null,
         description: item.description ? String(item.description) : null,
+        tags: Array.isArray(item.tags)
+          ? item.tags
+          : (typeof item.tags === 'string'
+              ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
+              : []),
         imageUrls: urls,
         ownerId: item.owner_id,
         createdAt: item.created_at,
@@ -206,10 +211,23 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[API/Properties] POST: Inserindo na tabela 'properties'...");
-    const { data: result, error } = await supabase
+    let { data: result, error } = await supabase
       .from('properties')
       .insert([sanitized])
       .select();
+
+    // Fallback gracioso caso a coluna 'tags' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+      console.warn("[API/Properties] POST: Coluna 'tags' ainda não criada no Supabase. Inserindo sem a coluna 'tags' temporariamente:", error.message);
+      const fallbackSanitized = { ...sanitized };
+      delete fallbackSanitized.tags;
+      const retry = await supabase
+        .from('properties')
+        .insert([fallbackSanitized])
+        .select();
+      result = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("[API/Properties] POST error ao inserir imóvel:", error);
@@ -281,10 +299,22 @@ export async function PATCH(req: NextRequest) {
     }
 
     console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
-    const { error } = await supabase
+    let { error } = await supabase
       .from('properties')
       .update(sanitized)
       .eq('id', id);
+
+    // Fallback gracioso caso a coluna 'tags' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+      console.warn(`[API/Properties] PATCH ID ${id}: Coluna 'tags' ainda não criada no Supabase. Atualizando sem a coluna 'tags':`, error.message);
+      const fallbackSanitized = { ...sanitized };
+      delete fallbackSanitized.tags;
+      const retry = await supabase
+        .from('properties')
+        .update(fallbackSanitized)
+        .eq('id', id);
+      error = retry.error;
+    }
 
     if (error) {
       console.error(`[API/Properties] PATCH ID ${id} error:`, error);

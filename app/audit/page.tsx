@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { isPlatformAdmin } from "@/lib/constants";
 import { getActionMeta, AuditSeverity } from "@/lib/audit";
 import { getTenants } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { 
@@ -92,27 +93,40 @@ export default function AuditPage() {
     }
   }, [isMaster]);
 
+  const tenantMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tenants.forEach(t => {
+      if (t.id && t.name) map[t.id] = t.name;
+    });
+    return map;
+  }, [tenants]);
+
   // Fetch logs
   const fetchLogs = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
 
     try {
-      let rawSession: string | null = null;
-      if (typeof window !== "undefined") {
-        rawSession = window.sessionStorage.getItem("crm-imob-session-v5") ||
-                     window.sessionStorage.getItem("crm-imob-session-v4") ||
-                     window.localStorage.getItem("crm-imob-session-v4");
-      }
-
       let authHeader = "";
-      if (rawSession) {
-        try {
-          const parsed = JSON.parse(rawSession);
-          if (parsed?.access_token) {
-            authHeader = `Bearer ${parsed.access_token}`;
-          }
-        } catch {}
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.access_token) {
+          authHeader = `Bearer ${sessionData.session.access_token}`;
+        }
+      } catch {}
+
+      if (!authHeader && typeof window !== "undefined") {
+        const rawSession = window.sessionStorage.getItem("crm-imob-session-v5") ||
+                           window.sessionStorage.getItem("crm-imob-session-v4") ||
+                           window.localStorage.getItem("crm-imob-session-v4");
+        if (rawSession) {
+          try {
+            const parsed = JSON.parse(rawSession);
+            if (parsed?.access_token) {
+              authHeader = `Bearer ${parsed.access_token}`;
+            }
+          } catch {}
+        }
       }
 
       const params = new URLSearchParams();
@@ -560,6 +574,11 @@ export default function AuditPage() {
                               <div className="min-w-0">
                                 <p className="font-bold text-foreground truncate max-w-[130px] text-xs">{log.author_name || "Sistema"}</p>
                                 <p className="text-[9px] text-muted-foreground truncate max-w-[130px]">{log.metadata?.userEmail || ""}</p>
+                                {isMaster && log.tenant_id && tenantMap[log.tenant_id] && (
+                                  <span className="inline-block text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border mt-0.5 max-w-[130px] truncate">
+                                    {tenantMap[log.tenant_id]}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>

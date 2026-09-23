@@ -44,18 +44,11 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
   try {
     // Collect client metadata
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown';
-    const clientPayload = {
-      ...event,
-      metadata: {
-        ...(event.metadata || {}),
-        userAgent,
-        timestamp: new Date().toISOString(),
-        url: window.location.pathname + window.location.search,
-      }
-    };
 
-    // Use session storage auth token if present
+    // Use session storage auth token and details if present
     let authHeader: string | null = null;
+    let sessionUserEmail: string | undefined = undefined;
+    let sessionUserId: string | undefined = undefined;
     try {
       const rawSession = window.sessionStorage.getItem('crm-imob-session-v5') || 
                           window.sessionStorage.getItem('crm-imob-session-v4') ||
@@ -65,15 +58,28 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
         if (parsed?.access_token) {
           authHeader = `Bearer ${parsed.access_token}`;
         }
+        if (parsed?.user) {
+          sessionUserEmail = parsed.user.email;
+          sessionUserId = parsed.user.id;
+        }
       }
     } catch {}
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    const resolvedTenantId = event.tenantId || 
+      (typeof window !== 'undefined' ? (window.sessionStorage.getItem('active-tenant-id') || window.localStorage.getItem('active-tenant-id') || undefined) : undefined);
+
+    const clientPayload = {
+      ...event,
+      tenantId: resolvedTenantId,
+      userId: event.userId || sessionUserId,
+      userEmail: event.userEmail || sessionUserEmail,
+      metadata: {
+        ...(event.metadata || {}),
+        userAgent,
+        timestamp: new Date().toISOString(),
+        url: window.location.pathname + window.location.search,
+      }
     };
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
 
     // Fire and forget
     fetch('/api/audit', {

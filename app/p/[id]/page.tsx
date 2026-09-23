@@ -49,6 +49,7 @@ interface Property {
   acceptsFinancing?: boolean;
   notes?: string | null;
   description?: string | null;
+  tags?: string[];
   imageUrls?: string[];
   ownerId: string;
   tenantId?: string;
@@ -434,6 +435,29 @@ export default function PublicPropertyCapturePage() {
                     </p>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Diferenciais & Comodidades (Tags) */}
+          {property.tags && property.tags.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200/50 p-6 md:p-8 shadow-sm space-y-4">
+              <div>
+                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" /> Diferenciais & Comodidades
+                </h3>
+                <div className="h-0.5 w-12 bg-primary rounded-full" />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {property.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary font-bold text-xs border border-primary/20 shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{tag}</span>
+                  </span>
+                ))}
               </div>
             </div>
           )}

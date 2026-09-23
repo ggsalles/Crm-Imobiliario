@@ -86,6 +86,7 @@ export interface Property {
   buildingName?: string;
   notes?: string;
   description?: string;
+  tags?: string[];
   imageUrls?: string[];
   ownerId: string;
   createdAt?: string;
@@ -1509,6 +1510,7 @@ function sanitizePropertyData(data: any, userId: string) {
     building_name: data.buildingName ? String(data.buildingName).substring(0, 500) : null,
     notes: data.notes ? String(data.notes).substring(0, 5000) : null,
     description: data.description ? String(data.description).substring(0, 5000) : null,
+    tags: Array.isArray(data.tags) ? data.tags.map((t: any) => String(t).trim()).filter(Boolean) : [],
     owner_id: userId
   };
 

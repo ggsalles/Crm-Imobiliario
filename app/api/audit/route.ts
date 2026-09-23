@@ -13,12 +13,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
     }
 
-    const isMaster = isPlatformAdmin(authUser.email);
-
-    // Fetch user's profile to verify if they are Admin of the tenant
     const { data: userProfile, error: profileErr } = await supabase
       .from('profiles')
-      .select('role, is_admin, tenant_id')
+      .select('role, is_admin, tenant_id, email')
       .eq('id', authUser.id)
       .maybeSingle();
 
@@ -26,6 +23,7 @@ export async function GET(req: NextRequest) {
       console.warn('[API/Audit] Erro ao carregar perfil:', profileErr);
     }
 
+    const isMaster = isPlatformAdmin(authUser.email) || isPlatformAdmin(userProfile?.email);
     const isTenantAdmin = userProfile?.role === 'Admin' || userProfile?.is_admin === true;
 
     if (!isMaster && !isTenantAdmin) {
@@ -105,7 +103,7 @@ export async function POST(req: NextRequest) {
                      '127.0.0.1';
     const userAgent = req.headers.get('user-agent') || body.metadata?.userAgent || 'Desconhecido';
 
-    const userId = authUser?.id || body.userId;
+    let userId = authUser?.id || body.userId;
     let tenantId = body.tenantId;
 
     if (!tenantId && userId) {
@@ -117,7 +115,33 @@ export async function POST(req: NextRequest) {
       tenantId = p?.tenant_id;
     }
 
-    const authorName = body.userName || authUser?.email || 'Sistema';
+    // Resilient fallback by email if tenantId or userId is still undefined
+    const emailToLookup = (authUser?.email || body.userEmail || '').trim().toLowerCase();
+    if ((!tenantId || !userId) && emailToLookup) {
+      const { data: pByEmail } = await supabase
+        .from('profiles')
+        .select('id, tenant_id, display_name')
+        .eq('email', emailToLookup)
+        .maybeSingle();
+      if (pByEmail) {
+        if (!userId) userId = pByEmail.id;
+        if (!tenantId) tenantId = pByEmail.tenant_id;
+      }
+    }
+
+    // Safety fallback for foreign key constraints on timeline table (owner_id, created_by)
+    if (!userId) {
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', 'ggsalles@gmail.com')
+        .maybeSingle();
+      if (adminProfile?.id) {
+        userId = adminProfile.id;
+      }
+    }
+
+    const authorName = body.userName || authUser?.email || body.userEmail || 'Sistema';
 
     const insertPayload = {
       type: 'system',

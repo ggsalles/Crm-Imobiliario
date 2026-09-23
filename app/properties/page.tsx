@@ -37,12 +37,14 @@ import {
   SlidersHorizontal,
   RotateCcw,
   Building2,
-  Globe
+  Globe,
+  Tag
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
+import { POPULAR_PROPERTY_TAGS, TAG_CATEGORIES } from "@/lib/property-tags";
 import { 
   getProperties,
   subscribeToProperties, 
@@ -79,8 +81,11 @@ export default function PropertiesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
+  const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [title, setTitle] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -130,7 +135,7 @@ ${property.condoFee && property.condoFee > 0 ? `🏢 *Condomínio:* ${formatCurr
 🚗 *Vagas:* ${property.parkingSpots} vagas
 ✍️ *Tipo:* ${property.type.substring(0,1).toUpperCase() + property.type.substring(1)}
 🏦 *Aceita Financiamento:* ${financingTxt}
-
+${property.tags && property.tags.length > 0 ? `✨ *Diferenciais:* ${property.tags.join(', ')}\n` : ''}
 📄 *Descrição do Imóvel:*
 ${property.description || "Consulte-nos para mais detalhes!"}
 ${photosText}
@@ -282,6 +287,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       setImageUrls(editingProperty?.imageUrls || []);
       setCep(formatCEP(editingProperty?.cep || ""));
       setAreaInput(editingProperty?.area ? String(editingProperty.area) : "");
+      setSelectedTags(editingProperty?.tags || []);
+      setCustomTagInput("");
       setValuationResult(null);
     }
     // Only reset when switching TO form view or editing a different property
@@ -466,10 +473,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         const matchesLocation = (p.location || "").toLowerCase().includes(query);
         const matchesCity = (p.city || "").toLowerCase().includes(query);
         const matchesId = (p.id || "").toLowerCase().includes(query);
+        const matchesTags = (p.tags || []).some(t => t.toLowerCase().includes(query));
 
-        if (!matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId) {
+        if (!matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId && !matchesTags) {
           return false;
         }
+      }
+
+      // 1.1 Selected Tags Filter (Characteristics / Amenities)
+      if (selectedFilterTags.length > 0) {
+        const pTagsLower = (p.tags || []).map(t => t.toLowerCase());
+        const pDescLower = (p.description || '').toLowerCase();
+        const matchAllSelected = selectedFilterTags.every(tag => {
+          const target = tag.toLowerCase();
+          return pTagsLower.includes(target) || pDescLower.includes(target);
+        });
+        if (!matchAllSelected) return false;
       }
 
       // 2. Specific Street Filter
@@ -542,7 +561,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     displayMinPrice,
     displayMaxPrice,
     bedroomsFilter,
-    parkingFilter
+    parkingFilter,
+    selectedFilterTags
   ]);
 
   const activeFiltersCount = useMemo(() => {
@@ -556,6 +576,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     if (parkingFilter !== "all") count++;
     if (statusFilter !== "all") count++;
     if (filterType !== "all") count++;
+    if (selectedFilterTags.length > 0) count += selectedFilterTags.length;
     return count;
   }, [
     search,
@@ -566,7 +587,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     bedroomsFilter,
     parkingFilter,
     statusFilter,
-    filterType
+    filterType,
+    selectedFilterTags
   ]);
 
   const clearAllFilters = useCallback(() => {
@@ -579,6 +601,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setParkingFilter("all");
     setStatusFilter("all");
     setFilterType("all");
+    setSelectedFilterTags([]);
   }, []);
 
   const setPricePreset = useCallback((min: number | null, max: number | null) => {
@@ -630,6 +653,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setTitle("");
     setDisplayPrice("");
     setCep("");
+    setSelectedTags([]);
+    setCustomTagInput("");
   }, []);
 
   const handleEdit = useCallback((property: Property) => {
@@ -804,6 +829,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
         notes: String(formData.get("notes") || "").substring(0, 2000),
         description: String(formData.get("description") || "").substring(0, 5000),
+        tags: selectedTags,
         imageUrls: cleanUrls,
       };
 
@@ -821,6 +847,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       toast.success(isEditing ? "Imóvel atualizado com sucesso!" : "Imóvel cadastrado com sucesso!", { id: toastId });
       
       setEditingProperty(null);
+      setSelectedTags([]);
+      setCustomTagInput("");
       setImageUrls([]);
       setView('list');
 
@@ -1162,6 +1190,52 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                             <option value="alugado">Alugado</option>
                           </select>
                         </div>
+
+                        {/* 7. Busca & Filtro de Características / Tags */}
+                        <div className="sm:col-span-2 lg:col-span-3 space-y-2 pt-2 border-t border-border/50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Tag className="w-3.5 h-3.5 text-primary" />
+                              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                                Filtrar por Características & Tags ({selectedFilterTags.length} selecionadas)
+                              </label>
+                            </div>
+                            {selectedFilterTags.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedFilterTags([])}
+                                className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                              >
+                                Limpar tags
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                            {POPULAR_PROPERTY_TAGS.map((tag) => {
+                              const isSelected = selectedFilterTags.includes(tag);
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedFilterTags(prev =>
+                                      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                                    );
+                                  }}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1",
+                                    isSelected
+                                      ? "bg-primary text-white border-primary shadow-xs"
+                                      : "bg-background border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  )}
+                                >
+                                  {isSelected && <Check className="w-3 h-3" />}
+                                  <span>{tag}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -1171,6 +1245,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                 {activeFiltersCount > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mr-1">Filtros ativos:</span>
+                    {selectedFilterTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/15 text-primary text-[10px] font-bold border border-primary/20"
+                      >
+                        <Tag className="w-2.5 h-2.5" />
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFilterTags(prev => prev.filter(t => t !== tag))}
+                          className="hover:opacity-70 cursor-pointer"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
                     {search.trim() && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
                         <span>Busca: &ldquo;{search}&rdquo;</span>
@@ -1671,6 +1761,147 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                         rows={4}
                         className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none outline-none"
                       />
+                    </div>
+
+                    {/* Bloco de Características, Comodidades & Tags (Diferenciais) */}
+                    <div className="md:col-span-2 p-6 sm:p-7 bg-muted/20 border border-border/70 rounded-3xl space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                            <Tag className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                              <span>Características, Diferenciais & Comodidades</span>
+                              {selectedTags.length > 0 && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-bold">
+                                  {selectedTags.length} selecionado{selectedTags.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              Adicione comodidades e tags para valorizar seu imóvel na vitrine e acelerar buscas
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Campo para Adicionar Tag Personalizada */}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={customTagInput}
+                            onChange={(e) => setCustomTagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const val = customTagInput.trim();
+                                if (val && !selectedTags.some(t => t.toLowerCase() === val.toLowerCase())) {
+                                  setSelectedTags(prev => [...prev, val]);
+                                  setCustomTagInput("");
+                                }
+                              }
+                            }}
+                            placeholder="Digite uma comodidade e tecle Enter (ex: Vista Panorâmica, Energia Solar, Reformado...)"
+                            className="w-full px-4 py-2.5 bg-background border border-border rounded-xl text-xs font-medium text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                          />
+                          {customTagInput && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomTagInput("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = customTagInput.trim();
+                            if (val && !selectedTags.some(t => t.toLowerCase() === val.toLowerCase())) {
+                              setSelectedTags(prev => [...prev, val]);
+                              setCustomTagInput("");
+                            }
+                          }}
+                          disabled={!customTagInput.trim()}
+                          className="px-4 py-2.5 bg-primary text-primary-foreground text-xs font-bold rounded-xl hover:opacity-90 transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Adicionar</span>
+                        </button>
+                      </div>
+
+                      {/* Tags Ativas Atualmente no Imóvel */}
+                      {selectedTags.length > 0 && (
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Tags ativas neste imóvel (clique no × para remover):
+                          </label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs animate-in fade-in"
+                              >
+                                <span>{tag}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                                  className="hover:bg-white/20 rounded-full p-0.5 transition-colors cursor-pointer"
+                                  title="Remover tag"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sugestões Populares Agrupadas */}
+                      <div className="space-y-3 pt-2 border-t border-border/50">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block">
+                          Comodidades Frequentes (clique para marcar/desmarcar):
+                        </label>
+                        <div className="space-y-2.5">
+                          {TAG_CATEGORIES.map((cat, catIdx) => (
+                            <div key={catIdx} className="space-y-1.5">
+                              <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider block">
+                                {cat.category}
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {cat.tags.map((tag) => {
+                                  const isSelected = selectedTags.some(t => t.toLowerCase() === tag.toLowerCase());
+                                  return (
+                                    <button
+                                      key={tag}
+                                      type="button"
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          setSelectedTags(prev => prev.filter(t => t.toLowerCase() !== tag.toLowerCase()));
+                                        } else {
+                                          setSelectedTags(prev => [...prev, tag]);
+                                        }
+                                      }}
+                                      className={cn(
+                                        "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1",
+                                        isSelected
+                                          ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
+                                          : "bg-background border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                                      )}
+                                    >
+                                      {isSelected ? <Check className="w-3 h-3 text-white" /> : <Plus className="w-2.5 h-2.5 opacity-60" />}
+                                      <span>{tag}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2 space-y-6">
@@ -2313,7 +2544,7 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40">
             <Bed className="w-3 h-3 text-muted-foreground" />
             <span className="text-[11px] font-semibold text-foreground">{property.bedrooms} Quartos</span>
@@ -2323,6 +2554,25 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare }: { prop
             <span className="text-[11px] font-semibold text-foreground">{property.area}m²</span>
           </div>
         </div>
+
+        {/* Tags / Diferenciais do Imóvel */}
+        {property.tags && property.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2.5">
+            {property.tags.slice(0, 3).map((tag, idx) => (
+              <span
+                key={idx}
+                className="px-2 py-0.5 rounded-md text-[9px] font-semibold bg-primary/10 text-primary border border-primary/15 truncate max-w-[120px]"
+              >
+                {tag}
+              </span>
+            ))}
+            {property.tags.length > 3 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-muted text-muted-foreground">
+                +{property.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-auto pt-2.5 border-t border-border flex flex-col gap-2">
           <div className="flex items-baseline justify-between">

@@ -27,19 +27,13 @@ export function invalidateTenantCache(userId?: string) {
  * Returns a configured Supabase client for Server Route Handlers.
  */
 export function getSupabase(req: NextRequest) {
-  const authHeader = req.headers.get('Authorization');
-
   if (supabaseServiceKey) {
-    const headers: Record<string, string> = {};
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
     return createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers },
       auth: { persistSession: false }
     });
   }
 
+  const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     return createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
