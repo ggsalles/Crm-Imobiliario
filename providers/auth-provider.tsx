@@ -248,27 +248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        const lastAudit = typeof window !== 'undefined' ? Number(sessionStorage.getItem('last_login_audit_timestamp') || '0') : 0;
-        if (Date.now() - lastAudit > 12000) {
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('last_login_audit_timestamp', String(Date.now()));
-          }
-          recordAuditEvent({
-            action: 'LOGIN_SUCCESS',
-            title: 'Autenticação no Sistema',
-            content: `Usuário autenticado com sucesso: ${session.user.email || 'Usuário'}`,
-            severity: 'info',
-            category: 'auth',
-            userId: session.user.id,
-            userName: session.user.user_metadata?.display_name || session.user.email?.split('@')[0],
-            userEmail: session.user.email || '',
-            tenantId: session.user.user_metadata?.tenant_id,
-            token: session.access_token
-          }).catch(() => {});
-        }
-      }
-
       if (session) {
         if (!authInitializedRef.current) {
           await handleInitialSession(session);
