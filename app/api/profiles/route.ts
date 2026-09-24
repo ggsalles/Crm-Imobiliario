@@ -2,6 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
 import { getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
+import { 
+  isUserInactiveInStore, 
+  getUserInactiveDetail, 
+  setUserInactiveInStore 
+} from '@/lib/user-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -250,6 +255,11 @@ export async function GET(req: NextRequest) {
         console.warn("Tabela profile_tenants pode nao ter sido criada ainda:", e);
       }
 
+      const inactiveDetail = getUserInactiveDetail(data.id);
+      const isLocallyInactive = isUserInactiveInStore(data.id);
+      const isActive = !isLocallyInactive && (data.is_active !== false);
+      const inactiveReason = inactiveDetail?.reason || data.inactive_reason || null;
+
       return NextResponse.json({
         id: data.id,
         displayName: data.display_name,
@@ -259,17 +269,19 @@ export async function GET(req: NextRequest) {
         userType: data.user_type,
         isAdmin: data.is_admin,
         tenantId: data.tenant_id,
-        tenantIds
+        tenantIds,
+        isActive,
+        inactiveReason
       });
     }
 
     if (email) {
-      let { data, error } = await supabase.from('profiles').select('id, tenant_id').eq('email', email.toLowerCase()).maybeSingle();
+      let { data, error } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
       
       if ((error || !data) && supabaseServiceKey) {
         console.warn("[API/Profiles] GET Email: Erro ou vazio usando client padrão, tentando com Service Role...");
         const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
-        const { data: adminData, error: adminError } = await adminSupabase.from('profiles').select('id, tenant_id').eq('email', email.toLowerCase()).maybeSingle();
+        const { data: adminData, error: adminError } = await adminSupabase.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
         if (!adminError && adminData) {
           data = adminData;
           error = null;
@@ -277,7 +289,22 @@ export async function GET(req: NextRequest) {
       }
 
       if (error) throw error;
-      return NextResponse.json(data ? { id: data.id, tenantId: data.tenant_id } : null);
+      if (!data) return NextResponse.json(null);
+
+      const inactiveDetail = getUserInactiveDetail(data.id);
+      const isLocallyInactive = isUserInactiveInStore(data.id);
+      const isActive = !isLocallyInactive && (data.is_active !== false);
+      const inactiveReason = inactiveDetail?.reason || data.inactive_reason || null;
+
+      return NextResponse.json({ 
+        id: data.id, 
+        tenantId: data.tenant_id,
+        displayName: data.display_name,
+        email: data.email,
+        role: data.role,
+        isActive,
+        inactiveReason
+      });
     }
 
     let { data: profiles, error } = await supabase.from('profiles').select('*');
@@ -326,17 +353,26 @@ export async function GET(req: NextRequest) {
     const requestedTenantId = searchParams.get('tenantId');
     const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser) : null);
 
-    let items = (profiles || []).map((item: any) => ({
-      id: item.id,
-      displayName: item.display_name,
-      email: item.email,
-      photoURL: item.photo_url,
-      role: item.role,
-      userType: item.user_type,
-      isAdmin: item.is_admin,
-      tenantId: item.tenant_id,
-      tenantIds: associationsMap[item.id] || [item.tenant_id || DEFAULT_TENANT_ID]
-    }));
+    let items = (profiles || []).map((item: any) => {
+      const inactiveDetail = getUserInactiveDetail(item.id);
+      const isLocallyInactive = isUserInactiveInStore(item.id);
+      const isActive = !isLocallyInactive && (item.is_active !== false);
+      const inactiveReason = inactiveDetail?.reason || item.inactive_reason || null;
+
+      return {
+        id: item.id,
+        displayName: item.display_name,
+        email: item.email,
+        photoURL: item.photo_url,
+        role: item.role,
+        userType: item.user_type,
+        isAdmin: item.is_admin,
+        tenantId: item.tenant_id,
+        tenantIds: associationsMap[item.id] || [item.tenant_id || DEFAULT_TENANT_ID],
+        isActive,
+        inactiveReason
+      };
+    });
 
     // Se o solicitante NÃO for o Master (ggsalles), ocultar o login do Master de empresas clientes:
     if (!callerIsMaster) {
@@ -369,6 +405,17 @@ export async function POST(req: NextRequest) {
     
     const { tenantIds, ...profileData } = body;
 
+    let initialIsActive: boolean = true;
+    let initialReason: string | undefined = undefined;
+    if (profileData.isActive !== undefined || profileData.is_active !== undefined) {
+      initialIsActive = profileData.isActive !== undefined ? Boolean(profileData.isActive) : Boolean(profileData.is_active);
+      initialReason = profileData.inactiveReason !== undefined ? profileData.inactiveReason : profileData.inactive_reason;
+      profileData.is_active = initialIsActive;
+      profileData.inactive_reason = initialReason || null;
+      delete profileData.isActive;
+      delete profileData.inactiveReason;
+    }
+
     // Serves as real-time multi-tenant association. We first check if a profile with this email already exists inside CRM.
     const { data: existingUser, error: findError } = await supabase
       .from('profiles')
@@ -396,10 +443,20 @@ export async function POST(req: NextRequest) {
         await supabase.from('profiles').update(updatePayload).eq('id', profileId);
       }
     } else {
-      const { data: result, error } = await supabase
+      let { data: result, error } = await supabase
         .from('profiles')
         .insert([profileData])
         .select();
+
+      if (error && (error.message?.includes('is_active') || error.message?.includes('inactive_reason') || error.code === '42703')) {
+        console.warn("[API/Profiles] POST: Coluna is_active/inactive_reason ainda não no Supabase. Fallback inserindo sem essas colunas...");
+        const fallbackInsert = { ...profileData };
+        delete fallbackInsert.is_active;
+        delete fallbackInsert.inactive_reason;
+        const res = await supabase.from('profiles').insert([fallbackInsert]).select();
+        result = res.data;
+        error = res.error;
+      }
 
       if (error) {
         if (error.code === '23505' || (error.message && error.message.toLowerCase().includes('unique constraint'))) {
@@ -421,6 +478,10 @@ export async function POST(req: NextRequest) {
         profileId = result[0].id;
         finalRole = result[0].role || 'Membro';
       }
+    }
+
+    if (!initialIsActive) {
+      setUserInactiveInStore(profileId, true, initialReason);
     }
 
     const resolvedTenantIds = Array.isArray(tenantIds) && tenantIds.length > 0
@@ -472,6 +533,17 @@ export async function PATCH(req: NextRequest) {
     const data = await req.json();
     const { tenantIds, ...otherData } = data;
 
+    // Trata atualização de status ativo/inativo
+    if (otherData.isActive !== undefined || otherData.is_active !== undefined) {
+      const isActive = otherData.isActive !== undefined ? Boolean(otherData.isActive) : Boolean(otherData.is_active);
+      const reason = (otherData.inactiveReason !== undefined ? otherData.inactiveReason : otherData.inactive_reason) || null;
+      setUserInactiveInStore(id, !isActive, reason || undefined);
+      otherData.is_active = isActive;
+      otherData.inactive_reason = reason;
+      delete otherData.isActive;
+      delete otherData.inactiveReason;
+    }
+
     // Normaliza tenantIds caso tenham sido informados
     const validTenantIds: string[] = Array.isArray(tenantIds) 
       ? tenantIds.filter(Boolean)
@@ -486,10 +558,23 @@ export async function PATCH(req: NextRequest) {
 
     // 1. Atualiza dados do perfil na tabela profiles em uma única operação direta
     if (Object.keys(otherData).length > 0) {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('profiles')
         .update(otherData)
         .eq('id', id);
+
+      if (error && (error.message?.includes('is_active') || error.message?.includes('inactive_reason') || error.code === '42703')) {
+        console.warn("[API/Profiles] Coluna is_active/inactive_reason ainda não no Supabase. Fallback aplicado com persistência local.");
+        const fallbackData = { ...otherData };
+        delete fallbackData.is_active;
+        delete fallbackData.inactive_reason;
+        if (Object.keys(fallbackData).length > 0) {
+          const res = await supabase.from('profiles').update(fallbackData).eq('id', id);
+          error = res.error;
+        } else {
+          error = null;
+        }
+      }
 
       if (error) {
         console.error("[API/Profiles] Erro ao atualizar tabela profiles:", error);

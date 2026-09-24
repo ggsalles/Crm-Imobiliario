@@ -32,6 +32,7 @@ import {
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -81,8 +82,10 @@ function MessagesContent() {
   const [convSearchQuery, setConvSearchQuery] = useState("");
   const [contacts, setContacts] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState<string | null>(null);
+  const [convToDelete, setConvToDelete] = useState<any | null>(null);
+  const [isDeletingConv, setIsDeletingConv] = useState(false);
+  const [msgToDelete, setMsgToDelete] = useState<any | null>(null);
+  const [isDeletingMsg, setIsDeletingMsg] = useState(false);
 
   const emojis = [
     "😀", "😃", "😄", "😁", "😆", "😅", "😂", "😉", "😊", "😇", 
@@ -91,19 +94,46 @@ function MessagesContent() {
     "✅", "❌", "🤝", "💼", "📅", "📞", "💪", "💯", "⭐", "🌈"
   ];
 
-  useEffect(() => {
-    if (deleteConfirmId) {
-      const timer = setTimeout(() => setDeleteConfirmId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [deleteConfirmId]);
+  const confirmDeleteConversation = async () => {
+    if (!convToDelete) return;
+    const convId = convToDelete.id;
+    setIsDeletingConv(true);
+    const toastId = toast.loading("Excluindo conversa...");
+    setConversations(prev => prev.filter(c => c.id !== convId));
 
-  useEffect(() => {
-    if (deleteConfirmMsgId) {
-      const timer = setTimeout(() => setDeleteConfirmMsgId(null), 3000);
-      return () => clearTimeout(timer);
+    try {
+      await deleteConversation(convId);
+      if (selectedConv?.id === convId) {
+        setSelectedConv(null);
+      }
+      toast.success("Conversa excluída com sucesso!", { id: toastId });
+      setConvToDelete(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Erro ao excluir conversa.", { id: toastId });
+    } finally {
+      setIsDeletingConv(false);
     }
-  }, [deleteConfirmMsgId]);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!msgToDelete) return;
+    const msgId = msgToDelete.id;
+    setIsDeletingMsg(true);
+    const toastId = toast.loading("Apagando mensagem...");
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+
+    try {
+      await deleteChatMessage(msgId);
+      toast.success("Mensagem apagada com sucesso!", { id: toastId });
+      setMsgToDelete(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Erro ao apagar mensagem.", { id: toastId });
+    } finally {
+      setIsDeletingMsg(false);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -466,51 +496,26 @@ function MessagesContent() {
                       </div>
 
                       <div className="flex flex-col items-end gap-1 shrink-0 relative min-w-[60px]">
-                        <span className={cn(
-                          "text-[9px] font-bold text-muted-foreground uppercase tracking-tighter shrink-0 pt-0.5 transition-all duration-200",
-                          deleteConfirmId === conv.id ? "opacity-0 scale-90" : "group-hover:opacity-0 group-hover:scale-95"
-                        )}>
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter shrink-0 pt-0.5 transition-all duration-200 group-hover:opacity-0 group-hover:scale-95">
                           {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                         </span>
                         
                         {(conv.unreadCount?.[user?.id || ""] || 0) > 0 && (
-                          <span className={cn(
-                            "w-4 h-4 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 shadow-xs shadow-primary/20 transition-all duration-200",
-                            deleteConfirmId === conv.id ? "opacity-0 scale-90" : "group-hover:opacity-0 group-hover:scale-95"
-                          )}>
+                          <span className="w-4 h-4 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 shadow-xs shadow-primary/20 transition-all duration-200 group-hover:opacity-0 group-hover:scale-95">
                             {conv.unreadCount?.[user?.id || ""]}
                           </span>
                         )}
 
                         <button
                           type="button"
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
-                            if (deleteConfirmId === conv.id) {
-                              try {
-                                await deleteConversation(conv.id);
-                                if (selectedConv?.id === conv.id) {
-                                  setSelectedConv(null);
-                                }
-                                toast.success("Conversa excluída com sucesso");
-                                setDeleteConfirmId(null);
-                              } catch (err) {
-                                console.error(err);
-                                toast.error("Erro ao excluir conversa");
-                              }
-                            } else {
-                              setDeleteConfirmId(conv.id);
-                            }
+                            setConvToDelete(conv);
                           }}
-                          className={cn(
-                            "absolute top-1/2 -translate-y-1/2 right-0 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center z-10",
-                            deleteConfirmId === conv.id 
-                              ? "bg-red-500 text-white scale-110 shadow-md shadow-red-500/20 opacity-100" 
-                              : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                          )}
-                          title={deleteConfirmId === conv.id ? "Clique novamente para confirmar" : "Excluir conversa"}
+                          className="absolute top-1/2 -translate-y-1/2 right-0 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center z-10 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
+                          title="Excluir conversa"
                         >
-                          <Trash2 className={cn("w-3.5 h-3.5", deleteConfirmId === conv.id && "animate-pulse")} />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -621,32 +626,18 @@ function MessagesContent() {
                               {(isOwn || profile?.role === 'Admin') && (
                                 <button
                                   type="button"
-                                  onClick={async (e) => {
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    if (deleteConfirmMsgId === msg.id) {
-                                      try {
-                                        await deleteChatMessage(msg.id);
-                                        setMessages(prev => prev.filter(m => m.id !== msg.id));
-                                        toast.success("Mensagem apagada com sucesso");
-                                        setDeleteConfirmMsgId(null);
-                                      } catch (err) {
-                                        console.error(err);
-                                        toast.error("Erro ao apagar mensagem");
-                                      }
-                                    } else {
-                                      setDeleteConfirmMsgId(msg.id);
-                                    }
+                                    setMsgToDelete(msg);
                                   }}
                                   className={cn(
-                                    "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center z-10 border border-border bg-card shadow-xs",
+                                    "absolute top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center z-10 border border-border bg-card shadow-xs cursor-pointer",
                                     isOwn ? "-left-10" : "-right-10",
-                                    deleteConfirmMsgId === msg.id 
-                                      ? "bg-red-500 text-white border-red-500 scale-110 shadow-md shadow-red-500/20 opacity-100" 
-                                      : "opacity-0 group-hover/msg:opacity-100 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                    "opacity-0 group-hover/msg:opacity-100 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
                                   )}
-                                  title={deleteConfirmMsgId === msg.id ? "Clique novamente para confirmar" : "Apagar mensagem"}
+                                  title="Apagar mensagem"
                                 >
-                                  <Trash2 className={cn("w-3 h-3", deleteConfirmMsgId === msg.id && "animate-pulse")} />
+                                  <Trash2 className="w-3 h-3" />
                                 </button>
                               )}
 
@@ -968,6 +959,30 @@ function MessagesContent() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Conversa */}
+      <ConfirmDeleteModal
+        isOpen={!!convToDelete}
+        onClose={() => setConvToDelete(null)}
+        onConfirm={confirmDeleteConversation}
+        title="Excluir Conversa"
+        itemName={convToDelete?.contactName || "Conversa selecionada"}
+        itemType="conversa"
+        warningNote="Todas as mensagens trocadas nesta conversa serão removidas permanentemente."
+        isDeleting={isDeletingConv}
+      />
+
+      {/* Modal de Confirmação de Exclusão de Mensagem */}
+      <ConfirmDeleteModal
+        isOpen={!!msgToDelete}
+        onClose={() => setMsgToDelete(null)}
+        onConfirm={confirmDeleteMessage}
+        title="Apagar Mensagem"
+        itemName={msgToDelete?.text ? `"${msgToDelete.text.substring(0, 80)}${msgToDelete.text.length > 80 ? '...' : ''}"` : "Mensagem com anexo"}
+        itemType="mensagem"
+        warningNote="Esta mensagem será apagada para todos os participantes do chat."
+        isDeleting={isDeletingMsg}
+      />
     </>
   );
 }

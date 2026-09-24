@@ -48,6 +48,9 @@ interface Property {
   parkingSpots?: number;
   acceptsFinancing?: boolean;
   isFeatured?: boolean;
+  buildingName?: string | null;
+  condoFee?: number | null;
+  iptu?: number | null;
   notes?: string | null;
   description?: string | null;
   tags?: string[];
@@ -95,8 +98,8 @@ export default function PublicPropertyCapturePage() {
     async function loadData() {
       try {
         setLoading(true);
-        // 1. Fetch single property
-        const res = await fetch(`/api/properties?id=${id}`);
+        // 1. Fetch single property with no-store
+        const res = await fetch(`/api/properties?id=${id}&_t=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) {
           throw new Error("Imóvel não encontrado");
         }
@@ -301,9 +304,35 @@ export default function PublicPropertyCapturePage() {
                 <span className="capitalize py-1 px-3 bg-white/90 backdrop-blur-sm text-slate-900 rounded-full text-xs font-extrabold shadow-sm">
                   {property.type}
                 </span>
-                <span className="py-1 px-3 bg-emerald-500 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-md shadow-emerald-500/20">
-                  {property.status === 'disponível' ? 'Disponível' : property.status}
-                </span>
+                {(() => {
+                  const s = (property.status || 'disponível').toLowerCase().trim();
+                  if (s === 'reservado' || s === 'reserved') {
+                    return (
+                      <span className="py-1 px-3 bg-amber-500 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-md shadow-amber-500/20">
+                        Reservado
+                      </span>
+                    );
+                  }
+                  if (s === 'vendido' || s === 'sold') {
+                    return (
+                      <span className="py-1 px-3 bg-slate-800 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-md border border-white/20">
+                        Vendido
+                      </span>
+                    );
+                  }
+                  if (s === 'alugado' || s === 'rented') {
+                    return (
+                      <span className="py-1 px-3 bg-blue-600 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-md">
+                        Alugado
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="py-1 px-3 bg-emerald-500 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-md shadow-emerald-500/20">
+                      Disponível
+                    </span>
+                  );
+                })()}
                 {property.acceptsFinancing && (
                   <span className="py-1 px-4 bg-primary text-white rounded-full text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary/25 flex items-center gap-1.5 border border-white/10">
                     <Coins className="w-3 h-3" /> Aceita Financiamento

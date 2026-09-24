@@ -42,6 +42,7 @@ import {
   Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { recordAuditEvent } from "@/lib/audit";
@@ -71,6 +72,8 @@ export default function PropertiesPage() {
 
   const [view, setView] = useState<'list' | 'form'>('list');
   const [properties, setProperties] = useState<Property[]>([]);
+  const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null);
+  const [isDeletingProperty, setIsDeletingProperty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -652,13 +655,17 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setDisplayMaxPrice(max ? formatCurrencyBRL(max) : "");
   }, []);
 
-  const handleDelete = async (id: string) => {
-    console.log(`[Properties] handleDelete: Executando exclusão do ID: ${id}`);
-    setLoading(true);
+  const confirmDeleteProperty = async () => {
+    if (!propertyToDelete) return;
+    const target = propertyToDelete;
+    const id = target.id;
+
+    console.log(`[Properties] confirmDeleteProperty: Executando exclusão do ID: ${id}`);
+    setIsDeletingProperty(true);
     const toastId = toast.loading("Excluindo imóvel...");
+    setProperties(prev => prev.filter(p => p.id !== id));
     
     try {
-      const target = properties.find(p => p.id === id);
       await deleteProperty(id);
 
       recordAuditEvent({
@@ -676,13 +683,15 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         }
       });
 
-      console.log(`[Properties] handleDelete: Sucesso ao excluir ID: ${id}`);
+      console.log(`[Properties] confirmDeleteProperty: Sucesso ao excluir ID: ${id}`);
       toast.success("Imóvel excluído com sucesso.", { id: toastId });
+      setPropertyToDelete(null);
     } catch (err: any) {
-      console.error(`[Properties] handleDelete: Erro ao excluir ID: ${id}`, err);
+      console.error(`[Properties] confirmDeleteProperty: Erro ao excluir ID: ${id}`, err);
+      setProperties(prev => [...prev, target]);
       toast.error(`Erro ao excluir: ${err.message || "Falha técnica"}`, { id: toastId });
     } finally {
-      setLoading(false);
+      setIsDeletingProperty(false);
     }
   };
 
@@ -1638,7 +1647,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       key={property.id} 
                       property={property} 
                       onEdit={() => handleEdit(property)}
-                      onDelete={() => handleDelete(property.id)}
+                      onDelete={() => setPropertyToDelete(property)}
                       onShowMap={() => setActiveMapProperty(property)}
                       onShare={() => setSharingProperty(property)}
                       onToggleFeatured={() => handleToggleFeatured(property)}
@@ -2718,6 +2727,17 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Imóvel */}
+      <ConfirmDeleteModal
+        isOpen={!!propertyToDelete}
+        onClose={() => setPropertyToDelete(null)}
+        onConfirm={confirmDeleteProperty}
+        title="Excluir Imóvel"
+        itemName={propertyToDelete ? `${propertyToDelete.title} - ${propertyToDelete.location}` : undefined}
+        itemType="imóvel do catálogo"
+        isDeleting={isDeletingProperty}
+      />
     </div>
   );
 }
@@ -2731,18 +2751,6 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare, onToggle
   onToggleFeatured: () => void;
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  
-  const images = property.imageUrls && property.imageUrls.length > 0 
-    ? property.imageUrls 
-    : ["https://picsum.photos/seed/realestate/800/600"];
-
-  useEffect(() => {
-    if (confirmDelete) {
-      const timer = setTimeout(() => setConfirmDelete(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [confirmDelete]);
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2987,29 +2995,12 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare, onToggle
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log(`[PropertyCard] Clique no botão lixeira. Estado confirmDelete: ${confirmDelete}`);
-                  if (confirmDelete) {
-                    console.log("[PropertyCard] Segunda confirmação recebida. Chamando onDelete...");
-                    onDelete();
-                    setConfirmDelete(false);
-                  } else {
-                    console.log("[PropertyCard] Primeira confirmação. Ativando estado de confirmação.");
-                    setConfirmDelete(true);
-                  }
+                  onDelete();
                 }} 
-                className={cn(
-                  "w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer z-20 relative border",
-                  confirmDelete 
-                    ? "bg-red-500 text-white border-red-600 scale-105 shadow-md shadow-red-500/20" 
-                    : "bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
-                )}
-                title={confirmDelete ? "Clique novamente para confirmar" : "Excluir imóvel"}
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer z-20 relative bg-muted text-muted-foreground border-transparent hover:bg-red-500/10 hover:text-red-500"
+                title="Excluir imóvel"
               >
-                {confirmDelete ? (
-                  <Trash2 className="w-3.5 h-3.5 animate-pulse pointer-events-none" />
-                ) : (
-                  <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
-                )}
+                <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
               </button>
             </div>
 

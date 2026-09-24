@@ -30,6 +30,7 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 
 export default function CompaniesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -39,7 +40,8 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [isDeletingCompany, setIsDeletingCompany] = useState(false);
 
   const fetchData = async () => {
     if (!user || !profile) return;
@@ -47,13 +49,6 @@ export default function CompaniesPage() {
     const data = await getCompanies(ownerId);
     setCompanies(data);
   };
-
-  useEffect(() => {
-    if (deleteConfirmId) {
-      const timer = setTimeout(() => setDeleteConfirmId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [deleteConfirmId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -80,9 +75,16 @@ export default function CompaniesPage() {
     c.industry?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = async (id: string) => {
+  const confirmDeleteCompany = async () => {
+    if (!companyToDelete) return;
+    const targetCompany = companyToDelete;
+    const id = targetCompany.id;
+
+    setIsDeletingCompany(true);
+    const toastId = toast.loading("Excluindo empresa...");
+    setCompanies(prev => prev.filter(c => c.id !== id));
+
     try {
-      const targetCompany = companies.find(c => c.id === id);
       await deleteCompany(id);
       recordAuditEvent({
         action: 'DELETE_COMPANY',
@@ -98,11 +100,18 @@ export default function CompaniesPage() {
           website: targetCompany?.website
         }
       });
-      toast.success("Empresa excluída!");
-      setDeleteConfirmId(null);
-      await fetchData();
-    } catch (err) {
-      toast.error("Erro ao excluir empresa.");
+      toast.success("Empresa excluída com sucesso!", { id: toastId });
+      setCompanyToDelete(null);
+      if (editingCompany && editingCompany.id === id) {
+        setIsModalOpen(false);
+        setEditingCompany(null);
+      }
+    } catch (err: any) {
+      console.error("Erro ao excluir empresa:", err);
+      setCompanies(prev => [...prev, targetCompany]);
+      toast.error(err?.message || "Erro ao excluir empresa.", { id: toastId });
+    } finally {
+      setIsDeletingCompany(false);
     }
   };
 
@@ -215,24 +224,13 @@ export default function CompaniesPage() {
                       </div>
                     </div>
                     <div className="flex gap-0.5">
-                      <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition-colors" title="Editar"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer" title="Editar"><Edit2 className="w-3.5 h-3.5" /></button>
                       <button 
-                        onClick={() => {
-                          if (deleteConfirmId === company.id) {
-                            handleDelete(company.id);
-                          } else {
-                            setDeleteConfirmId(company.id);
-                          }
-                        }} 
-                        className={cn(
-                          "p-1.5 rounded-lg transition-all",
-                          deleteConfirmId === company.id 
-                            ? "bg-red-500 text-white scale-105 shadow-xs" 
-                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                        )}
-                        title={deleteConfirmId === company.id ? "Clique novamente para confirmar" : "Excluir"}
+                        onClick={() => setCompanyToDelete(company)} 
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Excluir empresa"
                       >
-                        <Trash2 className={cn("w-3.5 h-3.5", deleteConfirmId === company.id && "animate-pulse")} />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -291,23 +289,11 @@ export default function CompaniesPage() {
                   {editingCompany && (
                     <button 
                       type="button" 
-                      onClick={() => { 
-                        if (deleteConfirmId === editingCompany.id) {
-                          handleDelete(editingCompany.id); 
-                          setIsModalOpen(false);
-                        } else {
-                          setDeleteConfirmId(editingCompany.id);
-                        }
-                      }} 
-                      className={cn(
-                        "px-3 py-2 rounded-xl transition-all border",
-                        deleteConfirmId === editingCompany.id 
-                          ? "bg-red-500 text-white border-red-600 shadow-md shadow-red-500/20 scale-105" 
-                          : "text-red-500 hover:bg-red-500/10 border-red-500/20"
-                      )}
-                      title={deleteConfirmId === editingCompany.id ? "Clique novamente para confirmar" : "Excluir empresa"}
+                      onClick={() => setCompanyToDelete(editingCompany)} 
+                      className="px-3 py-2 rounded-xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer"
+                      title="Excluir empresa"
                     >
-                      <Trash2 className={cn("w-4 h-4", deleteConfirmId === editingCompany.id && "animate-pulse")} />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 font-black uppercase tracking-widest text-[11px] text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors">Cancelar</button>
@@ -318,6 +304,17 @@ export default function CompaniesPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Empresa */}
+      <ConfirmDeleteModal
+        isOpen={!!companyToDelete}
+        onClose={() => setCompanyToDelete(null)}
+        onConfirm={confirmDeleteCompany}
+        title="Excluir Empresa"
+        itemName={companyToDelete?.name}
+        itemType="empresa"
+        isDeleting={isDeletingCompany}
+      />
     </div>
   );
 }

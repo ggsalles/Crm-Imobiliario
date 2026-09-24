@@ -698,7 +698,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userType: profileData.user_type,
           isAdmin: profileData.is_admin,
           tenantId: finalTenantId || finalTenantIds[0],
-          tenantIds: finalTenantIds
+          tenantIds: finalTenantIds,
+          isActive: profileData.is_active !== false,
+          inactiveReason: profileData.inactive_reason || undefined
         });
         return;
       }
@@ -760,7 +762,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userType: existingByEmail.user_type,
           isAdmin: existingByEmail.is_admin,
           tenantId: finalTenantId || updatedTenantIds[0],
-          tenantIds: updatedTenantIds
+          tenantIds: updatedTenantIds,
+          isActive: existingByEmail.is_active !== false,
+          inactiveReason: existingByEmail.inactive_reason || undefined
         });
         return;
       }
@@ -910,6 +914,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Revert session if not pre-registered
       await supabase.auth.signOut({ scope: 'local' });
       throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
+    } else if (preRegResult.preRegisteredUser && preRegResult.preRegisteredUser.isActive === false && !isPlatformAdmin(cleanEmail)) {
+      await supabase.auth.signOut({ scope: 'local' });
+      clearAuthSession();
+      const reasonStr = preRegResult.preRegisteredUser.inactiveReason 
+        ? ` (Motivo: "${preRegResult.preRegisteredUser.inactiveReason}")` 
+        : "";
+      throw new Error(`Acesso inativado: Seu usuário foi temporariamente inativado pela administração da imobiliária.${reasonStr} Entre em contato com seu gestor.`);
     }
 
     const authData = authResult.data;
@@ -1157,6 +1168,106 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPublicPath = pathname === '/login' || 
     pathname === '/register' || 
     pathname === '/reset-password';
+
+  const isUserInactive = profile?.isActive === false && !isPlatformAdmin(profile?.email);
+
+  if (isUserInactive && !isPublicPath) {
+    return (
+      <AuthContext.Provider value={contextValue}>
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-rose-500 selection:text-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(244,63,94,0.06),transparent_45%)] pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-96 bg-[radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.04),transparent_50%)] pointer-events-none" />
+          
+          <div className="w-full max-w-lg bg-slate-900/70 border border-rose-500/25 backdrop-blur-xl rounded-3xl p-8 md:p-10 shadow-2xl shadow-rose-950/20 relative z-10 text-center">
+            {/* User Lock Icon with Glowing Effect */}
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500/15 to-orange-500/5 text-rose-500 flex items-center justify-center border border-rose-500/25 shadow-lg shadow-rose-950/30 mb-7 relative">
+              <div className="absolute inset-0 bg-rose-500/10 blur-xl rounded-full" />
+              <svg className="w-8 h-8 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </div>
+
+            {/* Status Information */}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-4 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              Acesso Inativado
+            </span>
+
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-100 sm:text-3xl font-sans mb-2">
+              Conta Temporariamente Inativa
+            </h1>
+
+            <p className="text-sm font-semibold text-rose-400 mb-4">
+              {profile?.displayName || profile?.email}
+            </p>
+            
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto mb-6">
+              O seu acesso ao sistema de CRM foi suspenso temporariamente pela administração da imobiliária.
+            </p>
+
+            {/* Reason card if provided */}
+            {profile?.inactiveReason && (
+              <div className="mb-6 p-3.5 bg-rose-950/30 border border-rose-500/25 rounded-2xl text-left">
+                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">
+                  Motivo registrado pela gestão:
+                </span>
+                <p className="text-xs text-slate-200 italic font-medium">
+                  &ldquo;{profile.inactiveReason}&rdquo;
+                </p>
+              </div>
+            )}
+
+            <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-xl text-left mb-6">
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                🛡️ <strong className="text-slate-200">Seus dados continuam preservados:</strong> Todos os seus negócios, contatos e imóveis permanecem salvos em segurança no CRM. Para solicitar a reativação do seu acesso, entre em contato com o gestor ou administrador da sua imobiliária.
+              </p>
+            </div>
+
+            <div className="space-y-3 max-w-sm mx-auto">
+              {/* Multi-tenant switching list */}
+              {profile?.tenantIds && profile.tenantIds.length > 1 && (
+                <div className="pt-2 border-t border-slate-800/60 mb-2 text-left">
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-2 text-center">
+                    Acessar outra imobiliária:
+                  </p>
+                  <div className="space-y-2">
+                    {profile.tenantIds
+                      .filter(tid => tid !== profile.tenantId)
+                      .map(tid => (
+                        <button
+                          key={tid}
+                          onClick={() => changeTenant(tid)}
+                          className="w-full py-2.5 px-3.5 bg-slate-800/40 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white transition-all text-left truncate flex justify-between items-center cursor-pointer"
+                        >
+                          <span>Alternar imobiliária</span>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={logout}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium py-3 px-4 rounded-xl border border-slate-800 active:scale-[0.98] transition-all text-sm cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sair da Conta
+              </button>
+            </div>
+            
+            <p className="text-[9px] text-slate-600 font-mono tracking-widest uppercase mt-8 pointer-events-none select-none">
+              SalesScore User Security Guard
+            </p>
+          </div>
+        </div>
+      </AuthContext.Provider>
+    );
+  }
 
   if (isTenantBlocked && !isPublicPath) {
     return (

@@ -2,7 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { toast } from "sonner";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Plus, 
@@ -43,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { groupActivities, isPriorityActivity, UrgencyGroup } from "@/lib/intelligence";
 import { GeminiBanner } from "@/components/GeminiBanner";
 import { motion, AnimatePresence } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 
 export default function ActivitiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -53,9 +55,12 @@ export default function ActivitiesPage() {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
+  const [isDeletingActivity, setIsDeletingActivity] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const groupedActivities = useMemo(() => {
     const filtered = activities.filter(a => {
@@ -127,10 +132,12 @@ export default function ActivitiesPage() {
 
   const handleOpenAddModal = () => {
     setEditingActivity(null);
+    const nextHour = new Date();
+    nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
     setFormData({
       title: "",
       type: 'task',
-      date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      date: format(nextHour, "yyyy-MM-dd'T'HH:mm"),
       contactId: "",
       dealId: "",
       description: ""
@@ -153,55 +160,80 @@ export default function ActivitiesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title) return;
-
-    const activityData = {
-      title: formData.title,
-      type: formData.type,
-      date: new Date(formData.date).toISOString(),
-      contactId: formData.contactId || undefined,
-      dealId: formData.dealId || undefined,
-      description: formData.description || undefined,
-    };
-
-    if (editingActivity) {
-      await updateActivity(editingActivity.id, activityData);
-      recordAuditEvent({
-        action: 'UPDATE_ACTIVITY',
-        title: 'Edição de Atividade',
-        content: `Atividade "${formData.title}" (${formData.type}) foi atualizada.`,
-        severity: 'medium',
-        category: 'modification',
-        relatedId: editingActivity.id,
-        entityType: 'activity',
-        metadata: {
-          title: formData.title,
-          type: formData.type,
-          date: formData.date
-        }
-      });
-    } else {
-      const newActivityId = await createActivity({
-        ...activityData,
-        status: 'pending',
-      });
-      recordAuditEvent({
-        action: 'CREATE_ACTIVITY',
-        title: 'Criação de Nova Atividade',
-        content: `Nova atividade/tarefa "${formData.title}" (${formData.type}) agendada para ${format(new Date(formData.date), "dd/MM/yyyy HH:mm")}.`,
-        severity: 'info',
-        category: 'modification',
-        relatedId: typeof newActivityId === 'string' ? newActivityId : undefined,
-        entityType: 'activity',
-        metadata: {
-          title: formData.title,
-          type: formData.type,
-          date: formData.date
-        }
-      });
+    if (isSubmittingRef.current || isSaving) return;
+    if (!formData.title.trim()) {
+      toast.error("Por favor, preencha o título da atividade.");
+      return;
     }
 
-    setIsAddModalOpen(false);
+    if (!editingActivity && formData.date) {
+      const selectedTime = new Date(formData.date).getTime();
+      if (selectedTime < Date.now() - 60000) {
+        toast.error("Não é possível agendar uma atividade com data/horário no passado.");
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
+    setIsSaving(true);
+
+    try {
+      const activityData = {
+        title: formData.title.trim(),
+        type: formData.type,
+        date: new Date(formData.date).toISOString(),
+        contactId: formData.contactId || undefined,
+        dealId: formData.dealId || undefined,
+        description: formData.description || undefined,
+      };
+
+      if (editingActivity) {
+        await updateActivity(editingActivity.id, activityData);
+        recordAuditEvent({
+          action: 'UPDATE_ACTIVITY',
+          title: 'Edição de Atividade',
+          content: `Atividade "${formData.title}" (${formData.type}) foi atualizada.`,
+          severity: 'medium',
+          category: 'modification',
+          relatedId: editingActivity.id,
+          entityType: 'activity',
+          metadata: {
+            title: formData.title,
+            type: formData.type,
+            date: formData.date
+          }
+        });
+        toast.success("Atividade atualizada com sucesso!");
+      } else {
+        const newActivityId = await createActivity({
+          ...activityData,
+          status: 'pending',
+        });
+        recordAuditEvent({
+          action: 'CREATE_ACTIVITY',
+          title: 'Criação de Nova Atividade',
+          content: `Nova atividade/tarefa "${formData.title}" (${formData.type}) agendada para ${format(new Date(formData.date), "dd/MM/yyyy HH:mm")}.`,
+          severity: 'info',
+          category: 'modification',
+          relatedId: typeof newActivityId === 'string' ? newActivityId : undefined,
+          entityType: 'activity',
+          metadata: {
+            title: formData.title,
+            type: formData.type,
+            date: formData.date
+          }
+        });
+        toast.success("Atividade criada com sucesso!");
+      }
+
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      console.error("Error saving activity:", err);
+      toast.error(err?.message || "Erro ao salvar atividade.");
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const toggleStatus = async (activity: Activity) => {
@@ -224,35 +256,51 @@ export default function ActivitiesPage() {
     });
   };
 
-  const handleDelete = async (id: string) => {
-    const targetActivity = activities.find(a => a.id === id);
-    await deleteActivity(id);
-    recordAuditEvent({
-      action: 'DELETE_ACTIVITY',
-      title: 'Exclusão de Atividade',
-      content: `Atividade "${targetActivity?.title || id}" foi excluída.`,
-      severity: 'high',
-      category: 'deletion',
-      relatedId: id,
-      entityType: 'activity',
-      metadata: {
-        title: targetActivity?.title,
-        type: targetActivity?.type
+  const confirmDeleteActivity = async () => {
+    if (!activityToDelete) return;
+    const targetActivity = activityToDelete;
+    const id = targetActivity.id;
+
+    setIsDeletingActivity(true);
+    const toastId = toast.loading("Excluindo atividade...");
+
+    // Atualização otimista: remove imediatamente da listagem local
+    setActivities(prev => prev.filter(a => a.id !== id));
+
+    try {
+      await deleteActivity(id);
+      recordAuditEvent({
+        action: 'DELETE_ACTIVITY',
+        title: 'Exclusão de Atividade',
+        content: `Atividade "${targetActivity?.title || id}" foi excluída.`,
+        severity: 'high',
+        category: 'deletion',
+        relatedId: id,
+        entityType: 'activity',
+        metadata: {
+          title: targetActivity?.title,
+          type: targetActivity?.type
+        }
+      });
+      toast.success("Atividade excluída com sucesso!", { id: toastId });
+      setActivityToDelete(null);
+      if (isAddModalOpen && editingActivity?.id === id) {
+        setIsAddModalOpen(false);
       }
-    });
-    setDeleteConfirmId(null);
+    } catch (err: any) {
+      console.error("[ActivitiesPage] Erro ao excluir atividade:", err);
+      // Reverter alteração otimista
+      setActivities(prev => [...prev, targetActivity]);
+      toast.error(err?.message || "Não foi possível excluir a atividade. Tente novamente.", { id: toastId });
+    } finally {
+      setIsDeletingActivity(false);
+    }
   };
 
   const filteredActivities = activities.filter(a => {
     if (filter === 'all') return true;
     return a.status === filter;
   });
-
-  useEffect(() => {
-    if (!isAddModalOpen) {
-      setDeleteConfirmId(null);
-    }
-  }, [isAddModalOpen]);
 
   if (authLoading || !user) return null;
 
@@ -444,22 +492,11 @@ export default function ActivitiesPage() {
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                                 <button 
-                                  onClick={() => {
-                                    if (deleteConfirmId === activity.id) {
-                                      handleDelete(activity.id);
-                                    } else {
-                                      setDeleteConfirmId(activity.id);
-                                    }
-                                  }} 
-                                  className={cn(
-                                    "p-2 rounded-lg transition-all shadow-xs shrink-0",
-                                    deleteConfirmId === activity.id 
-                                      ? "bg-red-500 text-white scale-105 shadow-xs" 
-                                      : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                                  )}
-                                  title={deleteConfirmId === activity.id ? "Clique novamente para confirmar" : "Excluir"}
+                                  onClick={() => setActivityToDelete(activity)} 
+                                  className="p-2 rounded-lg transition-all shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                  title="Excluir atividade"
                                 >
-                                  <Trash2 className={cn("w-3.5 h-3.5", deleteConfirmId === activity.id && "animate-pulse")} />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </motion.div>
@@ -534,6 +571,7 @@ export default function ActivitiesPage() {
                   <input 
                     type="datetime-local"
                     required
+                    min={!editingActivity ? format(new Date(), "yyyy-MM-dd'T'HH:mm") : undefined}
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-foreground text-xs md:text-sm font-bold focus:border-primary outline-none transition-all"
@@ -580,23 +618,11 @@ export default function ActivitiesPage() {
                 {editingActivity && (
                   <button 
                     type="button"
-                    onClick={() => {
-                      if (deleteConfirmId === editingActivity.id) {
-                        handleDelete(editingActivity.id);
-                        setIsAddModalOpen(false);
-                      } else {
-                        setDeleteConfirmId(editingActivity.id);
-                      }
-                    }}
-                    className={cn(
-                      "px-3.5 py-2 rounded-xl transition-all border",
-                      deleteConfirmId === editingActivity.id
-                        ? "bg-red-500 text-white border-red-600 shadow-md shadow-red-500/20 scale-105"
-                        : "border-red-500/10 text-red-500 hover:bg-red-500/5"
-                    )}
-                    title={deleteConfirmId === editingActivity.id ? "Clique para confirmar" : "Excluir atividade"}
+                    onClick={() => setActivityToDelete(editingActivity)}
+                    className="px-3.5 py-2 rounded-xl transition-all border border-red-500/20 text-red-500 hover:bg-red-500/10 flex items-center justify-center"
+                    title="Excluir atividade"
                   >
-                    <Trash2 className={cn("w-4 h-4", deleteConfirmId === editingActivity.id && "animate-pulse")} />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
                 <button 
@@ -608,15 +634,26 @@ export default function ActivitiesPage() {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 bg-primary text-white py-2 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 transition-all font-sans"
+                  disabled={isSaving}
+                  className="flex-1 bg-primary text-white py-2 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-sans flex items-center justify-center gap-1.5"
                 >
-                  {editingActivity ? 'Salvar Alterações' : 'Salvar Atividade'}
+                  {isSaving ? 'Salvando...' : editingActivity ? 'Salvar Alterações' : 'Salvar Atividade'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+      {/* Modal de Confirmação de Exclusão */}
+      <ConfirmDeleteModal
+        isOpen={!!activityToDelete}
+        onClose={() => setActivityToDelete(null)}
+        onConfirm={confirmDeleteActivity}
+        title="Excluir Atividade"
+        itemName={activityToDelete?.title}
+        itemType="atividade"
+        isDeleting={isDeletingActivity}
+      />
     </div>
   );
 }

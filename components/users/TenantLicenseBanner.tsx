@@ -72,6 +72,11 @@ export function TenantLicenseBanner({
               <span className="px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-[9.5px] font-bold border border-emerald-500/20">
                 Plano: {currentTenant.brokerLimit ?? 2} corr. + {currentTenant.adminLimit ?? 1} adm
               </span>
+              {tenantUsers.filter(u => u.userType !== 'cliente' && u.isActive === false).length > 0 && (
+                <span className="px-1.5 py-0.2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded text-[9.5px] font-bold border border-rose-500/20">
+                  {tenantUsers.filter(u => u.userType !== 'cliente' && u.isActive === false).length} inativo{tenantUsers.filter(u => u.userType !== 'cliente' && u.isActive === false).length > 1 ? 's' : ''} (vagas liberadas)
+                </span>
+              )}
               <span>•</span>
               {isLimitReached ? (
                 <span className="text-amber-600 dark:text-amber-400 font-bold">Capacidade máxima atingida (100% ocupado)</span>

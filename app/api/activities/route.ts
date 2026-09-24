@@ -66,6 +66,35 @@ export async function POST(req: NextRequest) {
       data.tenant_id = activeTenantId;
     }
 
+    // Safeguard 1: Prevent scheduling new pending appointments in the past
+    if (data.date && data.status !== 'completed') {
+      const activityTime = new Date(data.date).getTime();
+      const nowWithGrace = Date.now() - 2 * 60 * 1000; // 2 min grace period for clock drift
+      if (activityTime < nowWithGrace) {
+        return NextResponse.json(
+          { error: "Não é possível agendar um compromisso com data ou horário no passado." },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Safeguard 2: Anti-duplicate check (rapid double clicks within 10 seconds)
+    if (data.owner_id && data.title) {
+      const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
+      const { data: recentDuplicate } = await supabase
+        .from('activities')
+        .select('id')
+        .eq('owner_id', data.owner_id)
+        .eq('title', data.title)
+        .gte('created_at', tenSecondsAgo)
+        .limit(1);
+
+      if (recentDuplicate && recentDuplicate.length > 0) {
+        console.warn("[API/Activities] Prevented rapid duplicate activity insertion:", recentDuplicate[0].id);
+        return NextResponse.json({ id: recentDuplicate[0].id });
+      }
+    }
+
     const { data: result, error } = await supabase
       .from('activities')
       .insert([data])

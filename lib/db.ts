@@ -241,8 +241,8 @@ export function calculateTenantPlanCapacity(
   const baseAdmins = tenant?.adminLimit !== undefined && tenant?.adminLimit !== null ? Number(tenant.adminLimit) : 1;
   const baseSlots = baseBrokers + baseAdmins;
 
-  // Membros ativos da equipe (exclui contatos/clientes)
-  const staff = tenantUsers.filter(u => u.userType !== 'cliente');
+  // Membros ativos da equipe (exclui contatos/clientes e membros inativos)
+  const staff = tenantUsers.filter(u => u.userType !== 'cliente' && u.isActive !== false);
   const activeAdmins = staff.filter(u => u.role === 'Admin').length;
   const activeBrokers = staff.filter(u => u.role !== 'Admin').length;
 
@@ -276,6 +276,8 @@ export interface UserProfile {
   isAdmin?: boolean;
   tenantId?: string;
   tenantIds?: string[];
+  isActive?: boolean;
+  inactiveReason?: string;
 }
 
 // Constants
@@ -483,7 +485,16 @@ export async function deleteContact(id: string) {
     const result = await apiFetch(`/api/contacts?id=${id}`, {
       method: "DELETE"
     });
-    return result.deleted;
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('contacts:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((c: any) => c.id !== id);
+        }
+      }
+    }
+    invalidateApiCache('/api/contacts');
+    forceDataResync();
+    return result?.deleted ?? true;
   } catch (err) {
     console.error("[lib/db] deleteContact FATAL:", err);
     throw err;
@@ -586,6 +597,16 @@ export async function deleteCompany(id: string) {
     await apiFetch(`/api/companies?id=${id}`, {
       method: "DELETE"
     });
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('companies:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((c: any) => c.id !== id);
+        }
+      }
+    }
+    invalidateApiCache('/api/companies');
+    forceDataResync();
+    return true;
   } catch (err) {
     console.error("[lib/db] deleteCompany FATAL:", err);
     throw err;
@@ -709,12 +730,22 @@ export async function updateDeal(id: string, data: any) {
 export async function deleteDeal(id: string) {
   if (!id || id === 'undefined' || id === 'null') {
     console.warn("[lib/db] deleteDeal: Invalid ID, ignoring delete request.", id);
-    return;
+    return false;
   }
   try {
     await apiFetch(`/api/deals?id=${id}`, {
       method: "DELETE"
     });
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('deals:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((d: any) => d.id !== id);
+        }
+      }
+    }
+    invalidateApiCache('/api/deals');
+    forceDataResync();
+    return true;
   } catch (err) {
     console.error("[lib/db] deleteDeal FATAL:", err);
     throw err;
@@ -848,6 +879,8 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
   if (data.isAdmin !== undefined) updateData.is_admin = data.isAdmin;
   if (data.tenantId !== undefined) updateData.tenant_id = data.tenantId;
   if (data.tenantIds !== undefined) updateData.tenantIds = data.tenantIds;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  if (data.inactiveReason !== undefined) updateData.inactiveReason = data.inactiveReason;
 
   try {
     if (typeof window !== "undefined") {
@@ -864,6 +897,8 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
             if (data.isAdmin !== undefined) parsed.isAdmin = data.isAdmin;
             if (data.tenantId !== undefined) parsed.tenantId = data.tenantId;
             if (data.tenantIds !== undefined) parsed.tenantIds = data.tenantIds;
+            if (data.isActive !== undefined) parsed.isActive = data.isActive;
+            if (data.inactiveReason !== undefined) parsed.inactiveReason = data.inactiveReason;
             sessionStorage.setItem(cacheKey, JSON.stringify(parsed));
           }
         } catch (e) {
@@ -886,7 +921,9 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
               role: data.role !== undefined ? data.role : u.role,
               userType: data.userType !== undefined ? data.userType : u.userType,
               tenantId: data.tenantId !== undefined ? data.tenantId : u.tenantId,
-              tenantIds: data.tenantIds !== undefined ? data.tenantIds : u.tenantIds
+              tenantIds: data.tenantIds !== undefined ? data.tenantIds : u.tenantIds,
+              isActive: data.isActive !== undefined ? data.isActive : u.isActive,
+              inactiveReason: data.inactiveReason !== undefined ? data.inactiveReason : u.inactiveReason
             };
           }
           return u;
@@ -930,7 +967,16 @@ export async function isEmailRegistered(email: string) {
   }
 }
 
-export async function createUserProfile(data: { displayName: string; email: string; role: 'Membro' | 'Admin'; userType: 'funcionário' | 'cliente'; tenantId?: string; tenantIds?: string[] }) {
+export async function createUserProfile(data: { 
+  displayName: string; 
+  email: string; 
+  role: 'Membro' | 'Admin'; 
+  userType: 'funcionário' | 'cliente'; 
+  tenantId?: string; 
+  tenantIds?: string[];
+  isActive?: boolean;
+  inactiveReason?: string;
+}) {
   const tempId = crypto.randomUUID();
   
   const profileData = {
@@ -941,7 +987,9 @@ export async function createUserProfile(data: { displayName: string; email: stri
     user_type: data.userType,
     is_admin: data.role === 'Admin',
     tenant_id: data.tenantId || null,
-    tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : [DEFAULT_TENANT_ID])
+    tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : [DEFAULT_TENANT_ID]),
+    isActive: data.isActive !== undefined ? data.isActive : true,
+    inactiveReason: data.inactiveReason || null
   };
 
   try {
@@ -1005,10 +1053,27 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
   };
 }
 
+const inFlightActivityCreations = new Map<string, Promise<string>>();
+const recentActivityCreations = new Map<string, { id: string; expiresAt: number }>();
+
 export async function createActivity(data: any) {
   const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
+
+  const dedupKey = `${user.id}:${data.title?.trim()}:${data.date}`;
+  const now = Date.now();
+
+  // If created within last 5 seconds, return identical ID (anti-double submit safeguard)
+  const cached = recentActivityCreations.get(dedupKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.id;
+  }
+
+  // If in-flight creation is already processing this exact event, await that same promise
+  if (inFlightActivityCreations.has(dedupKey)) {
+    return inFlightActivityCreations.get(dedupKey)!;
+  }
 
   const activityData = {
     title: data.title,
@@ -1021,16 +1086,24 @@ export async function createActivity(data: any) {
     owner_id: user.id
   };
 
-  try {
-    const result = await apiFetch('/api/activities', {
-      method: "POST",
-      body: JSON.stringify(activityData)
-    });
-    return result.id;
-  } catch (err) {
-    console.error("[lib/db] createActivity FATAL:", err);
-    throw err;
-  }
+  const creationPromise = (async () => {
+    try {
+      const result = await apiFetch('/api/activities', {
+        method: "POST",
+        body: JSON.stringify(activityData)
+      });
+      recentActivityCreations.set(dedupKey, { id: result.id, expiresAt: Date.now() + 5000 });
+      return result.id;
+    } catch (err) {
+      console.error("[lib/db] createActivity FATAL:", err);
+      throw err;
+    } finally {
+      inFlightActivityCreations.delete(dedupKey);
+    }
+  })();
+
+  inFlightActivityCreations.set(dedupKey, creationPromise);
+  return creationPromise;
 }
 
 export async function updateActivity(id: string, data: any) {
@@ -1057,6 +1130,16 @@ export async function deleteActivity(id: string) {
     await apiFetch(`/api/activities?id=${id}`, {
       method: "DELETE"
     });
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('activities:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((a: any) => a.id !== id);
+        }
+      }
+    }
+    invalidateApiCache('/api/activities');
+    forceDataResync();
+    return true;
   } catch (err) {
     console.error("[lib/db] deleteActivity FATAL:", err);
     throw err;
@@ -1451,6 +1534,58 @@ export async function getProperties(ownerId?: string) {
   }
 }
 
+export function clearPropertiesCache() {
+  invalidateApiCache('/api/properties');
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('properties:') || k.startsWith('showcase:')) {
+      delete dataCache[k];
+    }
+  }
+}
+
+export function subscribeToShowcaseProperties(
+  callback: (properties: Property[]) => void,
+  tenantId?: string,
+  ownerId?: string
+) {
+  const cacheKey = `showcase:${tenantId || 'all'}:${ownerId || 'all'}`;
+  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) {
+    callback(dataCache[cacheKey]);
+  }
+
+  const fetchShowcase = async () => {
+    try {
+      let url = `/api/properties?public=true&limit=150&_t=${Date.now()}`;
+      if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
+      if (ownerId) url += `&ownerId=${encodeURIComponent(ownerId)}`;
+
+      const res = await fetch(url, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          dataCache[cacheKey] = data as Property[];
+          callback(data as Property[]);
+        }
+      }
+    } catch (err) {
+      console.warn("[lib/db] subscribeToShowcaseProperties error:", err);
+      if (dataCache[cacheKey]) {
+        callback(dataCache[cacheKey]);
+      }
+    }
+  };
+
+  fetchShowcase();
+  const subscription = createRealtimeChannel('properties', fetchShowcase);
+  const poll = createVisibilityAwarePoll(fetchShowcase, 15000);
+
+  return () => {
+    supabase.removeChannel(subscription);
+    if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
+    clearInterval(poll);
+  };
+}
+
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
   const cacheKey = `properties:${ownerId || 'all'}`;
   if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
@@ -1548,6 +1683,8 @@ export async function createProperty(data: any, bypassUserId?: string) {
       body: JSON.stringify(insertData)
     });
     console.log("[lib/db] createProperty Proxy: SUCESSO. Novo ID:", result.id);
+    clearPropertiesCache();
+    forceDataResync();
     return result.id;
   } catch (err) {
     console.error("[lib/db] createProperty Proxy FATAL:", err);
@@ -1585,6 +1722,8 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
       body: JSON.stringify(updateData)
     });
     console.log("[lib/db] updateProperty Proxy: Transação concluída com sucesso.");
+    clearPropertiesCache();
+    forceDataResync();
     return id;
   } catch (err) {
     console.error(`[lib/db] updateProperty Proxy FATAL para o ID ${id}:`, err);
@@ -1599,6 +1738,8 @@ export async function deleteProperty(id: string) {
     await apiFetch(`/api/properties?id=${id}`, {
       method: "DELETE"
     });
+    clearPropertiesCache();
+    forceDataResync();
     return true;
   } catch (error) {
     console.error("[lib/db] Error in deleteProperty Proxy:", error);
@@ -1609,10 +1750,13 @@ export async function deleteProperty(id: string) {
 export async function togglePropertyFeatured(id: string, isFeatured: boolean) {
   console.log(`[lib/db] togglePropertyFeatured: ID ${id} -> ${isFeatured}`);
   try {
-    return await apiFetch(`/api/properties?id=${id}`, {
+    const res = await apiFetch(`/api/properties?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify({ is_featured: isFeatured, isFeatured })
     });
+    clearPropertiesCache();
+    forceDataResync();
+    return res;
   } catch (error) {
     console.error("[lib/db] Error in togglePropertyFeatured:", error);
     throw error;

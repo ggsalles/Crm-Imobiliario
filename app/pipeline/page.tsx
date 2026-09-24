@@ -32,6 +32,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { SoundControlButton } from "@/components/NewLeadSoundNotifier";
 import { 
   Deal, 
@@ -102,7 +103,8 @@ export default function PipelinePage() {
   const [lostNotes, setLostNotes] = useState<string>("");
   const [healthFilter, setHealthFilter] = useState<'all' | 'stale' | 'critical' | 'lost' | 'active'>('all');
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
+  const [isDeletingDeal, setIsDeletingDeal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [displayValue, setDisplayValue] = useState("");
   const [displayGoals, setDisplayGoals] = useState<{ [key: string]: string }>({});
@@ -143,13 +145,6 @@ export default function PipelinePage() {
       window.removeEventListener("storage_probabilities_updated", loadProbabilities);
     };
   }, []);
-
-  useEffect(() => {
-    if (deleteConfirmId) {
-      const timer = setTimeout(() => setDeleteConfirmId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [deleteConfirmId]);
 
   const currentGoal = useMemo(() => {
     const monthGoals = goals.filter(g => g.month === currentMonth);
@@ -548,9 +543,16 @@ export default function PipelinePage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const confirmDeleteDeal = async () => {
+    if (!dealToDelete) return;
+    const target = dealToDelete;
+    const id = target.id;
+
+    setIsDeletingDeal(true);
+    const toastId = toast.loading("Excluindo negócio...");
+    setDeals(prev => prev.filter(d => d.id !== id));
+
     try {
-      const target = deals.find(d => d.id === id);
       await deleteDeal(id);
 
       recordAuditEvent({
@@ -568,11 +570,18 @@ export default function PipelinePage() {
         }
       });
 
-      toast.success("Negócio excluído.");
-      setDeleteConfirmId(null);
-      await fetchDealsData();
-    } catch (err) {
-      toast.error("Erro ao excluir.");
+      toast.success("Negócio excluído com sucesso!", { id: toastId });
+      setDealToDelete(null);
+      if (editingDeal && editingDeal.id === id) {
+        setIsModalOpen(false);
+        setEditingDeal(null);
+      }
+    } catch (err: any) {
+      console.error("Erro ao excluir negócio:", err);
+      setDeals(prev => [...prev, target]);
+      toast.error(err?.message || "Erro ao excluir negócio.", { id: toastId });
+    } finally {
+      setIsDeletingDeal(false);
     }
   };
 
@@ -908,24 +917,13 @@ export default function PipelinePage() {
                                       <Link href={`/deals/${deal.id}`} className="p-0.5 text-muted-foreground hover:text-indigo-500 transition-all" title="Ver detalhes">
                                         <ExternalLink className="w-3 h-3" />
                                       </Link>
-                                      <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-0.5 text-muted-foreground hover:text-primary transition-all" title="Editar"><Edit2 className="w-3 h-3" /></button>
+                                      <button onClick={() => { setEditingDeal(deal); setIsModalOpen(true); }} className="p-0.5 text-muted-foreground hover:text-primary transition-all cursor-pointer" title="Editar"><Edit2 className="w-3 h-3" /></button>
                                       <button 
-                                        onClick={() => {
-                                          if (deleteConfirmId === deal.id) {
-                                            handleDelete(deal.id);
-                                          } else {
-                                            setDeleteConfirmId(deal.id);
-                                          }
-                                        }} 
-                                        className={cn(
-                                          "p-0.5 rounded-md transition-all",
-                                          deleteConfirmId === deal.id 
-                                            ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/20" 
-                                            : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                                        )}
-                                        title={deleteConfirmId === deal.id ? "Clique novamente para confirmar" : "Excluir"}
+                                        onClick={() => setDealToDelete(deal)} 
+                                        className="p-0.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer"
+                                        title="Excluir negócio"
                                       >
-                                        <Trash2 className={cn("w-3 h-3", deleteConfirmId === deal.id && "animate-pulse")} />
+                                        <Trash2 className="w-3 h-3" />
                                       </button>
                                     </div>
                                     <div className="flex -space-x-1.5">
@@ -1141,23 +1139,11 @@ export default function PipelinePage() {
                   {editingDeal?.id && (
                     <button 
                       type="button" 
-                      onClick={() => { 
-                        if (deleteConfirmId === editingDeal.id) {
-                          handleDelete(editingDeal.id); 
-                          setIsModalOpen(false);
-                        } else {
-                          setDeleteConfirmId(editingDeal.id);
-                        }
-                      }} 
-                      className={cn(
-                        "px-4 py-3 rounded-2xl transition-all border",
-                        deleteConfirmId === editingDeal.id 
-                          ? "bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20 scale-105" 
-                          : "text-red-500 hover:bg-red-500/10 border-red-500/20"
-                      )}
-                      title={deleteConfirmId === editingDeal.id ? "Clique novamente para confirmar" : "Excluir negócio"}
+                      onClick={() => setDealToDelete(editingDeal)} 
+                      className="px-4 py-3 rounded-2xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer"
+                      title="Excluir negócio"
                     >
-                      <Trash2 className={cn("w-5 h-5", deleteConfirmId === editingDeal.id && "animate-pulse")} />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   )}
                   <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 font-bold text-muted-foreground hover:bg-muted rounded-2xl transition-all">Cancelar</button>
@@ -1300,6 +1286,17 @@ export default function PipelinePage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Oportunidade */}
+      <ConfirmDeleteModal
+        isOpen={!!dealToDelete}
+        onClose={() => setDealToDelete(null)}
+        onConfirm={confirmDeleteDeal}
+        title="Excluir Negócio"
+        itemName={dealToDelete?.title}
+        itemType="oportunidade de negócio"
+        isDeleting={isDeletingDeal}
+      />
     </div>
   );
 }

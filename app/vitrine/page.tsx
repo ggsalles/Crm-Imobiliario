@@ -33,12 +33,16 @@ import {
   Eye,
   Copy,
   Tag,
-  Star
+  Star,
+  TrendingUp,
+  RotateCcw,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/auth-provider';
 import { Sidebar } from '@/components/sidebar';
 import { POPULAR_PROPERTY_TAGS } from '@/lib/property-tags';
+import { subscribeToShowcaseProperties, clearPropertiesCache } from '@/lib/db';
 
 interface Property {
   id: string;
@@ -50,12 +54,17 @@ interface Property {
   neighborhood?: string;
   city?: string;
   state?: string;
+  street?: string;
+  number?: string;
+  cep?: string;
   area: number;
   bedrooms?: number;
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
   isFeatured?: boolean;
+  condoFee?: number | null;
+  iptu?: number | null;
   buildingName?: string | null;
   description?: string | null;
   tags?: string[];
@@ -105,10 +114,13 @@ function VitrineContent() {
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [broker, setBroker] = useState<BrokerInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [minBedrooms, setMinBedrooms] = useState<number | 'all'>('all');
   const [minParking, setMinParking] = useState<number | 'all'>('all');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
@@ -118,87 +130,98 @@ function VitrineContent() {
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Fetch properties and metadata
-  useEffect(() => {
-    async function loadShowcaseData() {
-      try {
-        setLoading(true);
+  // Manual sync handler to force immediate fresh fetch from server
+  const handleManualSync = async () => {
+    setIsRefreshing(true);
+    clearPropertiesCache();
+    const targetTenant = tenantParam || profile?.tenantId || '';
+    let propUrl = `/api/properties?public=true&limit=150&_t=${Date.now()}`;
+    if (targetTenant) propUrl += `&tenantId=${encodeURIComponent(targetTenant)}`;
+    if (brokerParam) propUrl += `&ownerId=${encodeURIComponent(brokerParam)}`;
 
-        const targetTenant = tenantParam || profile?.tenantId || '';
-
-        // 1. Fetch properties
-        let propUrl = `/api/properties?public=true&limit=150`;
-        if (targetTenant) propUrl += `&tenantId=${encodeURIComponent(targetTenant)}`;
-        if (brokerParam) propUrl += `&ownerId=${encodeURIComponent(brokerParam)}`;
-
-        const propRes = await fetch(propUrl);
-        if (propRes.ok) {
-          const propData = await propRes.json();
-          if (Array.isArray(propData)) {
-            setProperties(propData);
-          }
+    try {
+      const propRes = await fetch(propUrl, { cache: 'no-store' });
+      if (propRes.ok) {
+        const propData = await propRes.json();
+        if (Array.isArray(propData)) {
+          setProperties(propData);
+          setLastSyncTime(new Date());
+          toast.success("Vitrine sincronizada com o cadastro de imóveis!");
         }
-
-        // 2. Fetch tenant info if provided
-        if (targetTenant) {
-          try {
-            const tenantRes = await fetch(`/api/tenants?id=${encodeURIComponent(targetTenant)}`);
-            if (tenantRes.ok) {
-              const tData = await tenantRes.json();
-              if (tData) {
-                setTenant({
-                  id: tData.id,
-                  name: tData.name || profile?.company || 'Imobiliária',
-                  slug: tData.slug,
-                  phone: tData.phone,
-                  city: tData.city,
-                  state: tData.state,
-                });
-              } else if (profile?.company) {
-                setTenant({
-                  id: targetTenant,
-                  name: profile.company,
-                });
-              }
-            }
-          } catch (tErr) {
-            console.warn('Erro ao carregar dados da imobiliária:', tErr);
-          }
-        } else if (profile?.company) {
-          setTenant({
-            id: profile.tenantId || '',
-            name: profile.company,
-          });
-        }
-
-        // 3. Fetch broker info if provided
-        if (brokerParam) {
-          try {
-            const brokerRes = await fetch(`/api/profiles?id=${encodeURIComponent(brokerParam)}`);
-            if (brokerRes.ok) {
-              const bData = await brokerRes.json();
-              if (bData) {
-                setBroker({
-                  id: bData.id,
-                  displayName: bData.displayName || bData.display_name || 'Consultor de Imóveis',
-                  email: bData.email,
-                  photoUrl: bData.photoUrl || bData.photo_url,
-                });
-              }
-            }
-          } catch (bErr) {
-            console.warn('Erro ao carregar dados do corretor:', bErr);
-          }
-        }
-      } catch (err) {
-        console.error('Erro ao carregar vitrine pública:', err);
-        toast.error('Erro ao conectar com a vitrine de imóveis.');
-      } finally {
-        setLoading(false);
       }
+    } catch (err) {
+      console.error("Erro na sincronização manual:", err);
+      toast.error("Erro ao sincronizar vitrine.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Real-time synchronization: subscribe to properties changes (Supabase Realtime + forceDataResync events)
+  useEffect(() => {
+    setLoading(true);
+    const targetTenant = tenantParam || profile?.tenantId || '';
+
+    // 1. Subscribe to properties with Realtime WebSocket & visibility-aware poll
+    const unsubscribe = subscribeToShowcaseProperties(
+      (data) => {
+        setProperties(data);
+        setLastSyncTime(new Date());
+        setLoading(false);
+      },
+      targetTenant || undefined,
+      brokerParam || undefined
+    );
+
+    // 2. Fetch tenant info if provided
+    if (targetTenant) {
+      fetch(`/api/tenants?id=${encodeURIComponent(targetTenant)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(tData => {
+          if (tData) {
+            setTenant({
+              id: tData.id,
+              name: tData.name || profile?.company || 'Imobiliária',
+              slug: tData.slug,
+              phone: tData.phone,
+              city: tData.city,
+              state: tData.state,
+            });
+          } else if (profile?.company) {
+            setTenant({
+              id: targetTenant,
+              name: profile.company,
+            });
+          }
+        })
+        .catch(err => console.warn('Erro ao carregar tenant na vitrine:', err));
+    } else if (profile?.company) {
+      setTenant({
+        id: profile.tenantId || '',
+        name: profile.company,
+      });
     }
 
-    loadShowcaseData();
+    // 3. Fetch broker info if provided
+    if (brokerParam) {
+      fetch(`/api/profiles?id=${encodeURIComponent(brokerParam)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(bData => {
+          if (bData) {
+            setBroker({
+              id: bData.id,
+              displayName: bData.displayName || bData.display_name || 'Consultor de Imóveis',
+              email: bData.email,
+              photoUrl: bData.photoUrl || bData.photo_url,
+            });
+          }
+        })
+        .catch(err => console.warn('Erro ao carregar broker na vitrine:', err));
+    }
+
+    return () => {
+      unsubscribe();
+    };
   }, [tenantParam, brokerParam, profile?.tenantId, profile?.company]);
 
   // Format currency
@@ -245,6 +268,20 @@ function VitrineContent() {
         if (!pType.includes(selectedType)) return false;
       }
 
+      // Commercial Status
+      if (selectedStatus !== 'all') {
+        const pStatus = (p.status || '').toLowerCase().trim();
+        if (selectedStatus === 'disponível') {
+          if (pStatus !== 'disponível' && pStatus !== 'disponivel' && pStatus !== 'available') return false;
+        } else if (selectedStatus === 'reservado') {
+          if (pStatus !== 'reservado' && pStatus !== 'reserved') return false;
+        } else if (selectedStatus === 'vendido') {
+          if (pStatus !== 'vendido' && pStatus !== 'sold') return false;
+        } else if (selectedStatus === 'alugado') {
+          if (pStatus !== 'alugado' && pStatus !== 'rented') return false;
+        }
+      }
+
       // Bedrooms
       if (minBedrooms !== 'all') {
         if ((p.bedrooms || 0) < minBedrooms) return false;
@@ -283,12 +320,13 @@ function VitrineContent() {
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, minBedrooms, minParking, maxPrice, selectedTags, onlyFeatured, sortBy]);
+  }, [properties, searchTerm, selectedType, selectedStatus, minBedrooms, minParking, maxPrice, selectedTags, onlyFeatured, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedType('all');
+    setSelectedStatus('all');
     setMinBedrooms('all');
     setMinParking('all');
     setMaxPrice('');
@@ -299,6 +337,7 @@ function VitrineContent() {
 
   const activeFiltersCount = [
     selectedType !== 'all',
+    selectedStatus !== 'all',
     minBedrooms !== 'all',
     minParking !== 'all',
     maxPrice !== '',
@@ -366,8 +405,8 @@ function VitrineContent() {
               <h1 className="font-extrabold text-base sm:text-lg tracking-tight line-clamp-1">
                 {tenant?.name || 'Vitrine de Imóveis'}
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="w-3 h-3" /> Verificada
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title={`Sincronizado em tempo real. Última checagem: ${lastSyncTime.toLocaleTimeString('pt-BR')}`}>
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Sincronizada ao Vivo
               </span>
               {showSidebar && (
                 <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
@@ -387,6 +426,17 @@ function VitrineContent() {
 
         {/* Action buttons on header */}
         <div className="flex items-center gap-2">
+          {/* Botão de Sincronização Manual */}
+          <button
+            onClick={handleManualSync}
+            disabled={isRefreshing}
+            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+            title="Atualizar dados da vitrine diretamente do banco"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isRefreshing ? 'Sincronizando...' : 'Atualizar'}</span>
+          </button>
+
           {showSidebar && (
             <button
               onClick={() => {
@@ -573,7 +623,35 @@ function VitrineContent() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="pt-4 pb-2 border-t border-border/80 mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 max-w-7xl mx-auto">
+              <div className="pt-4 pb-2 border-t border-border/80 mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 max-w-7xl mx-auto">
+                {/* Status Comercial */}
+                <div>
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Status Comercial
+                  </label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { id: 'all', label: 'Todos' },
+                      { id: 'disponível', label: 'Disp.' },
+                      { id: 'reservado', label: 'Reserv.' },
+                      { id: 'vendido', label: 'Vend.' },
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setSelectedStatus(st.id)}
+                        className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                          selectedStatus === st.id
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-card border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Dormitórios */}
                 <div>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
@@ -797,26 +875,58 @@ function VitrineContent() {
                             <Sparkles className="w-2.5 h-2.5 fill-white" /> Destaque
                           </span>
                         )}
+                        {prop.acceptsFinancing && (
+                          <span className="px-2 py-0.5 rounded-lg bg-primary/90 text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow-xs flex items-center gap-1">
+                            <TrendingUp className="w-2.5 h-2.5" /> Financia
+                          </span>
+                        )}
                       </div>
 
-                      {prop.status === 'reserved' || prop.status === 'reservado' ? (
-                        <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[10px] font-bold uppercase shadow-xs">
-                          Reservado
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold uppercase shadow-xs">
-                          Disponível
-                        </span>
-                      )}
+                      {(() => {
+                        const s = (prop.status || 'disponível').toLowerCase().trim();
+                        if (s === 'reserved' || s === 'reservado') {
+                          return (
+                            <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[10px] font-bold uppercase shadow-xs">
+                              Reservado
+                            </span>
+                          );
+                        }
+                        if (s === 'vendido' || s === 'sold') {
+                          return (
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[10px] font-bold uppercase shadow-xs border border-white/20">
+                              Vendido
+                            </span>
+                          );
+                        }
+                        if (s === 'alugado' || s === 'rented') {
+                          return (
+                            <span className="px-2 py-0.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase shadow-xs">
+                              Alugado
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold uppercase shadow-xs">
+                            Disponível
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {/* Bottom Photo Info */}
                     <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
                       <div className="text-white">
-                        <span className="text-xs uppercase font-medium opacity-90 block">Valor de Venda</span>
-                        <span className="text-lg sm:text-xl font-extrabold tracking-tight drop-shadow-sm">
-                          {formatPrice(prop.price)}
-                        </span>
+                        <span className="text-[10px] uppercase font-semibold opacity-90 block">Valor de Venda</span>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-lg sm:text-xl font-extrabold tracking-tight drop-shadow-sm">
+                            {formatPrice(prop.price)}
+                          </span>
+                          {prop.area > 0 && prop.price > 0 && (
+                            <span className="text-[10px] font-bold opacity-80 font-mono">
+                              ({formatPrice(Math.round(prop.price / prop.area))}/m²)
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {totalPhotos > 0 && (
@@ -832,7 +942,7 @@ function VitrineContent() {
                     <div className="space-y-1.5">
                       {prop.buildingName && (
                         <span className="text-[11px] font-bold uppercase tracking-wider text-primary block line-clamp-1">
-                          {prop.buildingName}
+                          🏢 {prop.buildingName}
                         </span>
                       )}
                       
@@ -847,6 +957,27 @@ function VitrineContent() {
                           {prop.city || prop.location || 'Localização sob consulta'}
                         </span>
                       </div>
+
+                      {/* Encargos Periódicos (Condomínio e IPTU) */}
+                      {((prop.condoFee && prop.condoFee > 0) || (prop.iptu && prop.iptu > 0)) && (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground font-medium pt-1">
+                          {prop.condoFee && prop.condoFee > 0 ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span>Cond.:</span>
+                              <strong className="text-foreground">{formatPrice(prop.condoFee)}</strong>
+                            </span>
+                          ) : null}
+                          {prop.condoFee && prop.condoFee > 0 && prop.iptu && prop.iptu > 0 ? (
+                            <span className="text-border">•</span>
+                          ) : null}
+                          {prop.iptu && prop.iptu > 0 ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span>IPTU:</span>
+                              <strong className="text-foreground">{formatPrice(prop.iptu)}</strong>
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
 
                       {/* Diferenciais / Tags Badges */}
                       {prop.tags && prop.tags.length > 0 && (

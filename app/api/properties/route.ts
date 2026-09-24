@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
+import { DEFAULT_TENANT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,6 +49,12 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const singleTags = Array.isArray(property.tags)
+        ? property.tags
+        : (typeof property.tags === 'string'
+            ? (property.tags.startsWith('[') ? (() => { try { return JSON.parse(property.tags); } catch { return []; } })() : property.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
+            : []);
+
       return NextResponse.json({
         id: property.id,
         title: String(property.title || "Sem título"),
@@ -67,12 +80,13 @@ export async function GET(req: NextRequest) {
         buildingName: property.building_name ? String(property.building_name) : null,
         notes: property.notes ? String(property.notes) : null,
         description: property.description ? String(property.description) : null,
+        tags: singleTags,
         imageUrls: urls,
         ownerId: property.owner_id,
         tenantId: property.tenant_id,
         createdAt: property.created_at,
         updatedAt: property.updated_at
-      });
+      }, { headers: NO_CACHE_HEADERS });
     }
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
@@ -81,7 +95,7 @@ export async function GET(req: NextRequest) {
 
     const isPublic = searchParams.get('public') === 'true';
     const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
-    const effectiveTenantId = activeTenantId || (isPublic ? tenantParam : null);
+    const effectiveTenantId = (isPublic && tenantParam) ? tenantParam : (activeTenantId || tenantParam || null);
 
     let query = supabase
       .from('properties')
@@ -89,11 +103,15 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
-      query = query.eq('tenant_id', effectiveTenantId);
+      if (effectiveTenantId === DEFAULT_TENANT_ID) {
+        query = query.or(`tenant_id.eq.${effectiveTenantId},tenant_id.is.null`);
+      } else {
+        query = query.eq('tenant_id', effectiveTenantId);
+      }
     }
 
     if (isPublic) {
-      // Vitrine pública: só exibe imóveis ativos e disponíveis ou reservados
+      // Vitrine pública: oculta apenas imóveis inativos ou deletados
       query = query.neq('status', 'inactive').neq('status', 'deleted');
     }
 
@@ -109,7 +127,7 @@ export async function GET(req: NextRequest) {
     const { data: properties, error } = await query.limit(limitParam);
 
     if (error) throw error;
-    if (!properties || properties.length === 0) return NextResponse.json([]);
+    if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
     // Fetch images
     const propertyIds = properties.map((p: any) => p.id);
@@ -168,12 +186,13 @@ export async function GET(req: NextRequest) {
               : []),
         imageUrls: urls,
         ownerId: item.owner_id,
+        tenantId: item.tenant_id,
         createdAt: item.created_at,
         updatedAt: item.updated_at
       };
     });
 
-    return NextResponse.json(items);
+    return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Properties] GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -189,14 +208,11 @@ export async function POST(req: NextRequest) {
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user);
-    if (activeTenantId) {
-      data.tenant_id = activeTenantId;
-    }
+    const resolvedTenantId = activeTenantId || data.tenant_id || DEFAULT_TENANT_ID;
+    data.tenant_id = resolvedTenantId;
     
     const { imageUrls, ...sanitized } = data;
-    if (data.tenant_id) {
-      (sanitized as any).tenant_id = data.tenant_id;
-    }
+    (sanitized as any).tenant_id = resolvedTenantId;
 
     // Normalize camelCase to snake_case for Supabase columns
     if ('condoFee' in sanitized) {
@@ -294,7 +310,13 @@ export async function PATCH(req: NextRequest) {
     const data = await req.json();
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
     
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user);
+
     const { imageUrls, ...sanitized } = data;
+    if (activeTenantId && !sanitized.tenant_id) {
+      sanitized.tenant_id = activeTenantId;
+    }
 
     // Normalize camelCase to snake_case for Supabase columns
     if ('condoFee' in sanitized) {

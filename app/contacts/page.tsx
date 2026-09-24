@@ -46,6 +46,7 @@ import {
 } from "@/lib/db";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 
 import { Suspense } from "react";
 
@@ -78,7 +79,8 @@ function ContactsContent() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
+  const [isDeletingContact, setIsDeletingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
   const [displayPhone, setDisplayPhone] = useState("");
@@ -202,11 +204,16 @@ function ContactsContent() {
     toast.success(`${filteredContacts.length} contatos exportados (ação registrada na auditoria).`);
   };
 
-  const handleDelete = async (id: string) => {
-    console.log("handleDelete called for id:", id);
+  const confirmDeleteContact = async () => {
+    if (!contactToDelete) return;
+    const targetContact = contactToDelete;
+    const id = targetContact.id;
+
+    setIsDeletingContact(true);
+    const toastId = toast.loading("Excluindo contato...");
+    setContacts(prev => prev.filter(c => c.id !== id));
+
     try {
-      const targetContact = contacts.find(c => c.id === id);
-      console.log("Deleting contact...");
       await deleteContact(id);
 
       recordAuditEvent({
@@ -223,20 +230,20 @@ function ContactsContent() {
         }
       });
 
-      toast.success("Contato excluído com sucesso!");
-      
-      // Close modal if deleting the contact being edited
+      toast.success("Contato excluído com sucesso!", { id: toastId });
+      setContactToDelete(null);
+
       if (editingContact && editingContact.id === id) {
         setIsModalOpen(false);
         setEditingContact(null);
       }
-      
-      setDeleteConfirmId(null);
-      await fetchData();
     } catch (err: any) {
       console.error("Error deleting contact:", err);
-      const errorMessage = err.message || "Erro ao excluir contato.";
-      toast.error(`Erro: ${errorMessage}`);
+      setContacts(prev => [...prev, targetContact]);
+      const errorMessage = err?.message || "Erro ao excluir contato.";
+      toast.error(`Erro: ${errorMessage}`, { id: toastId });
+    } finally {
+      setIsDeletingContact(false);
     }
   };
 
@@ -471,12 +478,10 @@ function ContactsContent() {
                       setEditingContact(contact);
                       setIsModalOpen(true);
                     }}
-                    onDelete={() => handleDelete(contact.id)}
+                    onDelete={() => setContactToDelete(contact)}
                     isActiveTabEquipe={activeTab === 'equipe'}
                     onMessage={() => handleMessage(contact, activeTab === 'equipe' ? 'equipe' : 'cliente')}
                     isMessaging={isMessaging === contact.id}
-                    isConfirmingDelete={deleteConfirmId === contact.id}
-                    setConfirmingDelete={(val) => setDeleteConfirmId(val ? contact.id : null)}
                   />
                 ))}
 
@@ -635,22 +640,11 @@ function ContactsContent() {
                   {editingContact && (
                     <button 
                       type="button"
-                      onClick={() => {
-                        if (deleteConfirmId === editingContact.id) {
-                          handleDelete(editingContact.id);
-                        } else {
-                          setDeleteConfirmId(editingContact.id);
-                        }
-                      }}
-                      className={cn(
-                        "px-3 py-2 rounded-xl transition-all border",
-                        deleteConfirmId === editingContact.id 
-                          ? "bg-red-500 text-white border-red-600 shadow-md shadow-red-500/20 scale-105" 
-                          : "text-red-500 hover:bg-red-500/10 border-red-500/20"
-                      )}
-                      title={deleteConfirmId === editingContact.id ? "Clique novamente para confirmar" : "Excluir este contato"}
+                      onClick={() => setContactToDelete(editingContact)}
+                      className="px-3 py-2 rounded-xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer"
+                      title="Excluir este contato"
                     >
-                      <Trash2 className={cn("w-4 h-4", deleteConfirmId === editingContact.id && "animate-pulse")} />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                   <button 
@@ -672,6 +666,17 @@ function ContactsContent() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão de Contato */}
+      <ConfirmDeleteModal
+        isOpen={!!contactToDelete}
+        onClose={() => setContactToDelete(null)}
+        onConfirm={confirmDeleteContact}
+        title="Excluir Contato"
+        itemName={contactToDelete?.name}
+        itemType="contato"
+        isDeleting={isDeletingContact}
+      />
     </div>
   );
 }
@@ -683,9 +688,7 @@ function ContactCard({
   onDelete, 
   isActiveTabEquipe, 
   onMessage, 
-  isMessaging,
-  isConfirmingDelete,
-  setConfirmingDelete
+  isMessaging
 }: { 
   contact: Contact, 
   companyName?: string, 
@@ -693,9 +696,7 @@ function ContactCard({
   onDelete: () => void, 
   isActiveTabEquipe: boolean, 
   onMessage: () => void, 
-  isMessaging: boolean,
-  isConfirmingDelete?: boolean,
-  setConfirmingDelete?: (val: boolean) => void
+  isMessaging: boolean
 }) {
   return (
     <div className="bg-card p-4 rounded-xl border border-border shadow-xs hover:shadow-md transition-all group h-full flex flex-col justify-between">
@@ -758,22 +759,12 @@ function ContactCard({
               onClick={(e) => { 
                 e.preventDefault(); 
                 e.stopPropagation();
-                if (isConfirmingDelete) {
-                  onDelete();
-                  setConfirmingDelete?.(false);
-                } else {
-                  setConfirmingDelete?.(true);
-                }
+                onDelete();
               }} 
-              className={cn(
-                "p-1.5 rounded-lg transition-all relative",
-                isConfirmingDelete 
-                  ? "bg-red-500 text-white scale-105 shadow-xs" 
-                  : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-              )}
-              title={isConfirmingDelete ? "Clique novamente para confirmar" : "Excluir"}
+              className="p-1.5 rounded-lg transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
+              title="Excluir contato"
             >
-              <Trash2 className={cn("w-3.5 h-3.5", isConfirmingDelete && "animate-pulse")} />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

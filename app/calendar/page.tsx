@@ -22,7 +22,7 @@ import {
   Loader2,
   AlertCircle
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { safeAiCall } from "@/lib/ai";
@@ -43,6 +43,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { useAuth } from "@/providers/auth-provider";
 import { 
   subscribeToActivities, 
@@ -78,16 +79,69 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  
+  const [isSaving, setIsSaving] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [eventToDelete, setEventToDelete] = useState<any | null>(null);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+
+  // Helper to compute smart default times (never in the past for today)
+  const getDefaultEventTimes = useCallback((targetDate: Date = new Date()) => {
+    const now = new Date();
+    const isToday = isSameDay(targetDate, now);
+
+    if (isToday) {
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const nextHour = currentMinutes >= 45 ? currentHour + 2 : currentHour + 1;
+      const safeStartHour = Math.min(Math.max(nextHour, 8), 22);
+      const safeEndHour = Math.min(safeStartHour + 1, 23);
+      return {
+        time: `${String(safeStartHour).padStart(2, '0')}:00`,
+        endTime: `${String(safeEndHour).padStart(2, '0')}:00`
+      };
+    }
+
+    return { time: "10:00", endTime: "11:00" };
+  }, []);
+
   // New event form state
   const [newEvent, setNewEvent] = useState({
     title: "",
+    date: format(new Date(), "yyyy-MM-dd"),
     time: "10:00",
     endTime: "11:00",
     type: "Visita",
     client: "",
     description: ""
   });
+
+  const openNewEventModal = useCallback((date?: Date) => {
+    const targetDate = date || selectedDate || new Date();
+    setSelectedDate(targetDate);
+    setEditingEvent(null);
+    const times = getDefaultEventTimes(targetDate);
+    setNewEvent({
+      title: "",
+      date: format(targetDate, "yyyy-MM-dd"),
+      time: times.time,
+      endTime: times.endTime,
+      type: "Visita",
+      client: "",
+      description: ""
+    });
+    setIsModalOpen(true);
+  }, [selectedDate, getDefaultEventTimes]);
+
+  const isPastDateTimeSelected = useCallback(() => {
+    if (editingEvent) return false;
+    if (!newEvent.time || !newEvent.date) return false;
+    const [year, month, day] = newEvent.date.split('-').map(Number);
+    const [h, m] = newEvent.time.split(':').map(Number);
+    if (!year || !month || !day) return false;
+    const candidate = new Date(year, month - 1, day, h || 0, m || 0, 0, 0);
+    // Allow 60 seconds grace so choosing current minute doesn't immediately block
+    return candidate.getTime() < Date.now() - 60000;
+  }, [editingEvent, newEvent.date, newEvent.time]);
 
   const [events, setEvents] = useState<Event[]>([]);
   
@@ -320,16 +374,45 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
 
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const dbType = newEvent.type === "Visita" ? "meeting" : newEvent.type === "Reunião" ? "meeting" : "call";
-    
-    // Parse time and set it to the selected date
+    if (isSubmittingRef.current || isSaving) return;
+
+    if (!newEvent.title.trim()) {
+      toast.error("Por favor, preencha o título do evento.");
+      return;
+    }
+
+    if (!newEvent.date) {
+      toast.error("Por favor, informe a data do compromisso.");
+      return;
+    }
+
+    // Parse date and time in local components
+    const [year, month, day] = newEvent.date.split('-').map(Number);
     const [hours, minutes] = newEvent.time.split(':').map(Number);
-    const activityDate = new Date(selectedDate);
-    activityDate.setHours(hours, minutes, 0, 0);
+    const activityDate = new Date(year, month - 1, day, hours || 0, minutes || 0, 0, 0);
+
+    const now = new Date();
+
+    // Past date/time validation: block creating appointments in the past (allowing 60s grace)
+    if (!editingEvent && activityDate.getTime() < (now.getTime() - 60000)) {
+      toast.error("Não é possível agendar um compromisso no passado. Escolha uma data e horário futuros.");
+      return;
+    }
+
+    const [endHours, endMinutes] = newEvent.endTime.split(':').map(Number);
+    const endActivityDate = new Date(year, month - 1, day, endHours || 0, endMinutes || 0, 0, 0);
+
+    if (endActivityDate.getTime() <= activityDate.getTime()) {
+      toast.error("O horário de término deve ser posterior ao horário de início.");
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    setIsSaving(true);
+    const dbType = newEvent.type === "Visita" ? "meeting" : newEvent.type === "Reunião" ? "meeting" : "call";
 
     const activityData = {
-      title: newEvent.title,
+      title: newEvent.title.trim(),
       description: `${newEvent.time} - ${newEvent.endTime}${newEvent.description ? `\n${newEvent.description}` : ''}`,
       date: activityDate.toISOString(),
       type: dbType,
@@ -353,6 +436,7 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
             time: `${newEvent.time} - ${newEvent.endTime}`
           }
         });
+        toast.success("Compromisso atualizado com sucesso!");
       } else {
         const newActId = await createActivity(activityData);
         recordAuditEvent({
@@ -369,25 +453,39 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
             date: activityDate.toISOString()
           }
         });
+        toast.success("Compromisso agendado com sucesso!");
       }
       setIsModalOpen(false);
       setEditingEvent(null);
+      const nextDefaults = getDefaultEventTimes(selectedDate);
       setNewEvent({
         title: "",
-        time: "10:00",
-        endTime: "11:00",
+        date: format(selectedDate, "yyyy-MM-dd"),
+        time: nextDefaults.time,
+        endTime: nextDefaults.endTime,
         type: "Visita",
         client: "",
         description: ""
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving activity", err);
+      toast.error(err?.message || "Erro ao salvar compromisso. Tente novamente.");
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteEvent = async (id: string) => {
+  const confirmDeleteEvent = async () => {
+    if (!eventToDelete) return;
+    const targetEvent = eventToDelete;
+    const id = targetEvent.id;
+
+    setIsDeletingEvent(true);
+    const toastId = toast.loading("Excluindo compromisso...");
+    setEvents(prev => prev.filter(e => e.id !== id));
+
     try {
-      const targetEvent = events.find(e => e.id === id);
       await deleteActivity(id);
       recordAuditEvent({
         action: 'DELETE_ACTIVITY',
@@ -402,11 +500,16 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
           type: targetEvent?.type
         }
       });
+      toast.success("Compromisso excluído com sucesso!", { id: toastId });
+      setEventToDelete(null);
       if (isModalOpen) setIsModalOpen(false);
       setEditingEvent(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting activity", err);
-      toast.error("Erro ao excluir compromisso.");
+      setEvents(prev => [...prev, targetEvent]);
+      toast.error(err?.message || "Erro ao excluir compromisso.", { id: toastId });
+    } finally {
+      setIsDeletingEvent(false);
     }
   };
 
@@ -437,16 +540,18 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
     const timeParts = event.time.split(" - ");
     const start = timeParts[0] || "10:00";
     const end = timeParts[1] || "11:00";
+    const evDate = event.date instanceof Date ? event.date : parseISO(event.date);
     
     setNewEvent({
       title: event.title,
+      date: format(evDate, "yyyy-MM-dd"),
       time: start,
       endTime: end,
       type: event.type,
       client: event.client || "",
       description: event.description || ""
     });
-    setSelectedDate(event.date instanceof Date ? event.date : parseISO(event.date));
+    setSelectedDate(evDate);
     setIsModalOpen(true);
   };
 
@@ -488,7 +593,7 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
               <Filter className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => openNewEventModal(selectedDate)}
               className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -540,7 +645,14 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                 return (
                   <div 
                     key={i} 
-                    onClick={() => setSelectedDate(date)}
+                    onClick={() => {
+                      setSelectedDate(date);
+                      setNewEvent(prev => ({
+                        ...prev,
+                        date: format(date, "yyyy-MM-dd")
+                      }));
+                    }}
+                    onDoubleClick={() => openNewEventModal(date)}
                     className={cn(
                       "bg-card min-h-[75px] md:min-h-[85px] p-2 cursor-pointer hover:bg-muted/10 transition-colors group relative",
                       !isSameMonth(date, monthStart) && "bg-muted/5 opacity-40",
@@ -620,9 +732,10 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          handleDeleteEvent(event.id);
+                          setEventToDelete(event);
                         }}
                         className="absolute top-2 right-2 z-50 p-1.5 hover:bg-red-500/10 rounded-lg text-muted-foreground hover:text-red-500 transition-colors bg-card/80 backdrop-blur-sm border border-transparent hover:border-red-500/20 shadow-xs"
+                        title="Excluir compromisso"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -732,13 +845,23 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
               <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/30">
                 <div>
                   <h3 className="text-base font-bold text-foreground">{editingEvent ? 'Editar Compromisso' : 'Novo Compromisso'}</h3>
-                  <p className="text-[11px] font-medium text-muted-foreground">Agendando para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    Agendando para {newEvent.date ? format(parseISO(newEvent.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+                  </p>
                 </div>
                 <button 
                   onClick={() => {
                     setIsModalOpen(false);
                     setEditingEvent(null);
-                    setNewEvent({ title: "", time: "10:00", endTime: "11:00", type: "Visita", client: "", description: "" });
+                    setNewEvent({ 
+                      title: "", 
+                      date: format(new Date(), "yyyy-MM-dd"), 
+                      time: "10:00", 
+                      endTime: "11:00", 
+                      type: "Visita", 
+                      client: "", 
+                      description: "" 
+                    });
                   }}
                   className="p-1.5 hover:bg-muted rounded-lg transition-colors"
                 >
@@ -757,6 +880,34 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     placeholder="Ex: Visita ao Edifício Garden"
                     className="w-full px-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
                   />
+                </div>
+
+                <div className="space-y-1.5 font-medium text-start">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Data do Compromisso</label>
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <input 
+                      required
+                      type="date" 
+                      min={!editingEvent ? format(new Date(), "yyyy-MM-dd") : undefined}
+                      value={newEvent.date}
+                      onChange={e => {
+                        const newD = e.target.value;
+                        if (!newD) return;
+                        const [y, m, d] = newD.split('-').map(Number);
+                        const parsed = new Date(y, m - 1, d);
+                        setSelectedDate(parsed);
+                        const times = getDefaultEventTimes(parsed);
+                        setNewEvent(prev => ({
+                          ...prev,
+                          date: newD,
+                          time: isSameDay(parsed, new Date()) ? times.time : prev.time,
+                          endTime: isSameDay(parsed, new Date()) ? times.endTime : prev.endTime
+                        }));
+                      }}
+                      className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -787,6 +938,13 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                     </div>
                   </div>
                 </div>
+
+                {isPastDateTimeSelected() && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-amber-500 text-xs font-semibold animate-in fade-in duration-200">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span>O horário selecionado já passou. Selecione uma data e horário futuros para agendar o compromisso.</span>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Tipo de Atividade</label>
@@ -827,10 +985,11 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                   {editingEvent && (
                     <button 
                       type="button"
+                      disabled={isSaving}
                       onClick={() => {
-                        handleDeleteEvent(editingEvent.id);
+                        setEventToDelete(editingEvent);
                       }}
-                      className="flex-1 py-2.5 bg-red-500/10 text-red-500 rounded-xl font-bold text-xs md:text-sm hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2.5 bg-red-500/10 text-red-500 rounded-xl font-bold text-xs md:text-sm hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <X className="w-4 h-4" />
                       Excluir
@@ -838,10 +997,20 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
                   )}
                   <button 
                     type="submit"
-                    className="flex-[2] py-2.5 bg-primary text-white rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                    disabled={isSaving || isPastDateTimeSelected()}
+                    className="flex-[2] py-2.5 bg-primary text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                   >
-                    <Check className="w-4 h-4" />
-                    {editingEvent ? 'Salvar Alterações' : 'Salvar Compromisso'}
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        {editingEvent ? 'Salvar Alterações' : 'Salvar Compromisso'}
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1090,6 +1259,16 @@ Seja direto de forma humilde, elegante, profissional e altamente inspiradora, us
           </div>
         )}
       </AnimatePresence>
+      {/* Modal de Confirmação de Exclusão de Compromisso */}
+      <ConfirmDeleteModal
+        isOpen={!!eventToDelete}
+        onClose={() => setEventToDelete(null)}
+        onConfirm={confirmDeleteEvent}
+        title="Excluir Compromisso"
+        itemName={eventToDelete?.title}
+        itemType="compromisso da agenda"
+        isDeleting={isDeletingEvent}
+      />
     </div>
   );
 }

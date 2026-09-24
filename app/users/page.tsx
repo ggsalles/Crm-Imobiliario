@@ -36,6 +36,8 @@ import { CreateUserModal } from "@/components/users/CreateUserModal";
 import { UserLimitModal } from "@/components/users/UserLimitModal";
 import { TenantLicenseBanner } from "@/components/users/TenantLicenseBanner";
 import { UserTableRow } from "@/components/users/UserTableRow";
+import { InactivateUserModal } from "@/components/users/InactivateUserModal";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 
 export default function UsersPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -61,6 +63,11 @@ export default function UsersPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [savingUid, setSavingUid] = useState<string | null>(null);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
+  const [inactivatingUser, setInactivatingUser] = useState<UserProfile | null>(null);
+  const [isInactivating, setIsInactivating] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [newUserData, setNewUserData] = useState({
     displayName: "",
     email: "",
@@ -107,7 +114,7 @@ export default function UsersPage() {
 
   // Active staff count (ignoring clients/contacts, since staff licenses apply to corretores and admins)
   const staffUsers = tenantUsers.filter(u => u.userType !== 'cliente');
-  const activeCount = staffUsers.length;
+  const activeCount = staffUsers.filter(u => u.isActive !== false).length;
   const isLimitReached = activeCount >= tenantUserLimit;
   const remainingSlots = Math.max(0, tenantUserLimit - activeCount);
   const usagePercentage = Math.min(100, Math.round((activeCount / tenantUserLimit) * 100));
@@ -186,7 +193,9 @@ export default function UsersPage() {
       role: u.role,
       userType: u.userType || 'funcionário',
       tenantId: u.tenantId || DEFAULT_TENANT_ID,
-      tenantIds: u.tenantIds || [u.tenantId || DEFAULT_TENANT_ID]
+      tenantIds: u.tenantIds || [u.tenantId || DEFAULT_TENANT_ID],
+      isActive: u.isActive !== false,
+      inactiveReason: u.inactiveReason || ''
     });
   };
 
@@ -208,7 +217,9 @@ export default function UsersPage() {
           role: editForm.role ?? u.role,
           userType: editForm.userType ?? u.userType,
           tenantId: updatedTenantId,
-          tenantIds: updatedTenantIds.length > 0 ? updatedTenantIds : u.tenantIds
+          tenantIds: updatedTenantIds.length > 0 ? updatedTenantIds : u.tenantIds,
+          isActive: editForm.isActive !== undefined ? editForm.isActive : u.isActive,
+          inactiveReason: editForm.inactiveReason !== undefined ? editForm.inactiveReason : u.inactiveReason
         };
       }
       return u;
@@ -240,6 +251,88 @@ export default function UsersPage() {
       forceDataResync();
     } finally {
       setSavingUid(null);
+    }
+  };
+
+  const handleConfirmInactivation = async (userId: string, reason: string) => {
+    setIsInactivating(true);
+    try {
+      const targetUser = users.find(u => u.id === userId);
+      
+      // Atualização otimista imediata
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: false, inactiveReason: reason } : u));
+
+      await updateUserProfile(userId, {
+        isActive: false,
+        inactiveReason: reason
+      });
+
+      recordAuditEvent({
+        action: 'UPDATE_SETTINGS',
+        title: 'Inativação de Acesso de Usuário',
+        content: `Usuário "${targetUser?.displayName || userId}" (${targetUser?.email || ''}) foi inativado pela administração. Motivo: ${reason || 'Não informado'}.`,
+        severity: 'high',
+        category: 'modification',
+        relatedId: userId,
+        entityType: 'user',
+        metadata: {
+          userId,
+          userName: targetUser?.displayName,
+          userEmail: targetUser?.email,
+          reason,
+          action: 'inactivate'
+        }
+      });
+
+      toast.success(`Usuário "${targetUser?.displayName || 'Selecionado'}" inativado com sucesso. O acesso ao sistema foi suspenso e a vaga liberada.`);
+      setInactivatingUser(null);
+    } catch (err: any) {
+      console.error("[app/users] Erro ao inativar usuário:", err);
+      toast.error(err?.message || "Erro ao inativar usuário");
+      forceDataResync();
+    } finally {
+      setIsInactivating(false);
+    }
+  };
+
+  const handleReactivateUser = async (targetUser: UserProfile) => {
+    // Validação preventiva de capacidade da imobiliária
+    if (isLimitReached && !isPlatformAdmin) {
+      toast.error("Limite de vagas atingido. Expanda as licenças contratadas para reativar este usuário.");
+      setShowLimitModal(true);
+      return;
+    }
+
+    try {
+      // Atualização otimista imediata
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, isActive: true, inactiveReason: undefined } : u));
+
+      await updateUserProfile(targetUser.id, {
+        isActive: true,
+        inactiveReason: null
+      });
+
+      recordAuditEvent({
+        action: 'UPDATE_SETTINGS',
+        title: 'Reativação de Acesso de Usuário',
+        content: `Usuário "${targetUser.displayName}" (${targetUser.email}) teve seu acesso restabelecido pela administração.`,
+        severity: 'high',
+        category: 'modification',
+        relatedId: targetUser.id,
+        entityType: 'user',
+        metadata: {
+          userId: targetUser.id,
+          userName: targetUser.displayName,
+          userEmail: targetUser.email,
+          action: 'reactivate'
+        }
+      });
+
+      toast.success(`Usuário "${targetUser.displayName}" reativado com sucesso! O acesso ao sistema foi restabelecido.`);
+    } catch (err: any) {
+      console.error("[app/users] Erro ao reativar usuário:", err);
+      toast.error(err?.message || "Erro ao reativar usuário");
+      forceDataResync();
     }
   };
 
@@ -296,23 +389,22 @@ export default function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    const targetUser = userToDelete;
+    const id = targetUser.id;
+
     if (id === user?.id) {
       toast.error("Você não pode excluir seu próprio perfil");
-      return;
-    }
-    
-    if (deletingUid !== id) {
-      setDeletingUid(id);
-      toast.info("Clique novamente na lixeira para confirmar a exclusão", {
-        duration: 3000,
-        onAutoClose: () => setDeletingUid(null)
-      });
+      setUserToDelete(null);
       return;
     }
 
+    setIsDeletingUser(true);
+    const toastId = toast.loading("Excluindo usuário...");
+    setUsers(prev => prev.filter(u => u.id !== id));
+
     try {
-      const targetUser = users.find(u => u.id === id);
       await deleteUserProfile(id);
 
       recordAuditEvent({
@@ -330,11 +422,14 @@ export default function UsersPage() {
         }
       });
 
-      toast.success("Acesso removido com sucesso");
-      setDeletingUid(null);
+      toast.success("Acesso e usuário removidos com sucesso!", { id: toastId });
+      setUserToDelete(null);
     } catch (error: any) {
       console.error("Erro ao deletar:", error);
-      toast.error("Erro ao remover acesso. Verifique as permissões de administrador.");
+      setUsers(prev => [...prev, targetUser]);
+      toast.error("Erro ao remover acesso. Verifique as permissões de administrador.", { id: toastId });
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -360,6 +455,10 @@ export default function UsersPage() {
                       (u.tenantIds && u.tenantIds.includes(currentTenantId));
       if (!belongs) return false;
     }
+    // Status filter
+    if (statusFilter === 'active' && u.isActive === false) return false;
+    if (statusFilter === 'inactive' && u.isActive !== false) return false;
+
     return (
       u.displayName.toLowerCase().includes(search.toLowerCase()) || 
       u.email.toLowerCase().includes(search.toLowerCase())
@@ -511,14 +610,63 @@ export default function UsersPage() {
 
           {/* Tabela de Usuários */}
           <div className="bg-card rounded-xl border border-border shadow-xs overflow-hidden">
-            <div className="p-3.5 sm:p-4 border-b border-border flex items-center justify-between bg-muted/30">
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-bold text-foreground">{filteredUsers.length}</span>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Usuários Cadastrados</span>
+            <div className="p-3 sm:p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-muted/30">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm font-bold text-foreground">{filteredUsers.length}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Usuários</span>
+                </div>
+                <div className="h-4 w-px bg-border hidden sm:block" />
+                {/* Tabs de Filtro de Status */}
+                <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('all')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer",
+                      statusFilter === 'all' 
+                        ? "bg-card text-foreground shadow-xs" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Todos ({tenantUsers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('active')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+                      statusFilter === 'active' 
+                        ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-xs" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Ativos ({tenantUsers.filter(u => u.isActive !== false).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('inactive')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+                      statusFilter === 'inactive' 
+                        ? "bg-card text-rose-500 shadow-xs" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    Inativos ({tenantUsers.filter(u => u.isActive === false).length})
+                  </button>
+                </div>
               </div>
               <div className="flex gap-1.5">
-                <button className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground">
+                <button 
+                  onClick={() => setStatusFilter(statusFilter === 'all' ? 'active' : statusFilter === 'active' ? 'inactive' : 'all')}
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground flex items-center gap-1 text-xs"
+                  title="Alternar filtro rápido de status"
+                >
                   <Filter className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium hidden md:inline">Filtro rápido</span>
                 </button>
               </div>
             </div>
@@ -553,14 +701,23 @@ export default function UsersPage() {
                         setEditingUser(null);
                         setEditForm({});
                       }}
-                      onDeleteUser={handleDeleteUser}
+                      onDeleteUser={(id) => {
+                        const target = users.find(u => u.id === id);
+                        if (target) setUserToDelete(target);
+                      }}
+                      onInactivateClick={(target) => setInactivatingUser(target)}
+                      onReactivateClick={handleReactivateUser}
                     />
                   ))}
 
                   {filteredUsers.length === 0 && (
                     <tr key="empty-state">
                       <td colSpan={5} className="px-4 py-14 text-center text-muted-foreground font-medium text-xs">
-                        Nenhum usuário encontrado.
+                        {statusFilter === 'inactive' 
+                          ? "Nenhum usuário inativo encontrado." 
+                          : statusFilter === 'active'
+                          ? "Nenhum usuário ativo encontrado."
+                          : "Nenhum usuário encontrado."}
                       </td>
                     </tr>
                   )}
@@ -569,6 +726,15 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+
+        {/* Modal para Inativar Usuário */}
+        <InactivateUserModal 
+          isOpen={!!inactivatingUser}
+          onClose={() => setInactivatingUser(null)}
+          user={inactivatingUser}
+          onConfirm={handleConfirmInactivation}
+          isProcessing={isInactivating}
+        />
 
         {/* Modal para Adicionar Novo Usuário */}
         <CreateUserModal 
@@ -604,6 +770,18 @@ export default function UsersPage() {
           onSuccess={() => {
             fetchTenants();
           }}
+        />
+
+        {/* Modal de Confirmação de Exclusão de Usuário */}
+        <ConfirmDeleteModal
+          isOpen={!!userToDelete}
+          onClose={() => setUserToDelete(null)}
+          onConfirm={confirmDeleteUser}
+          title="Excluir Usuário do Sistema"
+          itemName={userToDelete ? `${userToDelete.displayName} (${userToDelete.email})` : undefined}
+          itemType="usuário"
+          warningNote="ATENÇÃO: A exclusão permanente removerá o cadastro do colaborador. Caso deseje apenas suspender o login mantendo o histórico de negócios intacto, utilize a opção 'Inativar Usuário'."
+          isDeleting={isDeletingUser}
         />
       </main>
     </div>
