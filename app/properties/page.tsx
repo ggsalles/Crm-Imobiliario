@@ -2752,6 +2752,10 @@ function PropertyCard({ property, onEdit, onDelete, onShowMap, onShare, onToggle
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const images = property.imageUrls && property.imageUrls.length > 0 
+    ? property.imageUrls 
+    : ["https://picsum.photos/seed/realestate/800/600"];
+
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentImageIndex((prev) => (prev + 1) % images.length);

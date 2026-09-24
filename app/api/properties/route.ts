@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 
     const isPublic = searchParams.get('public') === 'true';
     const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
-    const effectiveTenantId = (isPublic && tenantParam) ? tenantParam : (activeTenantId || tenantParam || null);
+    const effectiveTenantId = tenantParam || activeTenantId || null;
 
     let query = supabase
       .from('properties')

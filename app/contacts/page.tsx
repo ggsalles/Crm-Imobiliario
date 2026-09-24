@@ -134,12 +134,6 @@ function ContactsContent() {
   }, [user, profile]);
 
   useEffect(() => {
-    if (!isModalOpen) {
-      setDeleteConfirmId(null);
-    }
-  }, [isModalOpen]);
-
-  useEffect(() => {
     if (editId && contacts.length > 0) {
       const contactToEdit = contacts.find(c => c.id === editId);
       if (contactToEdit) {

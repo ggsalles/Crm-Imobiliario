@@ -436,6 +436,11 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         className="flex-1 px-1.5 space-y-0.5 mt-0.5 overflow-y-auto scrollbar-thin"
       >
         {navItems.map((item) => {
+          let targetHref = item.href;
+          if (item.href === '/vitrine' && profile?.tenantId) {
+            targetHref = `/vitrine?tenant=${profile.tenantId}`;
+          }
+
           const isActive = item.href.includes('?') 
             ? pathname === item.href.split('?')[0] && currentTab === item.href.split('=')[1]
             : pathname === item.href;
@@ -443,7 +448,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={targetHref}
               prefetch={true}
               onClick={() => setIsMobileMenuOpen(false)}
               title={isCollapsed ? item.label : undefined}

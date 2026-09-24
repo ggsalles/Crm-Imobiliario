@@ -162,6 +162,9 @@ function VitrineContent() {
     setLoading(true);
     const targetTenant = tenantParam || profile?.tenantId || '';
 
+    // Invalida cache residual de vitrine para garantir dados atualizados da imobiliária
+    clearPropertiesCache();
+
     // 1. Subscribe to properties with Realtime WebSocket & visibility-aware poll
     const unsubscribe = subscribeToShowcaseProperties(
       (data) => {
