@@ -3,8 +3,8 @@
  * Centraliza identificadores, papéis administrativos e configurações padrão.
  */
 
-export const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
-export const DEFAULT_TENANT_NAME = 'SalesScore';
+export const DEFAULT_TENANT_ID = 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f';
+export const DEFAULT_TENANT_NAME = 'Nando Imobiliária';
 
 export const PLATFORM_ADMIN_EMAIL = (
   process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ggsalles@gmail.com'

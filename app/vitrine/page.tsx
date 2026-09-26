@@ -272,17 +272,19 @@ function VitrineContent() {
       }
 
       // Commercial Status
-      if (selectedStatus !== 'all') {
-        const pStatus = (p.status || '').toLowerCase().trim();
-        if (selectedStatus === 'disponível') {
-          if (pStatus !== 'disponível' && pStatus !== 'disponivel' && pStatus !== 'available') return false;
-        } else if (selectedStatus === 'reservado') {
-          if (pStatus !== 'reservado' && pStatus !== 'reserved') return false;
-        } else if (selectedStatus === 'vendido') {
-          if (pStatus !== 'vendido' && pStatus !== 'sold') return false;
-        } else if (selectedStatus === 'alugado') {
-          if (pStatus !== 'alugado' && pStatus !== 'rented') return false;
-        }
+      const pStatus = (p.status || '').toLowerCase().trim();
+      const isAvailable = pStatus === 'disponível' || pStatus === 'disponivel' || pStatus === 'available' || !pStatus;
+      if (selectedStatus === 'all') {
+        // Vitrine padrão: exibe única e exclusivamente imóveis disponíveis
+        if (!isAvailable) return false;
+      } else if (selectedStatus === 'disponível') {
+        if (!isAvailable) return false;
+      } else if (selectedStatus === 'reservado') {
+        if (pStatus !== 'reservado' && pStatus !== 'reserved') return false;
+      } else if (selectedStatus === 'vendido') {
+        if (pStatus !== 'vendido' && pStatus !== 'sold') return false;
+      } else if (selectedStatus === 'alugado') {
+        if (pStatus !== 'alugado' && pStatus !== 'rented') return false;
       }
 
       // Bedrooms

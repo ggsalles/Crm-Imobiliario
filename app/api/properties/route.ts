@@ -19,11 +19,21 @@ export async function GET(req: NextRequest) {
 
     // If id is provided, fetch single property
     if (id && id !== 'undefined' && id !== 'null') {
-      const { data: property, error: propError } = await supabase
+      const isPublic = searchParams.get('public') === 'true';
+      const user = getAuthenticatedUser(req);
+      const activeTenantId = await getActiveTenantId(supabase, user);
+
+      let singleQuery = supabase
         .from('properties')
         .select('*')
-        .eq('id', id)
-        .maybeSingle();
+        .eq('id', id);
+
+      // Strict tenant isolation for CRM / authenticated requests
+      if (!isPublic && activeTenantId) {
+        singleQuery = singleQuery.eq('tenant_id', activeTenantId);
+      }
+
+      const { data: property, error: propError } = await singleQuery.maybeSingle();
 
       if (propError) throw propError;
       if (!property) return NextResponse.json(null);
@@ -95,24 +105,26 @@ export async function GET(req: NextRequest) {
 
     const isPublic = searchParams.get('public') === 'true';
     const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
-    const effectiveTenantId = tenantParam || activeTenantId || null;
+    
+    // Strict tenant isolation: force active company tenant for CRM / authenticated requests.
+    // For public showcase queries, allow target showcase tenantParam or activeTenantId.
+    const effectiveTenantId = isPublic
+      ? (tenantParam || activeTenantId || null)
+      : (activeTenantId || tenantParam || DEFAULT_TENANT_ID);
 
     let query = supabase
       .from('properties')
       .select('*')
       .order('created_at', { ascending: false });
 
+    // Strict tenant isolation: no fallback to tenant_id.is.null
     if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
-      if (effectiveTenantId === DEFAULT_TENANT_ID) {
-        query = query.or(`tenant_id.eq.${effectiveTenantId},tenant_id.is.null`);
-      } else {
-        query = query.eq('tenant_id', effectiveTenantId);
-      }
+      query = query.eq('tenant_id', effectiveTenantId);
     }
 
     if (isPublic) {
-      // Vitrine pública: oculta apenas imóveis inativos ou deletados
-      query = query.neq('status', 'inactive').neq('status', 'deleted');
+      // Vitrine pública: traz estritamente imóveis com status disponível
+      query = query.in('status', ['disponível', 'disponivel', 'available']);
     }
 
     if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
@@ -314,7 +326,7 @@ export async function PATCH(req: NextRequest) {
     const activeTenantId = await getActiveTenantId(supabase, user);
 
     const { imageUrls, ...sanitized } = data;
-    if (activeTenantId && !sanitized.tenant_id) {
+    if (activeTenantId) {
       sanitized.tenant_id = activeTenantId;
     }
 
@@ -341,10 +353,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
-    let { error } = await supabase
+    let updateQuery = supabase
       .from('properties')
       .update(sanitized)
       .eq('id', id);
+
+    if (activeTenantId) {
+      updateQuery = updateQuery.eq('tenant_id', activeTenantId);
+    }
+
+    let { error } = await updateQuery;
 
     // Fallback gracioso caso a coluna 'tags' ou 'is_featured' ainda não tenha sido criada no Supabase pelo usuário
     if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
@@ -356,10 +374,16 @@ export async function PATCH(req: NextRequest) {
         delete fallbackSanitized.tags;
         delete fallbackSanitized.is_featured;
       }
-      const retry = await supabase
+      let retryQuery = supabase
         .from('properties')
         .update(fallbackSanitized)
         .eq('id', id);
+
+      if (activeTenantId) {
+        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
+      }
+
+      const retry = await retryQuery;
       error = retry.error;
     }
 
@@ -401,6 +425,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
     }
 
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user);
+
     console.log(`[API/Properties] DELETE ID ${id}: Iniciando remoção...`);
 
     // First delete associated images due to possible foreign key constraints
@@ -413,10 +440,16 @@ export async function DELETE(req: NextRequest) {
       console.warn(`[API/Properties] DELETE ID ${id}: Erro ao remover imagens associadas (continuando...):`, imgError);
     }
 
-    const { error } = await supabase
+    let deleteQuery = supabase
       .from('properties')
       .delete()
       .eq('id', id);
+
+    if (activeTenantId) {
+      deleteQuery = deleteQuery.eq('tenant_id', activeTenantId);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       console.error(`[API/Properties] DELETE ID ${id} error:`, error);

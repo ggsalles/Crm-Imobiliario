@@ -185,11 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Safety timeout to prevent stuck loading state - raised to 15s for better reliability on cold-starts
+    // Safety timeout to prevent stuck loading state - reduced to 3.5s for snappy loading
     const timeout = setTimeout(() => {
-      console.warn("AuthProvider: Safety timeout reached. Forcing loading to false.");
+      console.warn("AuthProvider: Safety timeout reached (3.5s). Forcing loading to false.");
       setLoading(false);
-    }, 15000);
+    }, 3500);
 
     // Initial session loading
     setLoading(true);

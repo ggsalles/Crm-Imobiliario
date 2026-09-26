@@ -567,9 +567,10 @@ function DashboardContent() {
     if (!user || !profile) return;
 
     // Safety timeout: force loading false if it takes too long
+    // Fast fallback safety timer to never block rendering
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 8000);
+    }, 3500);
 
     // Subscriptions
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
