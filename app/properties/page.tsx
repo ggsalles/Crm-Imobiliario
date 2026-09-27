@@ -35,6 +35,8 @@ import { PropertyForm } from "@/components/properties/PropertyForm";
 import { PropertyMapModal } from "@/components/properties/PropertyMapModal";
 import { PropertyShareModal } from "@/components/properties/PropertyShareModal";
 import { VitrineShareModal } from "@/components/properties/VitrineShareModal";
+import { CreateDealFromPropertyModal } from "@/components/properties/CreateDealFromPropertyModal";
+import { PropertyDetailModal } from "@/components/properties/PropertyDetailModal";
 
 export default function PropertiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -53,6 +55,8 @@ export default function PropertiesPage() {
   const [sharingProperty, setSharingProperty] = useState<Property | null>(null);
   const [sharingText, setSharingText] = useState("");
   const [isVitrineModalOpen, setIsVitrineModalOpen] = useState(false);
+  const [propertyForNewDeal, setPropertyForNewDeal] = useState<Property | null>(null);
+  const [viewingProperty, setViewingProperty] = useState<Property | null>(null);
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -542,11 +546,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     <PropertyCard 
                       key={property.id} 
                       property={property} 
+                      onViewDetails={() => setViewingProperty(property)}
                       onEdit={() => handleEdit(property)}
                       onDelete={() => setPropertyToDelete(property)}
                       onShowMap={() => setActiveMapProperty(property)}
                       onShare={() => setSharingProperty(property)}
                       onToggleFeatured={() => handleToggleFeatured(property)}
+                      onCreateDeal={() => setPropertyForNewDeal(property)}
                     />
                   ))}
                 </AnimatePresence>
@@ -604,11 +610,54 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         onClose={() => setSharingProperty(null)}
       />
 
+      {/* Create Deal Directly From Property Modal */}
+      <CreateDealFromPropertyModal
+        isOpen={!!propertyForNewDeal}
+        property={propertyForNewDeal}
+        contacts={contacts}
+        onClose={() => setPropertyForNewDeal(null)}
+      />
+
       {/* Public Vitrine Share Modal */}
       <VitrineShareModal
         isOpen={isVitrineModalOpen}
         onClose={() => setIsVitrineModalOpen(false)}
         profile={profile}
+      />
+
+      {/* Property Full Details 360° Modal */}
+      <PropertyDetailModal
+        property={viewingProperty}
+        isOpen={!!viewingProperty}
+        onClose={() => setViewingProperty(null)}
+        onEdit={() => {
+          const p = viewingProperty;
+          setViewingProperty(null);
+          if (p) handleEdit(p);
+        }}
+        onDelete={() => {
+          const p = viewingProperty;
+          setViewingProperty(null);
+          if (p) setPropertyToDelete(p);
+        }}
+        onShowMap={() => {
+          const p = viewingProperty;
+          setViewingProperty(null);
+          if (p) setActiveMapProperty(p);
+        }}
+        onShare={() => {
+          const p = viewingProperty;
+          setViewingProperty(null);
+          if (p) setSharingProperty(p);
+        }}
+        onCreateDeal={() => {
+          const p = viewingProperty;
+          setViewingProperty(null);
+          if (p) setPropertyForNewDeal(p);
+        }}
+        onToggleFeatured={() => {
+          if (viewingProperty) handleToggleFeatured(viewingProperty);
+        }}
       />
 
       {/* Confirm Delete Modal */}

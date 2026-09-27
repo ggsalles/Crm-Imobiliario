@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id') || searchParams.get('slug');
+    const rawId = searchParams.get('id') || searchParams.get('slug');
+    const id = rawId === 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f' ? DEFAULT_TENANT_ID : rawId;
     const hasCacheBuster = searchParams.has('t') || !!id;
     const config = await getSaaSConfig(hasCacheBuster);
     const blockedIds = config.blockedTenantIds || [];

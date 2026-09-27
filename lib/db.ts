@@ -78,6 +78,7 @@ export interface Property {
   complement?: string;
   area: number;
   bedrooms?: number;
+  suites?: number;
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
@@ -1534,6 +1535,17 @@ export async function getProperties(ownerId?: string) {
   }
 }
 
+export async function getProperty(id: string): Promise<Property | null> {
+  if (!id) return null;
+  try {
+    const data = await apiFetch(`/api/properties?id=${encodeURIComponent(id)}`);
+    return data || null;
+  } catch (err) {
+    console.error("[lib/db] getProperty error:", err);
+    return null;
+  }
+}
+
 export function clearPropertiesCache() {
   invalidateApiCache('/api/properties');
   for (const k of Object.keys(dataCache)) {
@@ -1559,13 +1571,10 @@ export function subscribeToShowcaseProperties(
       if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
       if (ownerId) url += `&ownerId=${encodeURIComponent(ownerId)}`;
 
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          dataCache[cacheKey] = data as Property[];
-          callback(data as Property[]);
-        }
+      const data = await apiFetch(url, { bypassCache: true, noCache: true });
+      if (Array.isArray(data)) {
+        dataCache[cacheKey] = data as Property[];
+        callback(data as Property[]);
       }
     } catch (err) {
       console.warn("[lib/db] subscribeToShowcaseProperties error:", err);

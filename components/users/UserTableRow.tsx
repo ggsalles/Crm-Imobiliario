@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import Image from 'next/image';
 import { UserProfile, Tenant } from '@/lib/db';
 import { 
@@ -37,7 +37,7 @@ interface UserTableRowProps {
   onReactivateClick?: (u: UserProfile) => void;
 }
 
-export function UserTableRow({
+export const UserTableRow = memo(function UserTableRow({
   userItem,
   currentUserId,
   isAdmin,
@@ -327,4 +327,4 @@ export function UserTableRow({
       </td>
     </tr>
   );
-}
+});

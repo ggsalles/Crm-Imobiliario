@@ -13,8 +13,10 @@ import {
   Edit, 
   Trash2, 
   Share2, 
+  Briefcase, 
   ChevronLeft, 
-  ChevronRight 
+  ChevronRight,
+  Eye
 } from "lucide-react";
 import { Property } from "@/lib/db";
 import { cn, formatCurrencyBRL } from "@/lib/utils";
@@ -26,6 +28,8 @@ interface PropertyCardProps {
   onShowMap: () => void;
   onShare: () => void;
   onToggleFeatured: () => void;
+  onCreateDeal?: () => void;
+  onViewDetails?: () => void;
 }
 
 export function PropertyCard({ 
@@ -34,7 +38,9 @@ export function PropertyCard({
   onDelete, 
   onShowMap, 
   onShare, 
-  onToggleFeatured 
+  onToggleFeatured,
+  onCreateDeal,
+  onViewDetails
 }: PropertyCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
@@ -58,7 +64,10 @@ export function PropertyCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col"
+      onClick={() => {
+        if (onViewDetails) onViewDetails();
+      }}
+      className="bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col cursor-pointer"
     >
       <div className="h-40 sm:h-44 relative overflow-hidden shrink-0 group/img">
         <AnimatePresence mode="wait">
@@ -184,9 +193,11 @@ export function PropertyCard({
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40">
-            <Bed className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[11px] font-semibold text-foreground">{property.bedrooms} Quartos</span>
+          <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40 min-w-0">
+            <Bed className="w-3 h-3 text-muted-foreground shrink-0" />
+            <span className="text-[11px] font-semibold text-foreground truncate">
+              {property.bedrooms || 0} Qts{property.suites && property.suites > 0 ? ` (${property.suites} st)` : ''}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 bg-muted/60 p-2 rounded-lg border border-border/40">
             <Square className="w-3 h-3 text-muted-foreground" />
@@ -275,6 +286,17 @@ export function PropertyCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (onViewDetails) onViewDetails();
+                }} 
+                className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all cursor-pointer"
+                title="Visualizar ficha completa do imóvel"
+              >
+                <Eye className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   onEdit();
                 }} 
                 className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary flex items-center justify-center transition-all"
@@ -297,6 +319,21 @@ export function PropertyCard({
             </div>
 
             <div className="flex items-center gap-1">
+              {onCreateDeal && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onCreateDeal();
+                  }}
+                  className="h-7 px-2 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer shadow-2xs"
+                  title="Iniciar oportunidade/negociação no Funil vinculando este imóvel"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Negociar</span>
+                </button>
+              )}
               <button 
                 type="button"
                 onClick={(e) => {
@@ -305,7 +342,7 @@ export function PropertyCard({
                   onShare();
                 }}
                 className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-xs cursor-pointer"
-                title="Gerar ficha para WhatsApp"
+                title="Gerar ficha para WhatsApp ou PDF"
               >
                 <Share2 className="w-3.5 h-3.5 pointer-events-none" />
               </button>
@@ -316,8 +353,8 @@ export function PropertyCard({
                   e.stopPropagation();
                   onShowMap();
                 }}
-                className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-all shadow-xs cursor-pointer"
-                title="Visualizar mapa"
+                className="w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                title="Visualizar localização"
               >
                 <MapPin className="w-3.5 h-3.5 pointer-events-none" />
               </button>

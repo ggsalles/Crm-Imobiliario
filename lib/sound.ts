@@ -3,6 +3,8 @@
  * Plays the iconic "Uh-oh!" when a new lead enters the pipeline via public links or capture forms.
  */
 
+import { safeGetItem, safeSetItem } from "@/lib/safe-storage";
+
 const SOUND_STORAGE_KEY = 'crm_icq_sound_enabled';
 const AUDIO_SRC = '/sounds/icq_uh_oh.mp3';
 
@@ -15,12 +17,8 @@ let isAudioUnlocked = false;
  */
 export function isSoundEnabled(): boolean {
   if (typeof window === 'undefined') return true;
-  try {
-    const saved = localStorage.getItem(SOUND_STORAGE_KEY);
-    return saved === null ? true : saved === 'true';
-  } catch {
-    return true;
-  }
+  const saved = safeGetItem(SOUND_STORAGE_KEY);
+  return saved === null ? true : saved === 'true';
 }
 
 /**
@@ -28,12 +26,8 @@ export function isSoundEnabled(): boolean {
  */
 export function setSoundEnabled(enabled: boolean): void {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(SOUND_STORAGE_KEY, String(enabled));
-    window.dispatchEvent(new CustomEvent('crm-sound-toggle', { detail: { enabled } }));
-  } catch (err) {
-    console.error('Error saving sound preference:', err);
-  }
+  safeSetItem(SOUND_STORAGE_KEY, String(enabled));
+  window.dispatchEvent(new CustomEvent('crm-sound-toggle', { detail: { enabled } }));
 }
 
 /**

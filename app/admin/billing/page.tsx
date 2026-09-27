@@ -35,6 +35,7 @@ import { apiFetch } from "@/lib/db";
 import Link from "next/link";
 import { SaaSAdminConfig, getTenantBillingStatus } from "@/lib/billing-types";
 import { isPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "@/lib/constants";
+import { safeSetItem } from "@/lib/safe-storage";
 import { Sidebar } from "@/components/sidebar";
 
 interface TenantItem {
@@ -219,7 +220,7 @@ export default function AdminBillingPage() {
     if (typeof window !== 'undefined') {
       try {
         window.dispatchEvent(new CustomEvent('saas-billing-updated'));
-        localStorage.setItem('saas-billing-timestamp', String(Date.now()));
+        safeSetItem('saas-billing-timestamp', String(Date.now()));
         const bc = new BroadcastChannel('saas_billing_channel');
         bc.postMessage({ type: 'BILLING_UPDATED', timestamp: Date.now() });
         bc.close();

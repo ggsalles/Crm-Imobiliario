@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Search, 
@@ -190,7 +190,7 @@ export default function ContactDetail360Page() {
     fetchData();
   }, [id, user, profile, router]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!id) return;
     if (confirm("Tem certeza que deseja excluir este contato? Esta ação não pode ser desfeita.")) {
       try {
@@ -217,13 +217,11 @@ export default function ContactDetail360Page() {
         toast.error(`Erro: ${errorMessage}`);
       }
     }
-  };
+  }, [id, contact, router]);
 
-  const handleEdit = () => {
-    // For now we just go back to the list and open the modal
-    // In a real app we might have a dedicated edit page or pass state
+  const handleEdit = useCallback(() => {
     router.push("/contacts?edit=" + id);
-  };
+  }, [id, router]);
 
   interface MatchingProperty {
     property: Property;
@@ -236,7 +234,8 @@ export default function ContactDetail360Page() {
     };
   }
 
-  const getMatchingProperties = (): MatchingProperty[] => {
+  // Memoized Matchmaking of Properties
+  const matchingProperties = useMemo<MatchingProperty[]>(() => {
     if (!contact || contact.type !== 'cliente') return [];
     
     const profileOfInt = parseInterestProfile(contact.department);
@@ -291,9 +290,9 @@ export default function ContactDetail360Page() {
       })
       .filter(mp => mp.score >= 40)
       .sort((a, b) => b.score - a.score);
-  };
+  }, [contact, properties]);
 
-  const handleCreateDealFromMatch = async (property: Property) => {
+  const handleCreateDealFromMatch = useCallback(async (property: Property) => {
     if (!contact || !user) return;
     
     try {
@@ -342,9 +341,9 @@ export default function ContactDetail360Page() {
       console.error("Error creating deal from match:", e);
       toast.error("Erro ao cruzar imóvel e criar negócio.");
     }
-  };
+  }, [contact, user]);
 
-  const handleSaveInterestProfile = async (e: React.FormEvent) => {
+  const handleSaveInterestProfile = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contact) return;
 
@@ -367,7 +366,6 @@ export default function ContactDetail360Page() {
       };
 
       const departmentText = JSON.stringify(payloadProfile);
-      
       const tempUpdated = contact.temperature !== formTemperature;
       
       await updateContact(contact.id, { 
@@ -392,23 +390,6 @@ export default function ContactDetail360Page() {
 
       const refreshed = await getContact(id);
       setContact(refreshed);
-      
-      recordAuditEvent({
-        action: 'UPDATE_CONTACT',
-        title: 'Atualização de Perfil de Interesse',
-        content: `Preferências de busca e interesse do contato "${contact.name}" foram atualizadas.`,
-        severity: 'medium',
-        category: 'modification',
-        relatedId: contact.id,
-        entityId: contact.id,
-        entityType: 'contact',
-        metadata: {
-          contactId: contact.id,
-          propertyType: formPropertyType,
-          maxPrice,
-          temperature: formTemperature
-        }
-      });
 
       toast.success("Perfil de interesse atualizado com sucesso!");
       setIsProfileModalOpen(false);
@@ -445,9 +426,9 @@ export default function ContactDetail360Page() {
     } finally {
       setIsUpdatingProfile(false);
     }
-  };
+  }, [contact, id, formNeighborhoodsText, formMaxPrice, formMinBedrooms, formPropertyType, formTemperature]);
 
-  const handleQuickAction = async (type: 'call' | 'meeting' | 'task' | 'other') => {
+  const handleQuickAction = useCallback(async (type: 'call' | 'meeting' | 'task' | 'other') => {
     if (!user || !profile || !contact) return;
     
     const titles = {
@@ -491,24 +472,28 @@ export default function ContactDetail360Page() {
       });
 
       toast.success("Ação registrada com sucesso!");
-      // Refresh activities
       const updated = await getActivitiesByContact(contact.id);
       setActivities(updated);
     } catch (err) {
       console.error(err);
       toast.error("Erro ao registrar ação.");
     }
-  };
+  }, [user, profile, contact]);
 
-  const getEngagementLevel = () => {
+  // Memoized Stats
+  const totalDealsValue = useMemo(() => {
+    return deals.reduce((acc, deal) => acc + (deal.value || 0), 0);
+  }, [deals]);
+
+  const engagementLevel = useMemo(() => {
     const total = activities.length;
     if (total > 8) return { label: "Muito Alto", color: "text-emerald-500" };
     if (total > 5) return { label: "Alto", color: "text-primary" };
     if (total > 2) return { label: "Normal", color: "text-blue-500" };
     return { label: "Baixo", color: "text-orange-500" };
-  };
+  }, [activities.length]);
 
-  const getLastContactDate = () => {
+  const lastContactDate = useMemo(() => {
     if (activities.length === 0) return "Nenhum";
     const sorted = [...activities].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const lastDate = new Date(sorted[0].date);
@@ -519,9 +504,32 @@ export default function ContactDetail360Page() {
     if (diffDays === 0) return "Hoje";
     if (diffDays === 1) return "Ontem";
     if (diffDays < 7) return `Há ${diffDays} dias`;
-    if (diffDays < 30) return `Há ${Math.floor(diffDays/7)} sem.`;
+    if (diffDays < 30) return `Há ${Math.floor(diffDays / 7)} sem.`;
     return lastDate.toLocaleDateString('pt-BR');
-  };
+  }, [activities]);
+
+  const interestProfile = useMemo(() => {
+    return parseInterestProfile(contact?.department);
+  }, [contact?.department]);
+
+  const tasks = useMemo(() => {
+    return activities.filter(a => a.type === 'task');
+  }, [activities]);
+
+  const filteredDeals = useMemo(() => {
+    if (!searchQuery.trim()) return deals;
+    const q = searchQuery.toLowerCase().trim();
+    return deals.filter(d => 
+      (d.title || "").toLowerCase().includes(q) ||
+      (d.stage || "").toLowerCase().includes(q)
+    );
+  }, [deals, searchQuery]);
+
+  const statCards = useMemo(() => [ 
+    { label: "TOTAL EM NEGÓCIOS", value: `R$ ${totalDealsValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp },
+    { label: "ENGAJAMENTO", value: engagementLevel.label, icon: Users, color: engagementLevel.color },
+    { label: "ÚLTIMO CONTATO", value: lastContactDate, icon: Clock },
+  ], [totalDealsValue, engagementLevel, lastContactDate]);
 
   if (authLoading || (loading && !user)) {
     return (
@@ -694,11 +702,7 @@ export default function ContactDetail360Page() {
               
               {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[ 
-                  { label: "TOTAL EM NEGÓCIOS", value: `R$ ${deals.reduce((acc, deal) => acc + (deal.value || 0), 0).toLocaleString('pt-BR')}`, icon: TrendingUp },
-                  { label: "ENGAJAMENTO", value: getEngagementLevel().label, icon: Users, color: getEngagementLevel().color },
-                  { label: "ÚLTIMO CONTATO", value: getLastContactDate(), icon: Clock },
-                ].map((stat, i) => (
+                {statCards.map((stat, i) => (
                   <div key={i} className="bg-card p-8 rounded-[32px] border border-border shadow-sm">
                     <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">{stat.label}</div>
                     <div className={cn("text-2xl font-bold text-foreground", stat.color)}>{stat.value}</div>
@@ -725,11 +729,10 @@ export default function ContactDetail360Page() {
                         <button 
                           type="button"
                           onClick={() => {
-                            const currentProfile = parseInterestProfile(contact.department);
-                            setFormMaxPrice(currentProfile.maxPrice ? formatCurrencyBRL(currentProfile.maxPrice) : "");
-                            setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
-                            setFormPropertyType(currentProfile.propertyType || "todos");
-                            setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
+                            setFormMaxPrice(interestProfile.maxPrice ? formatCurrencyBRL(interestProfile.maxPrice) : "");
+                            setFormMinBedrooms(interestProfile.minBedrooms ? String(interestProfile.minBedrooms) : "");
+                            setFormPropertyType(interestProfile.propertyType || "todos");
+                            setFormNeighborhoodsText(interestProfile.neighborhoods ? interestProfile.neighborhoods.join(", ") : "");
                             setFormTemperature(
                               (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
                               (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
@@ -745,8 +748,7 @@ export default function ContactDetail360Page() {
                       </div>
 
                       {(() => {
-                        const profileOfInt = parseInterestProfile(contact.department);
-                        const hasProfile = profileOfInt.maxPrice || profileOfInt.minBedrooms || (profileOfInt.propertyType && profileOfInt.propertyType !== "todos") || profileOfInt.neighborhoods.length > 0;
+                        const hasProfile = interestProfile.maxPrice || interestProfile.minBedrooms || (interestProfile.propertyType && interestProfile.propertyType !== "todos") || interestProfile.neighborhoods.length > 0;
                         
                         if (!hasProfile) {
                           return (
@@ -764,14 +766,14 @@ export default function ContactDetail360Page() {
                               <div className="bg-muted/30 border border-border/80 rounded-2xl p-4 flex flex-col justify-center">
                                 <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Orçamento Limite</span>
                                 <span className="font-extrabold text-sm text-foreground">
-                                  {profileOfInt.maxPrice ? `R$ ${profileOfInt.maxPrice.toLocaleString('pt-BR')}` : "Qualquer valor"}
+                                  {interestProfile.maxPrice ? `R$ ${interestProfile.maxPrice.toLocaleString('pt-BR')}` : "Qualquer valor"}
                                 </span>
                               </div>
                               
                               <div className="bg-muted/30 border border-border/80 rounded-2xl p-4 flex flex-col justify-center">
                                 <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Qtd. Mín. Quartos</span>
                                 <span className="font-extrabold text-sm text-foreground">
-                                  {profileOfInt.minBedrooms ? `${profileOfInt.minBedrooms}+ Quartos` : "Livre"}
+                                  {interestProfile.minBedrooms ? `${interestProfile.minBedrooms}+ Quartos` : "Livre"}
                                 </span>
                               </div>
 
@@ -779,17 +781,17 @@ export default function ContactDetail360Page() {
                                 <div className="flex justify-between items-center">
                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Tipo de Propriedade</span>
                                   <span className="font-extrabold text-xs text-primary capitalize bg-primary/10 px-2.5 py-1 rounded-lg">
-                                    {profileOfInt.propertyType && profileOfInt.propertyType !== 'todos' ? profileOfInt.propertyType : "Todos"}
+                                    {interestProfile.propertyType && interestProfile.propertyType !== 'todos' ? interestProfile.propertyType : "Todos"}
                                   </span>
                                 </div>
                               </div>
                             </div>
 
-                            {profileOfInt.neighborhoods.length > 0 && (
+                            {interestProfile.neighborhoods.length > 0 && (
                               <div className="space-y-1.5 bg-muted/20 border border-border/50 rounded-2xl p-4">
                                 <div className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Bairros de Preferência</div>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {profileOfInt.neighborhoods.map((n, idx) => (
+                                  {interestProfile.neighborhoods.map((n, idx) => (
                                     <span key={idx} className="px-2.5 py-1 bg-background border border-border rounded-lg text-[9px] font-extrabold uppercase text-muted-foreground tracking-wide">
                                       {n.trim()}
                                     </span>
@@ -806,11 +808,10 @@ export default function ContactDetail360Page() {
                       <button
                         type="button"
                         onClick={() => {
-                          const currentProfile = parseInterestProfile(contact.department);
-                          setFormMaxPrice(currentProfile.maxPrice ? formatCurrencyBRL(currentProfile.maxPrice) : "");
-                          setFormMinBedrooms(currentProfile.minBedrooms ? String(currentProfile.minBedrooms) : "");
-                          setFormPropertyType(currentProfile.propertyType || "todos");
-                          setFormNeighborhoodsText(currentProfile.neighborhoods ? currentProfile.neighborhoods.join(", ") : "");
+                          setFormMaxPrice(interestProfile.maxPrice ? formatCurrencyBRL(interestProfile.maxPrice) : "");
+                          setFormMinBedrooms(interestProfile.minBedrooms ? String(interestProfile.minBedrooms) : "");
+                          setFormPropertyType(interestProfile.propertyType || "todos");
+                          setFormNeighborhoodsText(interestProfile.neighborhoods ? interestProfile.neighborhoods.join(", ") : "");
                           setFormTemperature(
                             (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
                             (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
@@ -840,12 +841,12 @@ export default function ContactDetail360Page() {
                           </div>
                         </div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-[#00E5FF] px-2.5 py-1.5 bg-[#00E5FF]/10 rounded-xl border border-[#00E5FF]/20">
-                          {getMatchingProperties().length} Match(es)
+                          {matchingProperties.length} Match(es)
                         </span>
                       </div>
 
                       {(() => {
-                        const matches = getMatchingProperties();
+                        const matches = matchingProperties;
                         if (matches.length === 0) {
                           return (
                             <div className="py-12 text-center text-muted-foreground bg-muted/15 rounded-2xl border border-dashed border-border p-6 flex flex-col justify-center items-center">
@@ -945,9 +946,9 @@ export default function ContactDetail360Page() {
                   <h2 className="text-xl font-bold">Negócios Ativos</h2>
                   <button onClick={() => router.push('/pipeline')} className="text-primary font-bold text-sm hover:opacity-80">Ver todos</button>
                 </div>
-                {deals.length > 0 ? (
+                {filteredDeals.length > 0 ? (
                   <div className="divide-y divide-border">
-                    {deals.map((deal) => (
+                    {filteredDeals.map((deal) => (
                       <div key={deal.id} className="p-6 flex items-center justify-between hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
@@ -1017,9 +1018,9 @@ export default function ContactDetail360Page() {
               {/* Tasks & Reminders */}
               <div className="bg-card rounded-[32px] border border-border p-8 shadow-sm">
                 <h3 className="text-lg font-bold text-foreground mb-6">Tarefas & Lembretes</h3>
-                {activities.filter(a => a.type === 'task').length > 0 ? (
+                {tasks.length > 0 ? (
                   <div className="space-y-4">
-                    {activities.filter(a => a.type === 'task').slice(0, 3).map(task => (
+                    {tasks.slice(0, 3).map(task => (
                       <div key={task.id} className="flex items-start gap-3 p-3 bg-muted/50 rounded-2xl border border-border">
                         <div className={cn("w-5 h-5 rounded-md border-2 mt-0.5", task.status === 'completed' ? "bg-primary border-primary flex items-center justify-center" : "border-border")}>
                           {task.status === 'completed' && <CheckSquare className="w-3 h-3 text-white" />}

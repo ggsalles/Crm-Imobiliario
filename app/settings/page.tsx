@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { Sidebar } from "@/components/sidebar";
 import { useTheme } from "@/providers/theme-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { 
   Palette, 
   Check, 
@@ -13,22 +14,30 @@ import {
   Target,
   Percent,
   Clock,
-  Moon
+  Moon,
+  Volume2,
+  VolumeX,
+  User,
+  Shield,
+  Building,
+  Bell
 } from "lucide-react";
+import { STAGES, DEFAULT_TENANT_NAME } from "@/lib/constants";
+import { safeGetItem, safeSetItem, safeGetJson, safeSetJson } from "@/lib/safe-storage";
+import { isSoundEnabled, setSoundEnabled, playIcqSound, unlockAudio } from "@/lib/sound";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { recordAuditEvent } from "@/lib/audit";
+import Image from "next/image";
 
-const STAGES_CONFIG = [
-  { id: "lead", title: "Novo Lead", defaultProb: 20 },
-  { id: "qualification", title: "Qualificação / Visita", defaultProb: 40 },
-  { id: "proposal", title: "Proposta", defaultProb: 60 },
-  { id: "negotiation", title: "Análise Jurídica", defaultProb: 80 },
-  { id: "closed", title: "Vendido / Alugado", defaultProb: 100 },
-];
+interface ColorOption {
+  name: string;
+  value: "blue" | "emerald" | "orange" | "purple" | "rose" | "indigo";
+  hex: string;
+}
 
-const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | "rose" | "indigo"; hex: string }[] = [
+const COLOR_OPTIONS: ColorOption[] = [
   { name: "Ocean Blue", value: "blue", hex: "#3b82f6" },
   { name: "Forest Green", value: "emerald", hex: "#10b981" },
   { name: "Sunset Orange", value: "orange", hex: "#f97316" },
@@ -37,22 +46,37 @@ const colors: { name: string; value: "blue" | "emerald" | "orange" | "purple" | 
   { name: "Deep Indigo", value: "indigo", hex: "#6366f1" },
 ];
 
+const THEME_OPTIONS = [
+  { id: "system", label: "Sistema", icon: Monitor, bg: "bg-slate-200 dark:bg-slate-800", border: "border-slate-300 dark:border-slate-700", iconColor: "text-slate-600 dark:text-slate-400" },
+  { id: "light", label: "Claro", icon: Sparkles, bg: "bg-slate-50", border: "border-slate-200", iconColor: "text-amber-500" },
+  { id: "dark", label: "Escuro", icon: Layout, bg: "bg-slate-900", border: "border-slate-800", iconColor: "text-blue-400" },
+  { id: "neutral", label: "Preto Obsidian", icon: Moon, bg: "bg-black", border: "border-zinc-900", iconColor: "text-zinc-400" },
+] as const;
+
 export default function SettingsPage() {
+  const { user, profile } = useAuth();
   const { primaryColor, setPrimaryColor, appearance, setAppearance } = useTheme();
+  
+  // Pipeline Probabilities
   const [probabilities, setProbabilities] = useState<Record<string, number>>({});
   const [isSaved, setIsSaved] = useState(false);
 
+  // Inactivity Timeout
   const [sessionEnabled, setSessionEnabled] = useState(true);
   const [sessionMinutes, setSessionMinutes] = useState(15);
   const [isSessionSaved, setIsSessionSaved] = useState(false);
 
+  // Sound & Notifications
+  const [soundEnabled, setSoundActiveState] = useState(true);
+  const [isTestingSound, setIsTestingSound] = useState(false);
+
   useEffect(() => {
     // Stage probabilities
-    const saved = localStorage.getItem("pipeline_probabilities");
+    const saved = safeGetJson<Record<string, number>>("pipeline_probabilities");
     if (saved) {
-      setProbabilities(JSON.parse(saved));
+      setProbabilities(saved);
     } else {
-      const defaults = STAGES_CONFIG.reduce((acc, stage) => {
+      const defaults = STAGES.reduce((acc, stage) => {
         acc[stage.id] = stage.defaultProb;
         return acc;
       }, {} as Record<string, number>);
@@ -60,23 +84,34 @@ export default function SettingsPage() {
     }
 
     // Session Timeout
-    const timeoutEnabled = localStorage.getItem("session_timeout_enabled") !== "false";
-    const timeoutMinutes = Number(localStorage.getItem("session_timeout_minutes") || "15");
+    const timeoutEnabled = safeGetItem("session_timeout_enabled") !== "false";
+    const timeoutMinutes = Number(safeGetItem("session_timeout_minutes") || "15");
     setSessionEnabled(timeoutEnabled);
     setSessionMinutes(timeoutMinutes);
+
+    // Sound alert
+    setSoundActiveState(isSoundEnabled());
+
+    const handleSoundToggle = (e: any) => {
+      if (e?.detail?.enabled !== undefined) {
+        setSoundActiveState(e.detail.enabled);
+      }
+    };
+    window.addEventListener("crm-sound-toggle", handleSoundToggle);
+    return () => window.removeEventListener("crm-sound-toggle", handleSoundToggle);
   }, []);
 
-  const handleProbChange = (id: string, value: string) => {
-    const numValue = Math.min(100, Math.max(0, parseInt(value) || 0));
+  const handleProbChange = useCallback((id: string, value: string) => {
+    const numValue = Math.min(100, Math.max(0, parseInt(value, 10) || 0));
     setProbabilities(prev => ({
       ...prev,
       [id]: numValue
     }));
     setIsSaved(false);
-  };
+  }, []);
 
-  const saveProbabilities = () => {
-    localStorage.setItem("pipeline_probabilities", JSON.stringify(probabilities));
+  const saveProbabilities = useCallback(() => {
+    safeSetJson("pipeline_probabilities", probabilities);
     setIsSaved(true);
     recordAuditEvent({
       action: 'UPDATE_SETTINGS',
@@ -89,13 +124,12 @@ export default function SettingsPage() {
       }
     });
     setTimeout(() => setIsSaved(false), 2000);
-    // Trigger storage event so other tabs/components can update
     window.dispatchEvent(new Event("storage_probabilities_updated"));
-  };
+  }, [probabilities]);
 
-  const saveSessionSettings = () => {
-    localStorage.setItem("session_timeout_enabled", String(sessionEnabled));
-    localStorage.setItem("session_timeout_minutes", String(sessionMinutes));
+  const saveSessionSettings = useCallback(() => {
+    safeSetItem("session_timeout_enabled", String(sessionEnabled));
+    safeSetItem("session_timeout_minutes", String(sessionMinutes));
     setIsSessionSaved(true);
     recordAuditEvent({
       action: 'UPDATE_SETTINGS',
@@ -110,9 +144,32 @@ export default function SettingsPage() {
     });
     toast.success("Opção de inatividade salva!");
     setTimeout(() => setIsSessionSaved(false), 2000);
-    // Trigger storage event for timeout
     window.dispatchEvent(new Event("storage_timeout_updated"));
-  };
+  }, [sessionEnabled, sessionMinutes]);
+
+  const toggleSound = useCallback((enable: boolean) => {
+    setSoundActiveState(enable);
+    setSoundEnabled(enable);
+    if (enable) {
+      unlockAudio();
+      toast.success("Alertas sonoros ativados!");
+    } else {
+      toast.info("Alertas sonoros desativados.");
+    }
+  }, []);
+
+  const handleTestSound = useCallback(() => {
+    setIsTestingSound(true);
+    unlockAudio();
+    playIcqSound();
+    toast.info("Reproduzindo aviso sonoro de novo lead ('Uh-oh!')...");
+    setTimeout(() => setIsTestingSound(false), 1200);
+  }, []);
+
+  const userInitial = useMemo(() => {
+    const name = profile?.displayName || user?.displayName || user?.email || "U";
+    return name.charAt(0).toUpperCase();
+  }, [profile?.displayName, user?.displayName, user?.email]);
 
   return (
     <div className="flex min-h-screen bg-background transition-colors duration-500">
@@ -121,12 +178,119 @@ export default function SettingsPage() {
         <header className="h-14 md:h-16 bg-card/80 backdrop-blur-md border-b border-border/60 pl-14 md:pl-5 px-3 sm:px-4 md:px-5 flex items-center justify-between shrink-0 sticky top-0 z-10 transition-colors">
           <div>
             <h1 className="font-bold text-foreground text-sm sm:text-base tracking-tight">Configurações</h1>
-            <p className="text-[11px] text-muted-foreground hidden sm:block">Personalize sua experiência e gerencie sua conta.</p>
+            <p className="text-[11px] text-muted-foreground hidden sm:block">Personalize sua experiência e gerencie preferências do CRM.</p>
           </div>
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-5 max-w-5xl w-full mx-auto space-y-3 sm:space-y-4">
           <div className="space-y-3 sm:space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            
+            {/* Informações da Conta e Organização */}
+            {user && (
+              <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <User className="w-4 h-4 text-primary" />
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Perfil & Conta Ativa</h3>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-muted/30 rounded-xl border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shrink-0 relative">
+                      {profile?.photoURL ? (
+                        <Image 
+                          src={profile.photoURL} 
+                          alt="Foto de perfil" 
+                          width={44} 
+                          height={44} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="font-bold text-sm text-primary">{userInitial}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        {profile?.displayName || user.displayName || "Usuário do CRM"}
+                        <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase">
+                          {profile?.role || "Membro"}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{user.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                    <div className="flex items-center gap-1.5 bg-background px-2.5 py-1.5 rounded-lg border border-border">
+                      <Building className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-[11px] font-semibold text-foreground">
+                        {profile?.tenantId || DEFAULT_TENANT_NAME}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                      <Shield className="w-3.5 h-3.5" />
+                      Ativo
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Notificações e Sons */}
+            <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Bell className="w-4 h-4 text-primary" />
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground">Alertas & Notificações</h3>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Configure os avisos sonoros e lembretes para novas oportunidades recebidas.</p>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleTestSound}
+                  disabled={isTestingSound}
+                  className="px-3.5 py-1.5 bg-muted hover:bg-primary hover:text-white text-foreground rounded-lg text-xs font-bold transition-all border border-border shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                >
+                  <Volume2 className={cn("w-3.5 h-3.5", isTestingSound && "animate-bounce text-emerald-400")} />
+                  {isTestingSound ? "Testando Som..." : "Testar Alerta Sonoro"}
+                </button>
+              </div>
+
+              <div className="p-3 bg-muted/30 rounded-xl border border-border flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center text-xs",
+                    soundEnabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+                  )}>
+                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">Alerta Sonoro de Novos Leads (&quot;Uh-oh!&quot;)</h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Toca o sinal acústico instantâneo quando uma nova oportunidade ingressa no funil.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleSound(!soundEnabled)}
+                  className={cn(
+                    "w-10 h-5 rounded-full p-0.5 transition-colors relative cursor-pointer shrink-0 ml-3",
+                    soundEnabled ? "bg-emerald-500" : "bg-muted"
+                  )}
+                  title={soundEnabled ? "Desativar som" : "Ativar som"}
+                >
+                  <div 
+                    className={cn(
+                      "w-4 h-4 bg-white rounded-full shadow-xs transition-transform",
+                      soundEnabled ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </section>
+
+            {/* Aparência do CRM */}
             <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
@@ -141,7 +305,7 @@ export default function SettingsPage() {
                     setPrimaryColor("blue");
                     setAppearance("system");
                   }}
-                  className="px-3.5 py-1.5 bg-muted text-foreground rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all border border-border shadow-xs self-start sm:self-auto"
+                  className="px-3.5 py-1.5 bg-muted text-foreground rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all border border-border shadow-xs self-start sm:self-auto cursor-pointer"
                 >
                   Restaurar Padrões
                 </button>
@@ -151,12 +315,7 @@ export default function SettingsPage() {
               <div>
                 <h4 className="text-xs font-bold mb-2 text-foreground">Tema do Sistema</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { id: "system", label: "Sistema", icon: Monitor, bg: "bg-slate-200 dark:bg-slate-800", border: "border-slate-300 dark:border-slate-700", iconColor: "text-slate-600 dark:text-slate-400" },
-                    { id: "light", label: "Claro", icon: Sparkles, bg: "bg-slate-50", border: "border-slate-200", iconColor: "text-amber-500" },
-                    { id: "dark", label: "Escuro", icon: Layout, bg: "bg-slate-900", border: "border-slate-800", iconColor: "text-blue-400" },
-                    { id: "neutral", label: "Preto Obsidian", icon: Moon, bg: "bg-black", border: "border-zinc-900", iconColor: "text-zinc-400" },
-                  ].map((mode) => (
+                  {THEME_OPTIONS.map((mode) => (
                     <button
                       key={mode.id}
                       onClick={() => setAppearance(mode.id as any)}
@@ -179,7 +338,7 @@ export default function SettingsPage() {
               <div className="pt-3 border-t border-border">
                 <h4 className="text-xs font-bold mb-2 text-foreground">Cores de Destaque</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                  {colors.map((color) => (
+                  {COLOR_OPTIONS.map((color) => (
                     <button
                       key={color.value}
                       onClick={() => setPrimaryColor(color.value)}
@@ -212,6 +371,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
+            {/* Probabilidades do Pipeline (Score) */}
             <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
@@ -225,7 +385,7 @@ export default function SettingsPage() {
                   onClick={saveProbabilities}
                   disabled={isSaved}
                   className={cn(
-                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs flex items-center gap-1.5 self-start sm:self-auto",
+                    "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer",
                     isSaved 
                       ? "bg-emerald-500 text-white border-emerald-600" 
                       : "bg-primary text-white border-primary/20 hover:bg-primary/90"
@@ -243,7 +403,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-                {STAGES_CONFIG.map((stage) => (
+                {STAGES.map((stage) => (
                   <div key={stage.id} className="p-2.5 bg-muted/30 rounded-xl border border-border">
                     <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block mb-1 truncate">
                       {stage.title}
@@ -264,6 +424,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
+            {/* Inatividade da Sessão (Segurança) */}
             <section className="bg-card rounded-xl p-3.5 sm:p-4 border border-border shadow-xs space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
@@ -355,7 +516,7 @@ export default function SettingsPage() {
                       value={sessionMinutes}
                       disabled={!sessionEnabled}
                       onChange={(e) => {
-                        setSessionMinutes(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)));
+                        setSessionMinutes(Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1)));
                         setIsSessionSaved(false);
                       }}
                       className="flex-1 accent-primary h-1.5 bg-border rounded-lg appearance-none cursor-pointer"

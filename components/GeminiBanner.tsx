@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Sparkles, Brain, Loader2, Info, AlertCircle } from "lucide-react";
 import { Activity, Deal } from "@/lib/db";
 import { safeAiCall } from "@/lib/ai";
+import { safeGetJson, safeSetJson } from "@/lib/safe-storage";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -30,19 +31,15 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
     if (loading) return;
 
     if (!manual) {
-      const cached = localStorage.getItem("activities_ai_insights");
+      const cached = safeGetJson<{ list: string[]; timestamp: number }>("activities_ai_insights");
       if (cached) {
-        try {
-          const { list, timestamp } = JSON.parse(cached);
-          const age = Date.now() - timestamp;
-          if (age < 3600000 && Array.isArray(list) && list.length > 0) {
-            setInsights(list);
-            setCurrentIndex(0);
-            hasGeneratedRef.current = true;
-            return;
-          }
-        } catch (e) {
-          // ignore
+        const { list, timestamp } = cached;
+        const age = Date.now() - timestamp;
+        if (age < 3600000 && Array.isArray(list) && list.length > 0) {
+          setInsights(list);
+          setCurrentIndex(0);
+          hasGeneratedRef.current = true;
+          return;
         }
       }
     }
@@ -87,14 +84,10 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
           setInsights(finalInsights);
           setCurrentIndex(0);
           hasGeneratedRef.current = true;
-          try {
-            localStorage.setItem("activities_ai_insights", JSON.stringify({
-              list: finalInsights,
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            // ignore
-          }
+          safeSetJson("activities_ai_insights", {
+            list: finalInsights,
+            timestamp: Date.now()
+          });
         }
       }
     } catch (error: any) {

@@ -43,6 +43,22 @@
   html {
     @apply h-full overflow-x-hidden;
   }
+  /* Estilização nativa global para combos e selects garantindo contraste impecável */
+  select {
+    color-scheme: light dark;
+  }
+  select option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .dark select option,
+  [data-theme="dark"] select option {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
   /* Prevent Chrome / Safari input autofill background color changes and keep typography colors */
   input:-webkit-autofill,
   input:-webkit-autofill:hover, 

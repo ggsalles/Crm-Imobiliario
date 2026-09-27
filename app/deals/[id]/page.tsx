@@ -22,7 +22,8 @@ import {
   Target,
   User,
   DollarSign,
-  X
+  X,
+  FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ import { Deal, Company, Contact, getDeal, getCompany, getContact, updateDeal, ge
 import { recordAuditEvent } from "@/lib/audit";
 import { Timeline } from "@/components/Timeline";
 import { formatCurrencyBRL } from "@/lib/utils";
+import { STAGES } from "@/lib/constants";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -39,6 +41,8 @@ import { useCallback } from "react";
 
 import { AISalesAssistant } from "@/components/AISalesAssistant";
 import { PropertyMatcher } from "@/components/PropertyMatcher";
+import { CommercialProposalModal } from "@/components/deals/CommercialProposalModal";
+import { DealDocumentsChecklist } from "@/components/deals/DealDocumentsChecklist";
 
 export default function DealDetailPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -54,6 +58,7 @@ export default function DealDetailPage() {
 
   // Activity scheduling states
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
   const [activityTitle, setActivityTitle] = useState("");
   const [activityType, setActivityType] = useState<'meeting' | 'call' | 'task' | 'other'>('task');
   const [activityDate, setActivityDate] = useState("");
@@ -311,7 +316,15 @@ export default function DealDetailPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2 w-full lg:w-auto">
+              <div className="flex gap-2 w-full lg:w-auto flex-wrap">
+                <button 
+                  onClick={() => setIsProposalModalOpen(true)}
+                  className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-card hover:bg-muted border border-border rounded-lg font-bold text-xs text-foreground transition-all shadow-xs cursor-pointer"
+                  title="Gerar Proposta Comercial formal para PDF, impressão e WhatsApp"
+                >
+                  <FileText className="w-3.5 h-3.5 text-primary" />
+                  Proposta Comercial
+                </button>
                 <button 
                   onClick={() => router.push(`/messages`)}
                   className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 border border-border rounded-lg font-bold text-xs text-foreground hover:bg-muted transition-all"
@@ -322,15 +335,8 @@ export default function DealDetailPage() {
                 <button 
                   disabled={loading}
                   onClick={async () => {
-                    const STAGES = [
-                      { id: 'lead', title: 'Novo Lead' },
-                      { id: 'qualification', title: 'Qualificação / Visita' },
-                      { id: 'proposal', title: 'Proposta' },
-                      { id: 'negotiation', title: 'Análise Jurídica' },
-                      { id: 'closed', title: 'Vendido / Alugado' }
-                    ];
                     const currentIndex = STAGES.findIndex(s => s.id === deal.stage);
-                    if (currentIndex < STAGES.length - 1) {
+                    if (currentIndex !== -1 && currentIndex < STAGES.length - 1) {
                       const nextStage = STAGES[currentIndex + 1];
                       try {
                         setLoading(true);
@@ -426,6 +432,9 @@ export default function DealDetailPage() {
 
               {/* Smart Property Matching */}
               <PropertyMatcher deal={deal} contact={contact} onUpdate={refreshData} />
+
+              {/* Due Diligence & Legal Documents Checklist */}
+              <DealDocumentsChecklist deal={deal} onUpdate={refreshData} />
 
               {/* Next Steps */}
               <div className="bg-primary rounded-xl p-3.5 sm:p-4 text-primary-foreground shadow-xs">
@@ -597,6 +606,17 @@ export default function DealDetailPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Commercial Proposal Generator Modal */}
+      <CommercialProposalModal
+        isOpen={isProposalModalOpen}
+        onClose={() => setIsProposalModalOpen(false)}
+        deal={deal}
+        contact={contact}
+        company={company}
+        brokerName={profile?.displayName || "Corretor Responsável"}
+        brokerCreci={profile?.jobTitle || "CRECI Especialista"}
+      />
     </div>
   );
 }

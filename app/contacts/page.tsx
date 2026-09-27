@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo, Suspense } from "react";
 import Image from "next/image";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -12,16 +12,16 @@ import {
   Mail, 
   Phone, 
   Tag, 
-  MapPin,
   ShieldCheck,
   UserCircle,
   X,
   Loader2,
   Trash2,
   Edit2,
-  Building2,
-  Download
+  Download,
+  Upload
 } from "lucide-react";
+import { ImportContactsModal } from "@/components/contacts/ImportContactsModal";
 import { recordAuditEvent } from "@/lib/audit";
 import { cn, formatPhone } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -30,15 +30,13 @@ import Link from "next/link";
 import { 
   Contact, 
   UserProfile, 
-  Company,
-  getContacts,
+  Company, 
   subscribeToContacts, 
   subscribeToUsers, 
-  subscribeToCompanies,
+  subscribeToCompanies, 
   createContact, 
   updateContact, 
-  deleteContact,
-  createCompany,
+  deleteContact, 
   createTimelineEvent,
   findOrCreateConversation,
   createUserProfile,
@@ -47,8 +45,6 @@ import {
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
-
-import { Suspense } from "react";
 
 export default function ContactsPage() {
   return (
@@ -73,17 +69,27 @@ function ContactsContent() {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
   const [displayPhone, setDisplayPhone] = useState("");
+  const [visibleCount, setVisibleCount] = useState(12);
+  const [selectedTemperature, setSelectedTemperature] = useState<'all' | 'quente' | 'morno' | 'frio'>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+
+  // Reset pagination on search or filter change
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [searchQuery, activeTab, selectedTemperature, selectedSource]);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -92,13 +98,6 @@ function ContactsContent() {
       setDisplayPhone("");
     }
   }, [isModalOpen, editingContact]);
-
-  const fetchData = async () => {
-    if (!user || !profile) return;
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
-    const data = await getContacts(ownerId);
-    setContacts(data);
-  };
 
   // Redirect if not logged in
   useEffect(() => {
@@ -139,25 +138,94 @@ function ContactsContent() {
       if (contactToEdit) {
         setEditingContact(contactToEdit);
         setIsModalOpen(true);
-        // Clear the query param to avoid re-opening on refresh
         router.replace('/contacts');
       }
     }
   }, [editId, contacts, router]);
 
-  const filteredContacts = contacts.filter(c => 
-    c.type === activeTab &&
-    (c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-     c.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Indexed companies map for O(1) resolution
+  const companiesMap = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
 
-  const filteredUsers = users.filter(u => 
-    u.id !== user?.id && // Don't show current user in the list
-    (u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Memoized tab counts
+  const clientCount = useMemo(() => contacts.filter(c => c.type === 'cliente').length, [contacts]);
+  const teamCount = useMemo(() => {
+    // Exclui a conta do próprio usuário master/logado para manter a listagem limpa e sem ruídos
+    const otherUsers = users.filter(u => 
+      u.id !== user?.id && (!user?.email || u.email?.toLowerCase().trim() !== user?.email?.toLowerCase().trim())
+    );
+    const registeredEmails = new Set(users.map(u => (u.email || '').toLowerCase().trim()));
+    const manualTeamContacts = contacts.filter(c => 
+      c.type === 'equipe' && (!c.email || !registeredEmails.has(c.email.toLowerCase().trim()))
+    );
+    return otherUsers.length + manualTeamContacts.length;
+  }, [contacts, users, user?.id, user?.email]);
 
-  const handleExportContacts = () => {
+  // Memoized temperature distribution counts
+  const temperatureCounts = useMemo(() => {
+    let quente = 0, morno = 0, frio = 0;
+    contacts.forEach(c => {
+      if (c.type === 'cliente') {
+        if (c.temperature === 'quente') quente++;
+        else if (c.temperature === 'morno') morno++;
+        else if (c.temperature === 'frio') frio++;
+      }
+    });
+    return { quente, morno, frio };
+  }, [contacts]);
+
+  // Available unique sources for quick filtering
+  const availableSources = useMemo(() => {
+    const set = new Set<string>();
+    contacts.forEach(c => {
+      if (c.type === 'cliente' && c.source) set.add(c.source);
+    });
+    return Array.from(set).sort();
+  }, [contacts]);
+
+  // Memoized contacts filter
+  const filteredContacts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const registeredEmails = new Set(users.map(u => (u.email || '').toLowerCase().trim()));
+    return contacts.filter(c => {
+      if (c.type !== activeTab) return false;
+      if (activeTab === 'equipe' && c.email && registeredEmails.has(c.email.toLowerCase().trim())) {
+        return false; // Já será exibido como perfil registrado em users
+      }
+      if (activeTab === 'cliente') {
+        if (selectedTemperature !== 'all' && c.temperature !== selectedTemperature) return false;
+        if (selectedSource !== 'all' && c.source !== selectedSource) return false;
+      }
+      if (!q) return true;
+      return (
+        (c.name || "").toLowerCase().includes(q) || 
+        (c.email || "").toLowerCase().includes(q) ||
+        (c.phone || "").includes(q) ||
+        (c.source || "").toLowerCase().includes(q)
+      );
+    });
+  }, [contacts, activeTab, selectedTemperature, selectedSource, searchQuery, users]);
+
+  // Paginated contacts for optimal rendering
+  const displayedContacts = useMemo(() => {
+    return filteredContacts.slice(0, visibleCount);
+  }, [filteredContacts, visibleCount]);
+
+  // Memoized users filter (oculta a conta master/logada)
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return users.filter(u => {
+      if (u.id === user?.id || (user?.email && u.email?.toLowerCase().trim() === user?.email?.toLowerCase().trim())) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        (u.displayName || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, user?.id, user?.email, searchQuery]);
+
+  const handleExportContacts = useCallback(() => {
     if (filteredContacts.length === 0) {
       toast.info("Nenhum contato para exportar.");
       return;
@@ -196,9 +264,9 @@ function ContactsContent() {
     });
 
     toast.success(`${filteredContacts.length} contatos exportados (ação registrada na auditoria).`);
-  };
+  }, [filteredContacts, activeTab]);
 
-  const confirmDeleteContact = async () => {
+  const confirmDeleteContact = useCallback(async () => {
     if (!contactToDelete) return;
     const targetContact = contactToDelete;
     const id = targetContact.id;
@@ -239,9 +307,9 @@ function ContactsContent() {
     } finally {
       setIsDeletingContact(false);
     }
-  };
+  }, [contactToDelete, editingContact]);
 
-  const handleMessage = async (target: any, type: 'cliente' | 'equipe') => {
+  const handleMessage = useCallback(async (target: any, type: 'cliente' | 'equipe') => {
     if (!user) return;
     
     setIsMessaging(target.id);
@@ -258,9 +326,18 @@ function ContactsContent() {
     } finally {
       setIsMessaging(null);
     }
-  };
+  }, [user, router]);
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditContact = useCallback((contact: Contact) => {
+    setEditingContact(contact);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDeletePrompt = useCallback((contact: Contact) => {
+    setContactToDelete(contact);
+  }, []);
+
+  const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -364,14 +441,13 @@ function ContactsContent() {
         }
         if (activeTab !== 'equipe') toast.success("Contato criado!");
       }
-      await fetchData();
       setIsModalOpen(false);
       setEditingContact(null);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Erro ao salvar contato.");
     }
-  };
+  }, [activeTab, editingContact]);
 
   if (authLoading) return null;
 
@@ -393,8 +469,17 @@ function ContactsContent() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="bg-card hover:bg-muted text-foreground border border-border px-3 py-2 rounded-xl font-bold shadow-xs transition-all flex items-center gap-1.5 text-xs cursor-pointer"
+                title="Importar leads e contatos de planilhas CSV com deduplicação"
+              >
+                <Upload className="w-3.5 h-3.5 text-primary" />
+                Importar (CSV)
+              </button>
+
+              <button
                 onClick={handleExportContacts}
-                className="bg-card hover:bg-muted text-foreground border border-border px-3 py-2 rounded-xl font-bold shadow-xs transition-all flex items-center gap-1.5 text-xs"
+                className="bg-card hover:bg-muted text-foreground border border-border px-3 py-2 rounded-xl font-bold shadow-xs transition-all flex items-center gap-1.5 text-xs cursor-pointer"
                 title="Exportar dados com registro de auditoria LGPD"
               >
                 <Download className="w-3.5 h-3.5 text-muted-foreground" />
@@ -407,7 +492,7 @@ function ContactsContent() {
                   setIsModalOpen(true);
                 }}
                 className={cn(
-                  "bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs",
+                  "bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs cursor-pointer",
                   activeTab === 'equipe' && profile?.role !== 'Admin' && "hidden"
                 )}
               >
@@ -423,22 +508,22 @@ function ContactsContent() {
               <button 
                 onClick={() => setActiveTab('cliente')}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all",
+                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer",
                   activeTab === 'cliente' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-muted"
                 )}
               >
                 <UserCircle className="w-3.5 h-3.5" />
-                Clientes
+                Clientes ({clientCount})
               </button>
               <button 
                 onClick={() => setActiveTab('equipe')}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all",
+                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer",
                   activeTab === 'equipe' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-muted"
                 )}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Equipe
+                Equipe ({teamCount})
               </button>
             </div>
 
@@ -454,6 +539,91 @@ function ContactsContent() {
             </div>
           </div>
 
+          {/* Quick Filters for Clients (Temperature & Source) */}
+          {activeTab === 'cliente' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mr-1">Temperatura:</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemperature('all')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
+                    selectedTemperature === 'all' 
+                      ? "bg-primary text-primary-foreground shadow-xs" 
+                      : "bg-card border border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Todas ({clientCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemperature('quente')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+                    selectedTemperature === 'quente' 
+                      ? "bg-red-500 text-white shadow-xs" 
+                      : "bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20"
+                  )}
+                >
+                  🔥 Quente ({temperatureCounts.quente})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemperature('morno')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+                    selectedTemperature === 'morno' 
+                      ? "bg-amber-500 text-white shadow-xs" 
+                      : "bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
+                  )}
+                >
+                  ⚡ Morno ({temperatureCounts.morno})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemperature('frio')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+                    selectedTemperature === 'frio' 
+                      ? "bg-indigo-500 text-white shadow-xs" 
+                      : "bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/20"
+                  )}
+                >
+                  ❄️ Frio ({temperatureCounts.frio})
+                </button>
+              </div>
+
+              {availableSources.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedSource}
+                    onChange={(e) => setSelectedSource(e.target.value)}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary/20"
+                  >
+                    <option value="all">Todas as origens</option>
+                    {availableSources.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {(selectedTemperature !== 'all' || selectedSource !== 'all' || searchQuery) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemperature('all');
+                        setSelectedSource('all');
+                        setSearchQuery('');
+                      }}
+                      className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Grid Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {loading ? (
@@ -463,18 +633,15 @@ function ContactsContent() {
             ) : (
               <>
                 {/* Regular Contacts (Clients or Team) */}
-                {filteredContacts.map((contact) => (
+                {displayedContacts.map((contact) => (
                   <ContactCard 
                     key={contact.id} 
                     contact={contact} 
-                    companyName={companies.find(c => c.id === contact.companyId)?.name}
-                    onEdit={() => {
-                      setEditingContact(contact);
-                      setIsModalOpen(true);
-                    }}
-                    onDelete={() => setContactToDelete(contact)}
+                    companyName={companiesMap.get(contact.companyId || '')?.name}
+                    onEdit={handleEditContact}
+                    onDelete={handleDeletePrompt}
                     isActiveTabEquipe={activeTab === 'equipe'}
-                    onMessage={() => handleMessage(contact, activeTab === 'equipe' ? 'equipe' : 'cliente')}
+                    onMessage={handleMessage}
                     isMessaging={isMessaging === contact.id}
                   />
                 ))}
@@ -484,12 +651,13 @@ function ContactsContent() {
                   <UserCard 
                     key={userProfile.id} 
                     user={userProfile} 
-                    onMessage={() => handleMessage(userProfile, 'equipe')}
+                    isCurrentUser={userProfile.id === user?.id}
+                    onMessage={handleMessage}
                     isMessaging={isMessaging === userProfile.id}
                   />
                 ))}
 
-                {filteredContacts.length === 0 && (activeTab === 'cliente' || filteredUsers.length === 0) && (
+                {displayedContacts.length === 0 && (activeTab === 'cliente' || filteredUsers.length === 0) && (
                   <div className="col-span-full py-20 text-center bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
                       <Users className="w-8 h-8 text-muted-foreground" />
@@ -501,6 +669,18 @@ function ContactsContent() {
               </>
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {filteredContacts.length > displayedContacts.length && (
+            <div className="flex justify-center pt-2 pb-6">
+              <button
+                onClick={() => setVisibleCount(prev => prev + 12)}
+                className="px-5 py-2.5 rounded-xl bg-card border border-border hover:bg-muted font-bold text-xs text-foreground transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+              >
+                Carregar mais contatos ({filteredContacts.length - displayedContacts.length} restantes)
+              </button>
+            </div>
+          )}
         </div>
       </main>
 
@@ -523,7 +703,7 @@ function ContactsContent() {
             >
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-muted transition-colors"
+                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-muted transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -644,13 +824,13 @@ function ContactsContent() {
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border"
+                    className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20"
+                    className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer"
                   >
                     Salvar
                   </button>
@@ -671,11 +851,21 @@ function ContactsContent() {
         itemType="contato"
         isDeleting={isDeletingContact}
       />
+
+      {/* Modal de Importação de Leads e Contatos via CSV */}
+      <ImportContactsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        existingContacts={contacts}
+        onImportComplete={() => {
+          // Automatic sync via subscription
+        }}
+      />
     </div>
   );
 }
 
-function ContactCard({ 
+const ContactCard = memo(function ContactCard({ 
   contact, 
   companyName, 
   onEdit, 
@@ -686,10 +876,10 @@ function ContactCard({
 }: { 
   contact: Contact, 
   companyName?: string, 
-  onEdit: () => void, 
-  onDelete: () => void, 
+  onEdit: (contact: Contact) => void, 
+  onDelete: (contact: Contact) => void, 
   isActiveTabEquipe: boolean, 
-  onMessage: () => void, 
+  onMessage: (target: any, type: 'cliente' | 'equipe') => void, 
   isMessaging: boolean
 }) {
   return (
@@ -733,7 +923,7 @@ function ContactCard({
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground truncate font-medium">
-                {isActiveTabEquipe ? contact.role : (contact.source ? `Origem: ${contact.source}` : 'Sem origem')}
+                {isActiveTabEquipe ? contact.role : (contact.source ? `Origem: ${contact.source}` : (companyName ? `Empresa: ${companyName}` : 'Sem origem'))}
               </p>
             </div>
           </div>
@@ -742,9 +932,9 @@ function ContactCard({
               onClick={(e) => { 
                 e.preventDefault(); 
                 e.stopPropagation();
-                onEdit(); 
+                onEdit(contact); 
               }} 
-              className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all" 
+              className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all cursor-pointer" 
               title="Editar"
             >
               <Edit2 className="w-3.5 h-3.5" />
@@ -753,7 +943,7 @@ function ContactCard({
               onClick={(e) => { 
                 e.preventDefault(); 
                 e.stopPropagation();
-                onDelete();
+                onDelete(contact);
               }} 
               className="p-1.5 rounded-lg transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
               title="Excluir contato"
@@ -790,9 +980,9 @@ function ContactCard({
         </Link>
         {isActiveTabEquipe && (
           <button 
-            onClick={onMessage}
+            onClick={() => onMessage(contact, 'equipe')}
             disabled={isMessaging}
-            className="flex-1 text-center text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="flex-1 text-center text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             {isMessaging && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Mensagem
@@ -801,11 +991,25 @@ function ContactCard({
       </div>
     </div>
   );
-}
+});
 
-function UserCard({ user, onMessage, isMessaging }: { user: UserProfile, onMessage: () => void, isMessaging: boolean }) {
+const UserCard = memo(function UserCard({ 
+  user, 
+  isCurrentUser = false,
+  onMessage, 
+  isMessaging 
+}: { 
+  user: UserProfile, 
+  isCurrentUser?: boolean,
+  onMessage: (target: any, type: 'cliente' | 'equipe') => void, 
+  isMessaging: boolean 
+}) {
+  const isAdmin = user.role === 'Admin' || user.isAdmin === true;
   return (
-    <div className="bg-card p-4 rounded-xl border border-border shadow-xs hover:shadow-md transition-all group h-full flex flex-col justify-between border-primary/10">
+    <div className={cn(
+      "bg-card p-4 rounded-xl border shadow-xs hover:shadow-md transition-all group h-full flex flex-col justify-between",
+      isCurrentUser ? "border-primary/40 bg-primary/[0.02]" : "border-border"
+    )}>
       <div>
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -813,13 +1017,21 @@ function UserCard({ user, onMessage, isMessaging }: { user: UserProfile, onMessa
               {user.photoURL ? (
                 <Image src={user.photoURL} alt="Avatar" fill className="w-full h-full object-cover" referrerPolicy="no-referrer" unoptimized />
               ) : (
-                <span className="font-bold text-base text-primary">{user.displayName.charAt(0)}</span>
+                <span className="font-bold text-base text-primary">{user.displayName?.charAt(0) || 'U'}</span>
               )}
             </div>
             <div>
               <h3 className="font-bold text-sm md:text-base flex items-center gap-1.5 text-foreground">
                 {user.displayName}
-                <span className="bg-primary/10 text-primary text-[8px] uppercase px-1.5 py-0.5 rounded font-black">Membro</span>
+                {isCurrentUser && (
+                  <span className="bg-muted text-muted-foreground text-[8px] uppercase px-1.5 py-0.5 rounded font-black">Você</span>
+                )}
+                <span className={cn(
+                  "text-[8px] uppercase px-1.5 py-0.5 rounded font-black",
+                  isAdmin ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-primary/10 text-primary"
+                )}>
+                  {isAdmin ? 'Admin' : 'Membro'}
+                </span>
               </h3>
               <p className="text-[11px] text-muted-foreground font-medium">Membro da Organização</p>
             </div>
@@ -837,15 +1049,21 @@ function UserCard({ user, onMessage, isMessaging }: { user: UserProfile, onMessa
           </div>
         </div>
 
-        <button 
-          onClick={onMessage}
-          disabled={isMessaging}
-          className="w-full text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-auto"
-        >
-          {isMessaging && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          Enviar Mensagem
-        </button>
+        {isCurrentUser ? (
+          <div className="w-full text-xs font-semibold py-1.5 bg-muted/60 text-muted-foreground rounded-lg flex items-center justify-center gap-1.5 mt-auto border border-border/50 select-none">
+            Sua Conta
+          </div>
+        ) : (
+          <button 
+            onClick={() => onMessage(user, 'equipe')}
+            disabled={isMessaging}
+            className="w-full text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-auto cursor-pointer"
+          >
+            {isMessaging && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Enviar Mensagem
+          </button>
+        )}
       </div>
     </div>
   );
-}
+});

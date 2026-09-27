@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Building2, 
@@ -10,18 +10,18 @@ import {
   Plus, 
   Globe, 
   Tag, 
-  X,
-  Loader2,
-  Trash2,
-  Edit2,
-  Briefcase
+  X, 
+  Loader2, 
+  Trash2, 
+  Edit2, 
+  Briefcase 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { 
   Company, 
-  getCompanies,
+  getCompanies, 
   subscribeToCompanies, 
   createCompany, 
   updateCompany, 
@@ -36,6 +36,7 @@ export default function CompaniesPage() {
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,12 +44,12 @@ export default function CompaniesPage() {
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [isDeletingCompany, setIsDeletingCompany] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user || !profile) return;
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
     const data = await getCompanies(ownerId);
     setCompanies(data);
-  };
+  }, [user, profile]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -70,12 +71,32 @@ export default function CompaniesPage() {
     return () => unsub();
   }, [user, profile]);
 
-  const filteredCompanies = companies.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.industry?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Unique industries for fast filtering
+  const availableIndustries = useMemo(() => {
+    const set = new Set<string>();
+    companies.forEach(c => {
+      if (c.industry) set.add(c.industry.trim());
+    });
+    return Array.from(set).sort();
+  }, [companies]);
 
-  const confirmDeleteCompany = async () => {
+  // Memoized filtered companies
+  const filteredCompanies = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return companies.filter(c => {
+      if (selectedIndustry !== "all" && c.industry?.trim() !== selectedIndustry) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) || 
+        c.industry?.toLowerCase().includes(q) ||
+        c.website?.toLowerCase().includes(q)
+      );
+    });
+  }, [companies, selectedIndustry, searchQuery]);
+
+  const confirmDeleteCompany = useCallback(async () => {
     if (!companyToDelete) return;
     const targetCompany = companyToDelete;
     const id = targetCompany.id;
@@ -113,9 +134,18 @@ export default function CompaniesPage() {
     } finally {
       setIsDeletingCompany(false);
     }
-  };
+  }, [companyToDelete, editingCompany]);
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditClick = useCallback((company: Company) => {
+    setEditingCompany(company);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDeleteClick = useCallback((company: Company) => {
+    setCompanyToDelete(company);
+  }, []);
+
+  const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -166,7 +196,7 @@ export default function CompaniesPage() {
     } catch (err) {
       toast.error("Erro ao salvar empresa.");
     }
-  };
+  }, [editingCompany, fetchData]);
 
   if (authLoading) return null;
 
@@ -179,7 +209,7 @@ export default function CompaniesPage() {
             <div>
               <h1 className="text-xl md:text-2xl font-black tracking-tight">Empresas</h1>
               <p className="text-muted-foreground mt-0.5 text-xs md:text-sm font-medium">
-                Gerencie as organizações que são suas clientes.
+                Gerencie as organizações parceiras e clientes ({companies.length}).
               </p>
             </div>
             <button 
@@ -187,22 +217,36 @@ export default function CompaniesPage() {
                 setEditingCompany(null);
                 setIsModalOpen(true);
               }}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-md shadow-primary/20 hover:opacity-90 transition-all flex items-center gap-1.5"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Nova Empresa
             </button>
           </header>
 
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Pesquisar empresas..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 bg-card text-foreground border border-border rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs transition-all font-medium"
-            />
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Pesquisar empresas..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 bg-card text-foreground border border-border rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs transition-all font-medium"
+              />
+            </div>
+            {availableIndustries.length > 0 && (
+              <select
+                value={selectedIndustry}
+                onChange={(e) => setSelectedIndustry(e.target.value)}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shrink-0"
+              >
+                <option value="all">Todos os setores ({companies.length})</option>
+                {availableIndustries.map(ind => (
+                  <option key={ind} value={ind}>{ind}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -211,40 +255,12 @@ export default function CompaniesPage() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : filteredCompanies.map((company) => (
-              <div key={company.id} className="bg-card p-4 rounded-xl border border-border shadow-xs hover:shadow-md transition-all group flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-base text-muted-foreground">
-                        <Building2 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-sm md:text-base tracking-tight">{company.name}</h3>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{company.industry || 'Setor não informado'}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-0.5">
-                      <button onClick={() => { setEditingCompany(company); setIsModalOpen(true); }} className="p-1.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer" title="Editar"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button 
-                        onClick={() => setCompanyToDelete(company)} 
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                        title="Excluir empresa"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  {company.website && (
-                    <div className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline mb-3">
-                      <Globe className="w-3.5 h-3.5" />
-                      <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer">
-                        {company.website}
-                      </a>
-                    </div>
-                  )}
-                </div>
-                <button className="w-full text-[9px] font-black uppercase tracking-widest py-2 bg-muted text-muted-foreground rounded-lg hover:bg-primary/10 hover:text-primary transition-all">Ver Contatos</button>
-              </div>
+              <CompanyCard 
+                key={company.id} 
+                company={company} 
+                onEdit={handleEditClick} 
+                onDelete={handleDeleteClick} 
+              />
             ))}
             {!loading && filteredCompanies.length === 0 && (
               <div className="col-span-full py-16 text-center bg-card rounded-2xl border border-border border-dashed flex flex-col items-center">
@@ -296,8 +312,8 @@ export default function CompaniesPage() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 font-black uppercase tracking-widest text-[11px] text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors">Cancelar</button>
-                  <button type="submit" className="flex-1 py-2 font-black uppercase tracking-widest text-[11px] bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/30">Salvar</button>
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer">Cancelar</button>
+                  <button type="submit" className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer">Salvar</button>
                 </div>
               </form>
             </motion.div>
@@ -318,3 +334,58 @@ export default function CompaniesPage() {
     </div>
   );
 }
+
+const CompanyCard = memo(function CompanyCard({
+  company,
+  onEdit,
+  onDelete
+}: {
+  company: Company;
+  onEdit: (company: Company) => void;
+  onDelete: (company: Company) => void;
+}) {
+  return (
+    <div className="bg-card p-4 rounded-xl border border-border shadow-xs hover:shadow-md transition-all group flex flex-col justify-between">
+      <div>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-base text-muted-foreground">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm md:text-base tracking-tight">{company.name}</h3>
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{company.industry || 'Setor não informado'}</p>
+            </div>
+          </div>
+          <div className="flex gap-0.5">
+            <button 
+              onClick={() => onEdit(company)} 
+              className="p-1.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer" 
+              title="Editar"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={() => onDelete(company)} 
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+              title="Excluir empresa"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        {company.website && (
+          <div className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline mb-3">
+            <Globe className="w-3.5 h-3.5" />
+            <a href={company.website.startsWith('http') ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer">
+              {company.website}
+            </a>
+          </div>
+        )}
+      </div>
+      <div className="pt-2">
+        <span className="text-[10px] text-muted-foreground font-medium">Cadastrada no CRM</span>
+      </div>
+    </div>
+  );
+});

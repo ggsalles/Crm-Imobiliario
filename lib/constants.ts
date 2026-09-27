@@ -3,8 +3,8 @@
  * Centraliza identificadores, papéis administrativos e configurações padrão.
  */
 
-export const DEFAULT_TENANT_ID = 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f';
-export const DEFAULT_TENANT_NAME = 'Nando Imobiliária';
+export const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+export const DEFAULT_TENANT_NAME = 'SalesScore Imóveis';
 
 export const PLATFORM_ADMIN_EMAIL = (
   process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'ggsalles@gmail.com'
@@ -17,6 +17,24 @@ export const PLATFORM_ADMIN_WHATSAPP = '5511987654321';
 
 /** Limite padrão de usuários (licenças/vagas) por imobiliária caso não configurado */
 export const DEFAULT_USER_LIMIT_PER_TENANT = 5;
+
+/** Estágios do funil de vendas do CRM */
+export const STAGES = [
+  { id: "lead", title: "Novo Lead", color: "blue", defaultProb: 20 },
+  { id: "qualification", title: "Qualificação / Visita", color: "purple", defaultProb: 40 },
+  { id: "proposal", title: "Proposta", color: "orange", defaultProb: 60 },
+  { id: "negotiation", title: "Análise Jurídica", color: "yellow", defaultProb: 80 },
+  { id: "closed", title: "Vendido / Alugado", color: "emerald", defaultProb: 100 },
+] as const;
+
+/** Estágios completos do funil incluindo estado de perda para Kanban */
+export const PIPELINE_STAGES = [
+  ...STAGES,
+  { id: "lost", title: "Perdido / Desistência", color: "rose", defaultProb: 0 } as const,
+] as const;
+
+export type StageId = typeof STAGES[number]["id"];
+export type PipelineStageId = typeof PIPELINE_STAGES[number]["id"];
 
 /**
  * Verifica se um determinado e-mail possui privilégios de Administrador da Plataforma (Super Admin).

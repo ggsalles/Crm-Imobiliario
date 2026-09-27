@@ -78,10 +78,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-// Module-scoped globals to protect against React Strict Mode unmount/remount
-// and duplicate authentication event loops.
-let globalLastSyncedUserId: string | null = null;
-let globalLastSyncTime = 0;
+// Lock global para evitar chamadas de sincronização concorrentes
 const globalActiveSyncPromises: Record<string, Promise<any>> = {};
 
 import { useRouter, usePathname } from "next/navigation";
@@ -91,6 +88,7 @@ import { UserProfile, updateUserProfile, clearLocalCache } from "@/lib/db";
 import { User } from "@supabase/supabase-js";
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin } from "@/lib/constants";
 import { recordAuditEvent } from "@/lib/audit";
+import { safeJsonParse, safeGetItem, safeSetItem, safeRemoveItem } from "@/lib/safe-storage";
 
 interface AuthContextType {
   user: User | null;
@@ -165,8 +163,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const lastActivityTimeRef = useRef<number>(Date.now());
-  const lastSyncedUserIdRef = useRef<string | null>(null);
-  const lastSyncTimeRef = useRef<number>(0);
 
   useEffect(() => {
     // Online/Offline status handling
@@ -520,27 +516,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, router]);
 
   const syncProfile = async (user: User) => {
-    // Evitar sincronizações duplicadas ou concorrentes rápidas para o mesmo usuário
-    const nowTime = Date.now();
-    
-    // 1. Lock global por promessa ativa
+    // Evita chamadas concorrentes paralelas para o mesmo usuário
     if (globalActiveSyncPromises[user.id]) {
-      console.log(`[AuthProvider] Sincronização já em andamento globalmente para o usuário ${user.id}. Ignorando chamada paralela.`);
-      return;
+      return globalActiveSyncPromises[user.id];
     }
-
-    // 2. Lock global baseado em tempo decorrido
-    if (globalLastSyncedUserId === user.id && (nowTime - globalLastSyncTime < 4500)) {
-      console.log(`[AuthProvider] Sincronização recente (há menos de 4.5s) para o usuário ${user.id}. Ignorando deduplicação.`);
-      return;
-    }
-
-    globalLastSyncedUserId = user.id;
-    globalLastSyncTime = nowTime;
-
-    // Atualiza também os estados de referência locais da instância ativa
-    lastSyncedUserIdRef.current = user.id;
-    lastSyncTimeRef.current = nowTime;
 
     // Ler o tenant escolhido no login/cadastro se houver (sessão atual)
     let chosenTenantId: string | null = null;
@@ -561,18 +540,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tenantIds: user.user_metadata?.tenant_ids || [chosenTenantId || user.user_metadata?.tenant_id || DEFAULT_TENANT_ID]
     };
 
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = sessionStorage.getItem(`local-profile:${user.id}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.id === user.id) {
-            fallbackProfile = parsed;
-          }
-        }
-      } catch (e) {
-        console.warn("Erro ao carregar perfil em cache local:", e);
-      }
+    const cached = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
+    const parsedCached = safeJsonParse<UserProfile>(cached);
+    if (parsedCached && parsedCached.id === user.id) {
+      fallbackProfile = parsedCached;
     }
 
     // Se o usuário selecionou uma imobiliária no login, force-a no fallback
@@ -622,13 +593,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               apiProfile.tenantId = chosenTenantId;
             } else {
               // Garantir que se tivermos um tenant ID mais recente que o usuário ativamente trocou (e salvou no cache de sessão), use-o
-              const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
-              if (localCachedProfile) {
-                const parsed = JSON.parse(localCachedProfile);
-                if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantId !== parsed.tenantId) {
-                  console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache de sessão em vez de ${apiProfile.tenantId}`);
-                  apiProfile.tenantId = parsed.tenantId;
-                }
+              const localCachedProfile = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
+              const parsed = safeJsonParse<UserProfile>(localCachedProfile);
+              if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantId !== parsed.tenantId) {
+                console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache de sessão em vez de ${apiProfile.tenantId}`);
+                apiProfile.tenantId = parsed.tenantId;
               }
             }
 
@@ -671,7 +640,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (fetchError) {
-        console.warn("Retrying profile sync due to fetch error:", fetchError);
+        console.warn("[AuthProvider] Erro ao consultar perfil via cliente Supabase:", fetchError.message);
       }
 
       const finalTenantIds = tenantIds.length > 0 
@@ -680,13 +649,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (profileData) {
         // Garantir que priorizamos o tenantId ativo do cache se aplicável
-        const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
+        const localCachedProfile = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
+        const parsed = safeJsonParse<UserProfile>(localCachedProfile);
         let finalTenantId = profileData.tenant_id;
-        if (localCachedProfile) {
-          const parsed = JSON.parse(localCachedProfile);
-          if (parsed && parsed.id === user.id && parsed.tenantId && finalTenantId !== parsed.tenantId) {
-            finalTenantId = parsed.tenantId;
-          }
+        if (parsed && parsed.id === user.id && parsed.tenantId && finalTenantId !== parsed.tenantId) {
+          finalTenantId = parsed.tenantId;
         }
 
         setProfile({
@@ -740,13 +707,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const localCachedProfile = typeof window !== 'undefined' ? sessionStorage.getItem(`local-profile:${user.id}`) : null;
+        const localCachedProfile = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
+        const parsed = safeJsonParse<UserProfile>(localCachedProfile);
         let finalTenantId = existingByEmail.tenant_id;
-        if (localCachedProfile) {
-          const parsed = JSON.parse(localCachedProfile);
-          if (parsed && parsed.id === user.id && parsed.tenantId && finalTenantId !== parsed.tenantId) {
-            finalTenantId = parsed.tenantId;
-          }
+        if (parsed && parsed.id === user.id && parsed.tenantId && finalTenantId !== parsed.tenantId) {
+          finalTenantId = parsed.tenantId;
         }
 
         const updatedTenantIds = tenantIds.length > 0 
@@ -837,19 +802,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Criamos uma Promise de timeout interno secundário (10000ms) para a tarefa em segundo plano
-    const timeoutPromise = new Promise<void>((_, reject) => 
-      setTimeout(() => reject(new Error("Background Timeout")), 10000)
-    );
-
-    // Executa a sincronização de banco em segundo plano de forma silenciosa e resiliente, registrando a promessa no lock global
-    const syncPromise = Promise.race([performSync(), timeoutPromise]).catch((error: any) => {
-      console.log("AuthProvider: Sincronização em segundo plano concluída ou interrompida de forma segura:", error.message || error);
-    }).finally(() => {
-      setLoading(false);
-      // Remove do lock global após a conclusão real da sincronização
-      delete globalActiveSyncPromises[user.id];
-    });
+    // Executa a sincronização em segundo plano de forma resiliente, registrando a promessa no lock global
+    const syncPromise = performSync()
+      .catch((error: any) => {
+        console.warn("[AuthProvider] Sincronização em segundo plano concluída com observação:", error?.message || error);
+      })
+      .finally(() => {
+        setLoading(false);
+        delete globalActiveSyncPromises[user.id];
+      });
 
     globalActiveSyncPromises[user.id] = syncPromise;
 

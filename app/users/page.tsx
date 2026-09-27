@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { useAuth } from "@/providers/auth-provider";
@@ -80,51 +80,102 @@ export default function UsersPage() {
   const isAdmin = profile?.role === 'Admin';
   const isPlatformAdmin = checkPlatformAdmin(profile?.email);
 
-  const fetchTenants = async () => {
+  const fetchTenants = useCallback(async () => {
     try {
       const data = await getTenants();
       setTenants(data);
     } catch (err) {
       console.error("Erro ao carregar inquilinos:", err);
     }
-  };
+  }, []);
+
+  const forceDataResync = useCallback(async () => {
+    try {
+      const data = await apiFetch('/api/profiles', { bypassCache: true });
+      if (Array.isArray(data)) {
+        const ownerId = isAdmin ? undefined : user?.id;
+        const filtered = ownerId ? data.filter((u: UserProfile) => u.id === ownerId) : data;
+        setUsers(filtered);
+      }
+    } catch (err) {
+      console.warn("[app/users] Erro ao sincronizar perfis:", err);
+    }
+  }, [user, isAdmin]);
 
   // Current active tenant being managed or inspected
-  const currentTenantId = selectedTenantFilter || profile?.tenantId || DEFAULT_TENANT_ID;
-  const currentTenant = tenants.find(t => t.id === currentTenantId) || {
-    id: currentTenantId,
-    name: currentTenantId === DEFAULT_TENANT_ID ? DEFAULT_TENANT_NAME : "Imobiliária",
-    userLimit: 3,
-    brokerLimit: 2,
-    adminLimit: 1
-  };
+  const currentTenantId = useMemo(() => {
+    return selectedTenantFilter || profile?.tenantId || DEFAULT_TENANT_ID;
+  }, [selectedTenantFilter, profile?.tenantId]);
+
+  const tenantsMap = useMemo(() => new Map(tenants.map(t => [t.id, t])), [tenants]);
+
+  const currentTenant = useMemo(() => {
+    return tenantsMap.get(currentTenantId) || {
+      id: currentTenantId,
+      name: currentTenantId === DEFAULT_TENANT_ID ? DEFAULT_TENANT_NAME : "Imobiliária",
+      userLimit: 3,
+      brokerLimit: 2,
+      adminLimit: 1
+    };
+  }, [tenantsMap, currentTenantId]);
 
   // Active users registered to this tenant (never count platform master as a client's seat)
-  const tenantUsers = users.filter(u => {
-    if (checkPlatformAdmin(u.email) && currentTenantId !== DEFAULT_TENANT_ID) {
-      return false;
-    }
-    return (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
-           (u.tenantIds && u.tenantIds.includes(currentTenantId));
-  });
+  const tenantUsers = useMemo(() => {
+    return users.filter(u => {
+      if (checkPlatformAdmin(u.email) && currentTenantId !== DEFAULT_TENANT_ID) {
+        return false;
+      }
+      return (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
+             (u.tenantIds && u.tenantIds.includes(currentTenantId));
+    });
+  }, [users, currentTenantId]);
 
   // Capacidade total sincronizada com o plano comercial (base + extras)
-  const planCapacity = calculateTenantPlanCapacity(currentTenant, tenantUsers);
-  const tenantUserLimit = planCapacity.totalCapacity;
+  const { 
+    planCapacity, 
+    tenantUserLimit, 
+    staffUsers, 
+    activeCount, 
+    isLimitReached, 
+    remainingSlots, 
+    usagePercentage, 
+    visualBlocksString 
+  } = useMemo(() => {
+    const capacity = calculateTenantPlanCapacity(currentTenant, tenantUsers);
+    const limit = capacity.totalCapacity;
+    const staff = tenantUsers.filter(u => u.userType !== 'cliente');
+    const active = staff.filter(u => u.isActive !== false).length;
+    const reached = active >= limit;
+    const remaining = Math.max(0, limit - active);
+    const usage = Math.min(100, Math.round((active / (limit || 1)) * 100));
+    const filled = Math.min(active, limit);
+    const empty = Math.max(0, limit - active);
+    const blocks = `[${'■'.repeat(filled)}${'□'.repeat(empty)}]`;
 
-  // Active staff count (ignoring clients/contacts, since staff licenses apply to corretores and admins)
-  const staffUsers = tenantUsers.filter(u => u.userType !== 'cliente');
-  const activeCount = staffUsers.filter(u => u.isActive !== false).length;
-  const isLimitReached = activeCount >= tenantUserLimit;
-  const remainingSlots = Math.max(0, tenantUserLimit - activeCount);
-  const usagePercentage = Math.min(100, Math.round((activeCount / tenantUserLimit) * 100));
+    return {
+      planCapacity: capacity,
+      tenantUserLimit: limit,
+      staffUsers: staff,
+      activeCount: active,
+      isLimitReached: reached,
+      remainingSlots: remaining,
+      usagePercentage: usage,
+      visualBlocksString: blocks
+    };
+  }, [currentTenant, tenantUsers]);
 
-  // Visual string representation e.g. [■■■□□]
-  const filledCount = Math.min(activeCount, tenantUserLimit);
-  const emptyCount = Math.max(0, tenantUserLimit - activeCount);
-  const visualBlocksString = `[${'■'.repeat(filledCount)}${'□'.repeat(emptyCount)}]`;
+  // Status counts for tabs
+  const statusCounts = useMemo(() => {
+    const active = tenantUsers.filter(u => u.isActive !== false).length;
+    const inactive = tenantUsers.length - active;
+    return {
+      all: tenantUsers.length,
+      active,
+      inactive
+    };
+  }, [tenantUsers]);
 
-  const handleQuickUpdateLimit = async (newLimit: number, targetId?: string) => {
+  const handleQuickUpdateLimit = useCallback(async (newLimit: number, targetId?: string) => {
     if (!isPlatformAdmin) return;
     const tid = targetId || currentTenantId;
     setIsUpdatingLimit(true);
@@ -133,7 +184,7 @@ export default function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ userLimit: newLimit })
       });
-      const targetTenantName = tenants.find(t => t.id === tid)?.name || 'Imobiliária';
+      const targetTenantName = tenantsMap.get(tid)?.name || 'Imobiliária';
       recordAuditEvent({
         action: 'UPDATE_SETTINGS',
         title: 'Alteração de Licenças / Vagas da Imobiliária',
@@ -155,7 +206,7 @@ export default function UsersPage() {
     } finally {
       setIsUpdatingLimit(false);
     }
-  };
+  }, [isPlatformAdmin, currentTenantId, tenantsMap, fetchTenants]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -180,9 +231,9 @@ export default function UsersPage() {
     if (isAdmin || isPlatformAdmin) {
       fetchTenants();
     }
-  }, [isAdmin, isPlatformAdmin]);
+  }, [isAdmin, isPlatformAdmin, fetchTenants]);
 
-  const handleEditClick = (u: UserProfile) => {
+  const handleEditClick = useCallback((u: UserProfile) => {
     if (!isAdmin && u.id !== user?.id) {
       toast.error("Você só pode editar seu próprio perfil.");
       return;
@@ -197,9 +248,9 @@ export default function UsersPage() {
       isActive: u.isActive !== false,
       inactiveReason: u.inactiveReason || ''
     });
-  };
+  }, [isAdmin, user?.id]);
 
-  const handleSaveEdit = async (id: string) => {
+  const handleSaveEdit = useCallback(async (id: string) => {
     if (savingUid) return;
     setSavingUid(id);
 
@@ -252,9 +303,9 @@ export default function UsersPage() {
     } finally {
       setSavingUid(null);
     }
-  };
+  }, [savingUid, editForm, forceDataResync]);
 
-  const handleConfirmInactivation = async (userId: string, reason: string) => {
+  const handleConfirmInactivation = useCallback(async (userId: string, reason: string) => {
     setIsInactivating(true);
     try {
       const targetUser = users.find(u => u.id === userId);
@@ -293,9 +344,9 @@ export default function UsersPage() {
     } finally {
       setIsInactivating(false);
     }
-  };
+  }, [users, forceDataResync]);
 
-  const handleReactivateUser = async (targetUser: UserProfile) => {
+  const handleReactivateUser = useCallback(async (targetUser: UserProfile) => {
     // Validação preventiva de capacidade da imobiliária
     if (isLimitReached && !isPlatformAdmin) {
       toast.error("Limite de vagas atingido. Expanda as licenças contratadas para reativar este usuário.");
@@ -334,9 +385,9 @@ export default function UsersPage() {
       toast.error(err?.message || "Erro ao reativar usuário");
       forceDataResync();
     }
-  };
+  }, [isLimitReached, isPlatformAdmin, forceDataResync]);
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateUser = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin && !isPlatformAdmin) {
       toast.error("Você não possui permissão para cadastrar novos usuários.");
@@ -387,9 +438,9 @@ export default function UsersPage() {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [isAdmin, isPlatformAdmin, isLimitReached, newUserData, currentTenantId, fetchTenants]);
 
-  const confirmDeleteUser = async () => {
+  const confirmDeleteUser = useCallback(async () => {
     if (!userToDelete) return;
     const targetUser = userToDelete;
     const id = targetUser.id;
@@ -431,7 +482,32 @@ export default function UsersPage() {
     } finally {
       setIsDeletingUser(false);
     }
-  };
+  }, [userToDelete, user?.id]);
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter(u => {
+      // Platform master login is strictly hidden from regular companies
+      if (!isPlatformAdmin && checkPlatformAdmin(u.email)) {
+        return false;
+      }
+      // Regular companies only see their own users
+      if (!isPlatformAdmin) {
+        const belongs = (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
+                        (u.tenantIds && u.tenantIds.includes(currentTenantId));
+        if (!belongs) return false;
+      }
+      // Status filter
+      if (statusFilter === 'active' && u.isActive === false) return false;
+      if (statusFilter === 'inactive' && u.isActive !== false) return false;
+
+      if (!q) return true;
+      return (
+        (u.displayName || "").toLowerCase().includes(q) || 
+        (u.email || "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, isPlatformAdmin, currentTenantId, statusFilter, search]);
 
   if (authLoading || (loading && !user)) {
     return (
@@ -443,27 +519,6 @@ export default function UsersPage() {
       </div>
     );
   }
-
-  const filteredUsers = users.filter(u => {
-    // Platform master login is strictly hidden from regular companies
-    if (!isPlatformAdmin && checkPlatformAdmin(u.email)) {
-      return false;
-    }
-    // Regular companies only see their own users
-    if (!isPlatformAdmin) {
-      const belongs = (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
-                      (u.tenantIds && u.tenantIds.includes(currentTenantId));
-      if (!belongs) return false;
-    }
-    // Status filter
-    if (statusFilter === 'active' && u.isActive === false) return false;
-    if (statusFilter === 'inactive' && u.isActive !== false) return false;
-
-    return (
-      u.displayName.toLowerCase().includes(search.toLowerCase()) || 
-      u.email.toLowerCase().includes(search.toLowerCase())
-    );
-  });
 
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
@@ -629,7 +684,7 @@ export default function UsersPage() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    Todos ({tenantUsers.length})
+                    Todos ({statusCounts.all})
                   </button>
                   <button
                     type="button"
@@ -642,7 +697,7 @@ export default function UsersPage() {
                     )}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Ativos ({tenantUsers.filter(u => u.isActive !== false).length})
+                    Ativos ({statusCounts.active})
                   </button>
                   <button
                     type="button"
@@ -655,7 +710,7 @@ export default function UsersPage() {
                     )}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    Inativos ({tenantUsers.filter(u => u.isActive === false).length})
+                    Inativos ({statusCounts.inactive})
                   </button>
                 </div>
               </div>

@@ -8,7 +8,7 @@ import { isPlatformAdmin } from "@/lib/constants";
 import { getActionMeta, AuditSeverity } from "@/lib/audit";
 import { getTenants } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ShieldAlert, 
@@ -29,6 +29,7 @@ import {
   Key, 
   Building2, 
   ChevronRight, 
+  ChevronLeft,
   X,
   Lock,
   ArrowUpDown,
@@ -37,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { safeGetItem, safeJsonParse } from "@/lib/safe-storage";
 
 interface AuditLogItem {
   id: string;
@@ -76,6 +78,11 @@ export default function AuditPage() {
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedDateRange, setSelectedDateRange] = useState<string>("30d");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Selected Log Modal for inspection
   const [inspectingLog, setInspectingLog] = useState<AuditLogItem | null>(null);
@@ -90,43 +97,10 @@ export default function AuditPage() {
   );
   const isAdmin = Boolean(profile?.role === "Admin" || profile?.isAdmin || isMaster);
 
-  // Clear audit logs handler
-  const handleClearAuditLogs = async () => {
-    setIsClearing(true);
-    try {
-      let authHeader = "";
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session?.access_token) {
-          authHeader = `Bearer ${sessionData.session.access_token}`;
-        }
-      } catch (err) {
-        console.warn("Could not get access token for clear:", err);
-      }
-
-      const url = isMaster && selectedTenant && selectedTenant !== 'all'
-        ? `/api/audit?tenantId=${selectedTenant}`
-        : `/api/audit`;
-
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: authHeader ? { Authorization: authHeader } : {}
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Falha ao limpar logs de auditoria.");
-      }
-
-      toast.success("Tabela de logs de auditoria limpa com sucesso!");
-      setIsClearModalOpen(false);
-      await fetchLogs(true);
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao limpar logs de auditoria.");
-    } finally {
-      setIsClearing(false);
-    }
-  };
+  // Reset pagination whenever search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedTenant, selectedSeverity, selectedCategory, selectedDateRange, sortOrder, pageSize]);
 
   // Load tenants for master
   useEffect(() => {
@@ -162,16 +136,14 @@ export default function AuditPage() {
       } catch {}
 
       if (!authHeader && typeof window !== "undefined") {
-        const rawSession = window.sessionStorage.getItem("crm-imob-session-v5") ||
-                           window.sessionStorage.getItem("crm-imob-session-v4") ||
-                           window.localStorage.getItem("crm-imob-session-v4");
+        const rawSession = safeGetItem("crm-imob-session-v5", "sessionStorage") ||
+                           safeGetItem("crm-imob-session-v4", "sessionStorage") ||
+                           safeGetItem("crm-imob-session-v4", "localStorage");
         if (rawSession) {
-          try {
-            const parsed = JSON.parse(rawSession);
-            if (parsed?.access_token) {
-              authHeader = `Bearer ${parsed.access_token}`;
-            }
-          } catch {}
+          const parsed = safeJsonParse<{ access_token?: string }>(rawSession);
+          if (parsed?.access_token) {
+            authHeader = `Bearer ${parsed.access_token}`;
+          }
         }
       }
 
@@ -182,7 +154,7 @@ export default function AuditPage() {
         params.set("tenantId", profile.tenantId);
       }
 
-      params.set("limit", "250");
+      params.set("limit", "500");
 
       const res = await fetch(`/api/audit?${params.toString()}`, {
         headers: {
@@ -209,6 +181,44 @@ export default function AuditPage() {
     }
   }, [isMaster, selectedTenant, profile?.tenantId]);
 
+  // Clear audit logs handler
+  const handleClearAuditLogs = useCallback(async () => {
+    setIsClearing(true);
+    try {
+      let authHeader = "";
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.access_token) {
+          authHeader = `Bearer ${sessionData.session.access_token}`;
+        }
+      } catch (err) {
+        console.warn("Could not get access token for clear:", err);
+      }
+
+      const url = isMaster && selectedTenant && selectedTenant !== 'all'
+        ? `/api/audit?tenantId=${selectedTenant}`
+        : `/api/audit`;
+
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: authHeader ? { Authorization: authHeader } : {}
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Falha ao limpar logs de auditoria.");
+      }
+
+      toast.success("Tabela de logs de auditoria limpa com sucesso!");
+      setIsClearModalOpen(false);
+      await fetchLogs(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao limpar logs de auditoria.");
+    } finally {
+      setIsClearing(false);
+    }
+  }, [isMaster, selectedTenant, fetchLogs]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login");
@@ -221,11 +231,12 @@ export default function AuditPage() {
     }
   }, [authLoading, user, isAdmin, fetchLogs]);
 
-  // Filtered Logs calculation
+  // Filtered Logs calculation memoized
   const filteredLogs = useMemo(() => {
     const now = new Date().getTime();
+    const q = searchQuery.toLowerCase().trim();
 
-    return logs.filter(log => {
+    const filtered = logs.filter(log => {
       // Date filter
       if (selectedDateRange !== "all") {
         const logTime = new Date(log.created_at).getTime();
@@ -252,8 +263,7 @@ export default function AuditPage() {
       }
 
       // Search query filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (q) {
         const author = (log.author_name || "").toLowerCase();
         const title = (log.title || "").toLowerCase();
         const content = (log.content || "").toLowerCase();
@@ -273,9 +283,23 @@ export default function AuditPage() {
 
       return true;
     });
-  }, [logs, selectedDateRange, selectedSeverity, selectedCategory, searchQuery]);
 
-  // Statistics calculation
+    // Sorting
+    return filtered.sort((a, b) => {
+      const timeA = new Date(a.created_at).getTime();
+      const timeB = new Date(b.created_at).getTime();
+      return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+    });
+  }, [logs, selectedDateRange, selectedSeverity, selectedCategory, searchQuery, sortOrder]);
+
+  // Paginated subset of logs for instant rendering
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
+
+  // Statistics calculation memoized
   const stats = useMemo(() => {
     const total = logs.length;
     let criticalCount = 0;
@@ -305,7 +329,7 @@ export default function AuditPage() {
   }, [logs]);
 
   // Export audit report to CSV
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     if (filteredLogs.length === 0) {
       toast.info("Nenhum registro para exportar.");
       return;
@@ -349,9 +373,13 @@ export default function AuditPage() {
     document.body.removeChild(link);
 
     toast.success("Relatório de auditoria exportado com sucesso.");
-  };
+  }, [filteredLogs]);
 
-  // Unauthenticated guard: clean loader while redirecting to /login
+  const handleInspect = useCallback((log: AuditLogItem) => {
+    setInspectingLog(log);
+  }, []);
+
+  // Unauthenticated guard
   if (authLoading || !user) {
     return (
       <div className="flex h-screen bg-background items-center justify-center">
@@ -363,7 +391,7 @@ export default function AuditPage() {
     );
   }
 
-  // Access check guard for authenticated non-admin users (e.g. brokers/corretores)
+  // Access check guard for authenticated non-admin users
   if (!isAdmin) {
     return (
       <div className="flex h-screen bg-background text-foreground">
@@ -380,7 +408,7 @@ export default function AuditPage() {
             </p>
             <button 
               onClick={() => router.push('/')}
-              className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-md hover:bg-primary/90 transition-colors w-full"
+              className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs shadow-md hover:bg-primary/90 transition-colors w-full cursor-pointer"
             >
               Voltar ao Dashboard
             </button>
@@ -422,7 +450,7 @@ export default function AuditPage() {
               <button
                 onClick={() => fetchLogs(true)}
                 disabled={refreshing || loading}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-muted/60 hover:bg-muted text-foreground transition-all border border-border disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-muted/60 hover:bg-muted text-foreground transition-all border border-border disabled:opacity-50 cursor-pointer"
                 title="Recarregar registros"
               >
                 <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
@@ -431,7 +459,7 @@ export default function AuditPage() {
 
               <button
                 onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
               >
                 <Download className="w-3 h-3" />
                 Exportar Relatório (CSV)
@@ -440,7 +468,7 @@ export default function AuditPage() {
               {isMaster && (
                 <button
                   onClick={() => setIsClearModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition-all shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition-all shadow-xs cursor-pointer"
                   title="Limpar registros de auditoria (Exclusivo Master)"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -498,7 +526,7 @@ export default function AuditPage() {
         <div className="p-3 sm:p-4 md:p-5 space-y-3.5 flex-1 max-w-7xl mx-auto w-full">
           {/* Filter Bar */}
           <div className="p-3 rounded-xl bg-card border border-border shadow-xs space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-2.5">
               {/* Search input */}
               <div className="lg:col-span-2 relative">
                 <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
@@ -507,12 +535,12 @@ export default function AuditPage() {
                   placeholder="Filtrar por corretor, IP, ação ou descrição..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                  className="w-full pl-8 pr-8 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                 />
                 {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -520,7 +548,7 @@ export default function AuditPage() {
               </div>
 
               {/* Master Tenant Filter */}
-              {isMaster && (
+              {isMaster ? (
                 <div>
                   <select
                     value={selectedTenant}
@@ -535,19 +563,19 @@ export default function AuditPage() {
                     ))}
                   </select>
                 </div>
-              )}
+              ) : null}
 
               {/* Category Filter */}
-              <div>
+              <div className={!isMaster ? "lg:col-span-1" : ""}>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
                 >
                   <option value="all">Todas as Categorias</option>
-                  <option value="export">Exportações de Dados (CSV)</option>
-                  <option value="deletion">Exclusões de Registros</option>
-                  <option value="sensitive_view">Visualizações Sensíveis</option>
+                  <option value="export">Exportações (CSV)</option>
+                  <option value="deletion">Exclusões</option>
+                  <option value="sensitive_view">Dados Sensíveis</option>
                   <option value="auth">Acessos & Logins</option>
                 </select>
               </div>
@@ -560,7 +588,7 @@ export default function AuditPage() {
                   className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
                 >
                   <option value="all">Todas as Gravidades</option>
-                  <option value="critical">Crítica (Exclusões/Exportações)</option>
+                  <option value="critical">Crítica</option>
                   <option value="high">Alta</option>
                   <option value="medium">Média</option>
                   <option value="info">Informativa</option>
@@ -577,14 +605,27 @@ export default function AuditPage() {
                   <option value="24h">Últimas 24 Horas</option>
                   <option value="7d">Últimos 7 Dias</option>
                   <option value="30d">Últimos 30 Dias</option>
-                  <option value="all">Todo o Período Histórico</option>
+                  <option value="all">Todo o Histórico</option>
                 </select>
+              </div>
+
+              {/* Sort Order Toggle */}
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-background border border-border hover:bg-muted text-foreground transition-all cursor-pointer"
+                  title="Alternar ordem cronológica"
+                >
+                  <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+                  <span>{sortOrder === "desc" ? "Mais recentes" : "Mais antigos"}</span>
+                </button>
               </div>
             </div>
           </div>
 
           {/* Table Container */}
-          <div className="rounded-xl bg-card border border-border shadow-xs overflow-hidden">
+          <div className="rounded-xl bg-card border border-border shadow-xs overflow-hidden flex flex-col">
             {loading ? (
               <div className="py-16 flex flex-col items-center justify-center gap-2">
                 <RefreshCw className="w-5 h-5 text-primary animate-spin" />
@@ -597,114 +638,83 @@ export default function AuditPage() {
                 </div>
                 <h3 className="text-sm font-bold text-foreground">Nenhum evento registrado</h3>
                 <p className="text-xs text-muted-foreground max-w-sm mt-0.5">
-                  Não foram encontrados registros para os filtros selecionados. Conforme os usuários realizam ações críticas, elas aparecerão aqui automaticamente.
+                  Não foram encontrados registros para os filtros selecionados.
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground uppercase tracking-wider text-[9px]">
-                      <th className="py-2.5 px-3">Carimbo de Data/Hora</th>
-                      <th className="py-2.5 px-3">Usuário Responsável</th>
-                      <th className="py-2.5 px-3">Ação Realizada</th>
-                      <th className="py-2.5 px-3">Descrição do Evento</th>
-                      <th className="py-2.5 px-3">Endereço IP / Dispositivo</th>
-                      <th className="py-2.5 px-3 text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredLogs.map((log) => {
-                      const action = log.metadata?.action || "GENERAL_AUDIT";
-                      const meta = getActionMeta(action);
-                      const formattedDate = new Date(log.created_at).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit"
-                      });
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40 font-semibold text-muted-foreground uppercase tracking-wider text-[9px]">
+                        <th className="py-2.5 px-3">Carimbo de Data/Hora</th>
+                        <th className="py-2.5 px-3">Usuário Responsável</th>
+                        <th className="py-2.5 px-3">Ação Realizada</th>
+                        <th className="py-2.5 px-3">Descrição do Evento</th>
+                        <th className="py-2.5 px-3">Endereço IP / Dispositivo</th>
+                        <th className="py-2.5 px-3 text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {paginatedLogs.map((log) => (
+                        <AuditTableRow
+                          key={log.id}
+                          log={log}
+                          isMaster={isMaster}
+                          tenantName={log.tenant_id ? tenantMap[log.tenant_id] : undefined}
+                          onInspect={handleInspect}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                      const ip = log.metadata?.ip || "127.0.0.1";
-                      const userAgent = log.metadata?.userAgent || "Navegador";
-                      const isMobile = /mobile|android|iphone/i.test(userAgent);
+                {/* Pagination Controls */}
+                <div className="p-3 border-t border-border bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px]">
+                    <span>
+                      Mostrando {Math.min((currentPage - 1) * pageSize + 1, filteredLogs.length)} a {Math.min(currentPage * pageSize, filteredLogs.length)} de {filteredLogs.length} eventos
+                    </span>
+                    <span className="text-border">|</span>
+                    <div className="flex items-center gap-1">
+                      <span>Exibir:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        className="bg-card border border-border rounded-md px-1.5 py-0.5 text-[11px] font-bold focus:outline-none"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
 
-                      return (
-                        <tr key={log.id} className="hover:bg-muted/30 transition-colors group">
-                          {/* Date & Time */}
-                          <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1 font-mono text-[10px] sm:text-[11px] text-foreground">
-                              <Clock className="w-3 h-3 text-muted-foreground" />
-                              <span>{formattedDate}</span>
-                            </div>
-                          </td>
-
-                          {/* User */}
-                          <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[9px]">
-                                {log.author_name?.slice(0, 1).toUpperCase() || "U"}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-bold text-foreground truncate max-w-[130px] text-xs">{log.author_name || "Sistema"}</p>
-                                <p className="text-[9px] text-muted-foreground truncate max-w-[130px]">{log.metadata?.userEmail || ""}</p>
-                                {isMaster && log.tenant_id && tenantMap[log.tenant_id] && (
-                                  <span className="inline-block text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border mt-0.5 max-w-[130px] truncate">
-                                    {tenantMap[log.tenant_id]}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Action Badge */}
-                          <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-                            <span className={cn(
-                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border",
-                              meta.bg,
-                              meta.color
-                            )}>
-                              {meta.label}
-                            </span>
-                          </td>
-
-                          {/* Content / Description */}
-                          <td className="py-2 sm:py-2.5 px-3">
-                            <p className="text-foreground font-medium line-clamp-1 max-w-[280px] text-xs" title={log.content}>
-                              {log.content || log.title}
-                            </p>
-                          </td>
-
-                          {/* IP & Device */}
-                          <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-                            <div className="flex flex-col text-[9px] font-mono">
-                              <span className="text-foreground flex items-center gap-1">
-                                <Globe className="w-2.5 h-2.5 text-muted-foreground" />
-                                {ip}
-                              </span>
-                              <span className="text-muted-foreground text-[8px] flex items-center gap-1 mt-0.5">
-                                <Laptop className="w-2.5 h-2.5 text-muted-foreground" />
-                                {isMobile ? "Dispositivo Móvel" : "Desktop / Web"}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-2 sm:py-2.5 px-3 text-right whitespace-nowrap">
-                            <button
-                              onClick={() => setInspectingLog(log)}
-                              className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors border border-border"
-                            >
-                              Inspecionar
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      title="Página anterior"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-2.5 py-1 text-xs font-bold text-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages}
+                      className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      title="Próxima página"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -726,7 +736,7 @@ export default function AuditPage() {
               </div>
               <button 
                 onClick={() => setInspectingLog(null)}
-                className="w-6 h-6 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                className="w-6 h-6 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -782,7 +792,7 @@ export default function AuditPage() {
             <div className="p-3 border-t border-border bg-muted/20 flex justify-end">
               <button
                 onClick={() => setInspectingLog(null)}
-                className="px-3.5 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors"
+                className="px-3.5 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors cursor-pointer"
               >
                 Fechar
               </button>
@@ -802,7 +812,7 @@ export default function AuditPage() {
             <div className="text-center space-y-1.5">
               <h3 className="text-base font-bold text-foreground">Limpar Histórico de Auditoria?</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Esta ação apagará permanentemente todos os registros de log da tabela de auditoria ({logs.length} registros visíveis).
+                Esta ação apagará permanentemente todos os registros de log da tabela de auditoria ({logs.length} registros no total).
                 <br /><br />
                 <span className="font-semibold text-foreground">Nota:</span> Seus contatos, negócios no funil, imóveis e notas de clientes não serão afetados — apenas o histórico de acessos e operações será limpo.
               </p>
@@ -813,7 +823,7 @@ export default function AuditPage() {
                 type="button"
                 onClick={() => setIsClearModalOpen(false)}
                 disabled={isClearing}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Cancelar
               </button>
@@ -822,7 +832,7 @@ export default function AuditPage() {
                 type="button"
                 onClick={handleClearAuditLogs}
                 disabled={isClearing}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-md disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-md disabled:opacity-50 cursor-pointer"
               >
                 {isClearing ? (
                   <>
@@ -843,3 +853,104 @@ export default function AuditPage() {
     </div>
   );
 }
+
+// Memoized Table Row Component
+const AuditTableRow = memo(function AuditTableRow({
+  log,
+  isMaster,
+  tenantName,
+  onInspect
+}: {
+  log: AuditLogItem;
+  isMaster: boolean;
+  tenantName?: string;
+  onInspect: (log: AuditLogItem) => void;
+}) {
+  const action = log.metadata?.action || "GENERAL_AUDIT";
+  const meta = getActionMeta(action);
+  const formattedDate = new Date(log.created_at).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+
+  const ip = log.metadata?.ip || "127.0.0.1";
+  const userAgent = log.metadata?.userAgent || "Navegador";
+  const isMobile = /mobile|android|iphone/i.test(userAgent);
+
+  return (
+    <tr className="hover:bg-muted/30 transition-colors group">
+      {/* Date & Time */}
+      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
+        <div className="flex items-center gap-1 font-mono text-[10px] sm:text-[11px] text-foreground">
+          <Clock className="w-3 h-3 text-muted-foreground" />
+          <span>{formattedDate}</span>
+        </div>
+      </td>
+
+      {/* User */}
+      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[9px]">
+            {log.author_name?.slice(0, 1).toUpperCase() || "U"}
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground truncate max-w-[130px] text-xs">{log.author_name || "Sistema"}</p>
+            <p className="text-[9px] text-muted-foreground truncate max-w-[130px]">{log.metadata?.userEmail || ""}</p>
+            {isMaster && log.tenant_id && tenantName && (
+              <span className="inline-block text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border mt-0.5 max-w-[130px] truncate">
+                {tenantName}
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+
+      {/* Action Badge */}
+      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
+        <span className={cn(
+          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border",
+          meta.bg,
+          meta.color
+        )}>
+          {meta.label}
+        </span>
+      </td>
+
+      {/* Content / Description */}
+      <td className="py-2 sm:py-2.5 px-3">
+        <p className="text-foreground font-medium line-clamp-1 max-w-[280px] text-xs" title={log.content}>
+          {log.content || log.title}
+        </p>
+      </td>
+
+      {/* IP & Device */}
+      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
+        <div className="flex flex-col text-[9px] font-mono">
+          <span className="text-foreground flex items-center gap-1">
+            <Globe className="w-2.5 h-2.5 text-muted-foreground" />
+            {ip}
+          </span>
+          <span className="text-muted-foreground text-[8px] flex items-center gap-1 mt-0.5">
+            <Laptop className="w-2.5 h-2.5 text-muted-foreground" />
+            {isMobile ? "Dispositivo Móvel" : "Desktop / Web"}
+          </span>
+        </div>
+      </td>
+
+      {/* Actions */}
+      <td className="py-2 sm:py-2.5 px-3 text-right whitespace-nowrap">
+        <button
+          type="button"
+          onClick={() => onInspect(log)}
+          className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors border border-border cursor-pointer"
+        >
+          Inspecionar
+        </button>
+      </td>
+    </tr>
+  );
+});

@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, memo } from "react";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -22,7 +22,9 @@ import {
   Filter,
   Zap,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  CheckSquare,
+  Download
 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
@@ -45,6 +47,7 @@ import { groupActivities, isPriorityActivity, UrgencyGroup } from "@/lib/intelli
 import { GeminiBanner } from "@/components/GeminiBanner";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
+import { exportActivitiesToCsv } from "@/lib/csv-export";
 
 export default function ActivitiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -58,21 +61,10 @@ export default function ActivitiesPage() {
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
   const [isDeletingActivity, setIsDeletingActivity] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [searchQuery, setSearchQuery] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
   const isSubmittingRef = useRef(false);
-
-  const groupedActivities = useMemo(() => {
-    const filtered = activities.filter(a => {
-      if (filter === 'all') return true;
-      return a.status === filter;
-    });
-    return groupActivities(filtered);
-  }, [activities, filter]);
-
-  const toggleGroup = (group: string) => {
-    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
-  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -110,27 +102,57 @@ export default function ActivitiesPage() {
     const unsubContacts = subscribeToContacts(setContacts, ownerId);
     const unsubDeals = subscribeToDeals(setDeals, ownerId);
 
-    // Re-sync when tab gains focus
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log("[Activities] Tab visible, triggering re-sync...");
-        // subscribe functions already handle initial fetch and polling, 
-        // but visibility changes often mean the environment was hibernating
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       unsubActivities();
       unsubContacts();
       unsubDeals();
       clearTimeout(safetyTimer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, profile]);
 
-  const handleOpenAddModal = () => {
+  // Memoized fast lookup maps O(1)
+  const contactsMap = useMemo(() => new Map(contacts.map(c => [c.id, c])), [contacts]);
+  const dealsMap = useMemo(() => new Map(deals.map(d => [d.id, d])), [deals]);
+
+  // Activity counts by status
+  const activityCounts = useMemo(() => {
+    let pending = 0;
+    let completed = 0;
+    activities.forEach(a => {
+      if (a.status === 'completed') completed++;
+      else pending++;
+    });
+    return {
+      total: activities.length,
+      pending,
+      completed
+    };
+  }, [activities]);
+
+  // Grouped activities with search and status filter memoized
+  const groupedActivities = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+
+    const filtered = activities.filter(a => {
+      if (filter !== 'all' && a.status !== filter) return false;
+      if (!q) return true;
+
+      const titleMatch = (a.title || "").toLowerCase().includes(q);
+      const descMatch = (a.description || "").toLowerCase().includes(q);
+      const contactMatch = a.contactId ? (contactsMap.get(a.contactId)?.name || "").toLowerCase().includes(q) : false;
+      const dealMatch = a.dealId ? (dealsMap.get(a.dealId)?.title || "").toLowerCase().includes(q) : false;
+
+      return titleMatch || descMatch || contactMatch || dealMatch;
+    });
+
+    return groupActivities(filtered);
+  }, [activities, filter, searchQuery, contactsMap, dealsMap]);
+
+  const toggleGroup = useCallback((group: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  }, []);
+
+  const handleOpenAddModal = useCallback(() => {
     setEditingActivity(null);
     const nextHour = new Date();
     nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
@@ -143,9 +165,9 @@ export default function ActivitiesPage() {
       description: ""
     });
     setIsAddModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenEditModal = (activity: Activity) => {
+  const handleOpenEditModal = useCallback((activity: Activity) => {
     setEditingActivity(activity);
     setFormData({
       title: activity.title,
@@ -156,9 +178,9 @@ export default function ActivitiesPage() {
       description: activity.description || ""
     });
     setIsAddModalOpen(true);
-  };
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current || isSaving) return;
     if (!formData.title.trim()) {
@@ -234,29 +256,38 @@ export default function ActivitiesPage() {
       isSubmittingRef.current = false;
       setIsSaving(false);
     }
-  };
+  }, [editingActivity, formData, isSaving]);
 
-  const toggleStatus = async (activity: Activity) => {
+  const toggleStatus = useCallback(async (activity: Activity) => {
     const nextStatus = activity.status === 'completed' ? 'pending' : 'completed';
-    await updateActivity(activity.id, {
-      status: nextStatus
-    });
-    recordAuditEvent({
-      action: 'UPDATE_ACTIVITY',
-      title: nextStatus === 'completed' ? 'Atividade Concluída' : 'Atividade Reaberta',
-      content: `Atividade "${activity.title}" foi marcada como ${nextStatus === 'completed' ? 'Concluída' : 'Pendente'}.`,
-      severity: 'low',
-      category: 'modification',
-      relatedId: activity.id,
-      entityType: 'activity',
-      metadata: {
-        title: activity.title,
-        status: nextStatus
-      }
-    });
-  };
+    // Otimistic update
+    setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: nextStatus } : a));
 
-  const confirmDeleteActivity = async () => {
+    try {
+      await updateActivity(activity.id, {
+        status: nextStatus
+      });
+      recordAuditEvent({
+        action: 'UPDATE_ACTIVITY',
+        title: nextStatus === 'completed' ? 'Atividade Concluída' : 'Atividade Reaberta',
+        content: `Atividade "${activity.title}" foi marcada como ${nextStatus === 'completed' ? 'Concluída' : 'Pendente'}.`,
+        severity: 'low',
+        category: 'modification',
+        relatedId: activity.id,
+        entityType: 'activity',
+        metadata: {
+          title: activity.title,
+          status: nextStatus
+        }
+      });
+    } catch (err) {
+      // Revert optimistic update
+      setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: activity.status } : a));
+      toast.error("Erro ao atualizar status da atividade.");
+    }
+  }, []);
+
+  const confirmDeleteActivity = useCallback(async () => {
     if (!activityToDelete) return;
     const targetActivity = activityToDelete;
     const id = targetActivity.id;
@@ -264,7 +295,7 @@ export default function ActivitiesPage() {
     setIsDeletingActivity(true);
     const toastId = toast.loading("Excluindo atividade...");
 
-    // Atualização otimista: remove imediatamente da listagem local
+    // Atualização otimista
     setActivities(prev => prev.filter(a => a.id !== id));
 
     try {
@@ -289,18 +320,46 @@ export default function ActivitiesPage() {
       }
     } catch (err: any) {
       console.error("[ActivitiesPage] Erro ao excluir atividade:", err);
-      // Reverter alteração otimista
       setActivities(prev => [...prev, targetActivity]);
       toast.error(err?.message || "Não foi possível excluir a atividade. Tente novamente.", { id: toastId });
     } finally {
       setIsDeletingActivity(false);
     }
-  };
+  }, [activityToDelete, editingActivity, isAddModalOpen]);
 
-  const filteredActivities = activities.filter(a => {
-    if (filter === 'all') return true;
-    return a.status === filter;
-  });
+  const handleDeleteClick = useCallback((activity: Activity) => {
+    setActivityToDelete(activity);
+  }, []);
+
+  const handleExportActivities = useCallback(() => {
+    if (activities.length === 0) {
+      toast.info("Nenhuma atividade cadastrada para exportar.");
+      return;
+    }
+    const contactsObj: Record<string, Contact> = {};
+    contacts.forEach((c) => {
+      if (c.id) contactsObj[c.id] = c;
+    });
+
+    const dealsObj: Record<string, Deal> = {};
+    deals.forEach((d) => {
+      if (d.id) dealsObj[d.id] = d;
+    });
+
+    exportActivitiesToCsv(activities, contactsObj, dealsObj);
+    recordAuditEvent({
+      action: "EXPORT_REPORT",
+      title: "Exportação de Atividades e Tarefas",
+      content: `${activities.length} atividades exportadas para planilha CSV.`,
+      severity: "low",
+      category: "export",
+      metadata: {
+        activitiesCount: activities.length,
+        filter,
+      },
+    });
+    toast.success(`Exportadas ${activities.length} atividades para CSV!`);
+  }, [activities, contacts, deals, filter]);
 
   if (authLoading || !user) return null;
 
@@ -332,33 +391,92 @@ export default function ActivitiesPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h1 className="text-xl md:text-2xl font-black tracking-tight">Atividades</h1>
-              <p className="text-muted-foreground font-medium mt-0.5 text-xs md:text-sm">Gerencie suas tarefas, chamadas e reuniões</p>
+              <p className="text-muted-foreground font-medium mt-0.5 text-xs md:text-sm">
+                Gerencie suas tarefas, chamadas e reuniões ({activityCounts.total}).
+              </p>
             </div>
-            <button 
-              onClick={handleOpenAddModal}
-              className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all w-full sm:w-auto text-xs"
-            >
-              <Plus className="w-4 h-4" />
-              Nova Atividade
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleExportActivities}
+                className="bg-card border border-border px-3.5 py-2 rounded-xl font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer flex-1 sm:flex-initial"
+                title="Exportar todas as atividades cadastradas para CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-primary" />
+                <span>Exportar .CSV</span>
+              </button>
+              <button 
+                onClick={handleOpenAddModal}
+                className="bg-primary text-white px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all w-full sm:w-auto text-xs cursor-pointer flex-1 sm:flex-initial"
+              >
+                <Plus className="w-4 h-4" />
+                Nova Atividade
+              </button>
+            </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex gap-1.5">
-            {(['all', 'pending', 'completed'] as const).map((f) => (
+          {/* Filters & Search Row */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            {/* Status Tabs */}
+            <div className="flex gap-1.5 bg-card p-1 rounded-xl border border-border w-fit shrink-0">
               <button
-                key={f}
-                onClick={() => setFilter(f)}
+                type="button"
+                onClick={() => setFilter('all')}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all",
-                  filter === f 
-                    ? "bg-primary text-white shadow-xs shadow-primary/10" 
-                    : "bg-card text-muted-foreground border border-border hover:bg-muted"
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  filter === 'all' 
+                    ? "bg-primary text-white shadow-xs" 
+                    : "text-muted-foreground hover:bg-muted"
                 )}
               >
-                {f === 'all' ? 'Todas' : f === 'pending' ? 'Pendentes' : 'Concluídas'}
+                Todas ({activityCounts.total})
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setFilter('pending')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  filter === 'pending' 
+                    ? "bg-primary text-white shadow-xs" 
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                Pendentes ({activityCounts.pending})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter('completed')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  filter === 'completed' 
+                    ? "bg-primary text-white shadow-xs" 
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                Concluídas ({activityCounts.completed})
+              </button>
+            </div>
+
+            {/* Quick Search Input */}
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Buscar por título, lead ou negócio..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-8 py-1.5 bg-card text-foreground border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs font-medium"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}
@@ -379,7 +497,7 @@ export default function ActivitiesPage() {
                   <div key={groupKey} className="space-y-2.5">
                     <button 
                       onClick={() => toggleGroup(groupKey)}
-                      className="flex items-center gap-2 group/title"
+                      className="flex items-center gap-2 group/title cursor-pointer"
                     >
                       <h2 className={cn("text-xs font-black uppercase tracking-wider", groupColors[groupKey])}>
                         {groupLabels[groupKey]}
@@ -392,116 +510,18 @@ export default function ActivitiesPage() {
 
                     {!isCollapsed && (
                       <div className="space-y-2.5">
-                        {groupItems.map((activity) => {
-                          const contact = contacts.find(c => c.id === activity.contactId);
-                          const deal = deals.find(d => d.id === activity.dealId);
-                          const isPriority = isPriorityActivity(activity, deals);
-                          
-                          return (
-                            <motion.div 
-                              layout
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              key={activity.id}
-                              className={cn(
-                                "group bg-card p-3.5 md:p-4 rounded-xl border border-border shadow-xs flex items-center gap-3 md:gap-4 transition-all hover:bg-muted/10 relative overflow-hidden",
-                                activity.status === 'completed' && "opacity-60",
-                                isPriority && "ring-1 ring-primary/20 bg-primary/[0.02]"
-                              )}
-                            >
-                              {isPriority && (
-                                <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-                              )}
-
-                              <button 
-                                onClick={() => toggleStatus(activity)}
-                                className={cn(
-                                  "w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0",
-                                  activity.status === 'completed' 
-                                    ? "bg-emerald-500 text-white" 
-                                    : "border-2 border-border text-muted-foreground/30 group-hover:border-primary/50 group-hover:text-primary/50"
-                                )}
-                              >
-                                {activity.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                              </button>
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center flex-wrap gap-1.5 mb-1">
-                                  <h3 className={cn(
-                                    "text-sm md:text-base font-bold text-foreground truncate",
-                                    activity.status === 'completed' && "line-through text-muted-foreground"
-                                  )}>
-                                    {activity.title}
-                                  </h3>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={cn(
-                                      "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0",
-                                      activity.type === 'call' ? "bg-primary/10 text-primary" :
-                                      activity.type === 'meeting' ? "bg-purple-500/10 text-purple-500" :
-                                      activity.type === 'email' ? "bg-orange-500/10 text-orange-500" :
-                                      "bg-muted text-muted-foreground"
-                                    )}>
-                                      {activity.type === 'meeting' ? 'Reunião' : 
-                                       activity.type === 'task' ? 'Tarefa' : 
-                                       activity.type === 'call' ? 'Chamada' : 
-                                       activity.type === 'email' ? 'E-mail' : 
-                                       activity.type}
-                                    </span>
-                                    {isPriority && (
-                                      <span className="px-2 py-0.5 bg-primary text-white rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs shadow-primary/20 animate-pulse">
-                                        <Zap className="w-2.5 h-2.5" />
-                                        Prioridade
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3">
-                                  <div className="flex items-center gap-1 text-xs font-bold text-muted-foreground">
-                                    <Calendar className="w-3 h-3" />
-                                    {format(new Date(activity.date), "dd MMM, yyyy", { locale: ptBR })}
-                                  </div>
-                                  <div className="flex items-center gap-1 text-xs font-bold text-muted-foreground md:border-l md:border-border md:pl-3">
-                                    <Clock className="w-3 h-3" />
-                                    {format(new Date(activity.date), "HH:mm")}
-                                  </div>
-                                  {contact && (
-                                    <div className="flex items-center gap-1 text-xs font-bold text-primary md:border-l md:border-border md:pl-3">
-                                      <Users className="w-3 h-3" />
-                                      {contact.name}
-                                    </div>
-                                  )}
-                                  {deal && (
-                                    <div className="flex items-center gap-1 text-xs font-bold text-emerald-500 md:border-l md:border-border md:pl-3">
-                                      <Briefcase className="w-3 h-3" />
-                                      {deal.title}
-                                    </div>
-                                  )}
-                                </div>
-                                {activity.description && (
-                                  <p className="text-xs text-muted-foreground mt-2 font-medium line-clamp-2">{activity.description}</p>
-                                )}
-                              </div>
-
-                              <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
-                                  onClick={() => handleOpenEditModal(activity)}
-                                  className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                                  title="Editar"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={() => setActivityToDelete(activity)} 
-                                  className="p-2 rounded-lg transition-all shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                                  title="Excluir atividade"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
+                        {groupItems.map((activity) => (
+                          <ActivityCardItem
+                            key={activity.id}
+                            activity={activity}
+                            contact={activity.contactId ? contactsMap.get(activity.contactId) : undefined}
+                            deal={activity.dealId ? dealsMap.get(activity.dealId) : undefined}
+                            deals={deals}
+                            onToggleStatus={toggleStatus}
+                            onEdit={handleOpenEditModal}
+                            onDelete={handleDeleteClick}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -514,8 +534,8 @@ export default function ActivitiesPage() {
               <h3 className="text-lg font-bold">Nenhuma atividade encontrada</h3>
               <p className="text-muted-foreground text-xs font-medium mt-1">Relaxe! Você está em dia com suas tarefas.</p>
               <button 
-                onClick={() => setIsAddModalOpen(true)}
-                className="mt-5 bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-primary/20 hover:scale-105 transition-all"
+                onClick={handleOpenAddModal}
+                className="mt-5 bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-primary/20 hover:scale-105 transition-all cursor-pointer"
               >
                 Criar Minha Primeira Atividade
               </button>
@@ -535,7 +555,7 @@ export default function ActivitiesPage() {
               <h2 className="text-xl font-black tracking-tight">
                 {editingActivity ? 'Editar Atividade' : 'Nova Atividade'}
               </h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-all">
+              <button onClick={() => setIsAddModalOpen(false)} className="p-1.5 hover:bg-muted rounded-lg transition-all cursor-pointer">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
@@ -617,9 +637,9 @@ export default function ActivitiesPage() {
               <div className="flex gap-2 pt-2">
                 {editingActivity && (
                   <button 
-                    type="button"
+                    type="button" 
                     onClick={() => setActivityToDelete(editingActivity)}
-                    className="px-3.5 py-2 rounded-xl transition-all border border-red-500/20 text-red-500 hover:bg-red-500/10 flex items-center justify-center"
+                    className="px-3.5 py-2 rounded-xl transition-all border border-red-500/20 text-red-500 hover:bg-red-500/10 flex items-center justify-center cursor-pointer"
                     title="Excluir atividade"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -628,14 +648,14 @@ export default function ActivitiesPage() {
                 <button 
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="flex-1 py-2 border border-border rounded-xl font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted transition-all font-sans"
+                  className="flex-1 py-2 border border-border rounded-xl font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted transition-all font-sans cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 bg-primary text-white py-2 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-sans flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-primary text-white py-2 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-primary/20 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-sans flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {isSaving ? 'Salvando...' : editingActivity ? 'Salvar Alterações' : 'Salvar Atividade'}
                 </button>
@@ -644,6 +664,7 @@ export default function ActivitiesPage() {
           </div>
         </div>
       )}
+
       {/* Modal de Confirmação de Exclusão */}
       <ConfirmDeleteModal
         isOpen={!!activityToDelete}
@@ -658,3 +679,130 @@ export default function ActivitiesPage() {
   );
 }
 
+// Memoized Card Item for high-performance virtual rendering
+const ActivityCardItem = memo(function ActivityCardItem({
+  activity,
+  contact,
+  deal,
+  deals,
+  onToggleStatus,
+  onEdit,
+  onDelete
+}: {
+  activity: Activity;
+  contact?: Contact;
+  deal?: Deal;
+  deals: Deal[];
+  onToggleStatus: (activity: Activity) => void;
+  onEdit: (activity: Activity) => void;
+  onDelete: (activity: Activity) => void;
+}) {
+  const isPriority = isPriorityActivity(activity, deals);
+
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "group bg-card p-3.5 md:p-4 rounded-xl border border-border shadow-xs flex items-center gap-3 md:gap-4 transition-all hover:bg-muted/10 relative overflow-hidden",
+        activity.status === 'completed' && "opacity-60",
+        isPriority && "ring-1 ring-primary/20 bg-primary/[0.02]"
+      )}
+    >
+      {isPriority && (
+        <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+      )}
+
+      <button 
+        type="button"
+        onClick={() => onToggleStatus(activity)}
+        className={cn(
+          "w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer",
+          activity.status === 'completed' 
+            ? "bg-emerald-500 text-white" 
+            : "border-2 border-border text-muted-foreground/30 group-hover:border-primary/50 group-hover:text-primary/50"
+        )}
+      >
+        {activity.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center flex-wrap gap-1.5 mb-1">
+          <h3 className={cn(
+            "text-sm md:text-base font-bold text-foreground truncate",
+            activity.status === 'completed' && "line-through text-muted-foreground"
+          )}>
+            {activity.title}
+          </h3>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0",
+              activity.type === 'call' ? "bg-primary/10 text-primary" :
+              activity.type === 'meeting' ? "bg-purple-500/10 text-purple-500" :
+              activity.type === 'email' ? "bg-orange-500/10 text-orange-500" :
+              "bg-muted text-muted-foreground"
+            )}>
+              {activity.type === 'meeting' ? 'Reunião' : 
+               activity.type === 'task' ? 'Tarefa' : 
+               activity.type === 'call' ? 'Chamada' : 
+               activity.type === 'email' ? 'E-mail' : 
+               activity.type}
+            </span>
+            {isPriority && (
+              <span className="px-2 py-0.5 bg-primary text-white rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs shadow-primary/20 animate-pulse">
+                <Zap className="w-2.5 h-2.5" />
+                Prioridade
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-y-1.5 gap-x-3">
+          <div className="flex items-center gap-1 text-xs font-bold text-muted-foreground">
+            <Calendar className="w-3 h-3" />
+            {format(new Date(activity.date), "dd MMM, yyyy", { locale: ptBR })}
+          </div>
+          <div className="flex items-center gap-1 text-xs font-bold text-muted-foreground md:border-l md:border-border md:pl-3">
+            <Clock className="w-3 h-3" />
+            {format(new Date(activity.date), "HH:mm")}
+          </div>
+          {contact && (
+            <div className="flex items-center gap-1 text-xs font-bold text-primary md:border-l md:border-border md:pl-3">
+              <Users className="w-3 h-3" />
+              {contact.name}
+            </div>
+          )}
+          {deal && (
+            <div className="flex items-center gap-1 text-xs font-bold text-emerald-500 md:border-l md:border-border md:pl-3">
+              <Briefcase className="w-3 h-3" />
+              {deal.title}
+            </div>
+          )}
+        </div>
+        {activity.description && (
+          <p className="text-xs text-muted-foreground mt-2 font-medium line-clamp-2">{activity.description}</p>
+        )}
+      </div>
+
+      <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          type="button"
+          onClick={() => onEdit(activity)}
+          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all cursor-pointer"
+          title="Editar"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button 
+          type="button"
+          onClick={() => onDelete(activity)} 
+          className="p-2 rounded-lg transition-all shrink-0 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
+          title="Excluir atividade"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  );
+});

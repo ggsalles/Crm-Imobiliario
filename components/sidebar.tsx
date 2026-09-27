@@ -33,6 +33,7 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { subscribeToTotalUnreadMessages, getTenants, updateUserProfile } from "@/lib/db";
 import { toast } from "sonner";
+import { safeGetItem, safeSetItem } from "@/lib/safe-storage";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -62,24 +63,16 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sidebar-collapsed");
-      if (saved !== null) {
-        setIsCollapsed(saved === "true");
-      }
-    } catch {
-      // ignore
+    const saved = safeGetItem("sidebar-collapsed");
+    if (saved !== null) {
+      setIsCollapsed(saved === "true");
     }
   }, []);
 
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
       const next = !prev;
-      try {
-        localStorage.setItem("sidebar-collapsed", String(next));
-      } catch {
-        // ignore
-      }
+      safeSetItem("sidebar-collapsed", String(next));
       return next;
     });
   };
@@ -171,7 +164,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
 
   // Restore the scroll position of the sidebar when navigating
   useEffect(() => {
-    const savedScrollPos = sessionStorage.getItem('sidebar-scroll');
+    const savedScrollPos = safeGetItem('sidebar-scroll', 'sessionStorage');
     if (savedScrollPos && navRef.current) {
       const target = navRef.current;
       const scrollPos = Number(savedScrollPos);
@@ -431,7 +424,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
       <nav 
         ref={navRef}
         onScroll={(e) => {
-          sessionStorage.setItem('sidebar-scroll', String(e.currentTarget.scrollTop));
+          safeSetItem('sidebar-scroll', String(e.currentTarget.scrollTop), 'sessionStorage');
         }}
         className="flex-1 px-1.5 space-y-0.5 mt-0.5 overflow-y-auto scrollbar-thin"
       >

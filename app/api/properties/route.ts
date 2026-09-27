@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
         complement: property.complement ? String(property.complement) : null,
         area: Number(property.area || 0),
         bedrooms: Number(property.bedrooms || 0),
+        suites: Number(property.suites || 0),
         bathrooms: Number(property.bathrooms || 0),
         parkingSpots: Number(property.parking_spots || 0),
         acceptsFinancing: Boolean(property.accepts_financing),
@@ -104,12 +105,15 @@ export async function GET(req: NextRequest) {
     const activeTenantId = await getActiveTenantId(supabase, user);
 
     const isPublic = searchParams.get('public') === 'true';
-    const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
+    const rawTenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
+    const tenantParam = (rawTenantParam === 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f')
+      ? DEFAULT_TENANT_ID 
+      : rawTenantParam;
     
     // Strict tenant isolation: force active company tenant for CRM / authenticated requests.
-    // For public showcase queries, allow target showcase tenantParam or activeTenantId.
+    // For public showcase queries, allow target showcase tenantParam or activeTenantId, with fallback to DEFAULT_TENANT_ID.
     const effectiveTenantId = isPublic
-      ? (tenantParam || activeTenantId || null)
+      ? (tenantParam || activeTenantId || DEFAULT_TENANT_ID)
       : (activeTenantId || tenantParam || DEFAULT_TENANT_ID);
 
     let query = supabase
@@ -123,8 +127,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (isPublic) {
-      // Vitrine pública: traz estritamente imóveis com status disponível
-      query = query.in('status', ['disponível', 'disponivel', 'available']);
+      // Vitrine pública: traz imóveis ativos (disponíveis e reservados com badge informativa)
+      query = query.in('status', ['disponível', 'disponivel', 'available', 'reservado', 'reserved']);
     }
 
     if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
@@ -182,6 +186,7 @@ export async function GET(req: NextRequest) {
         complement: item.complement ? String(item.complement) : null,
         area: Number(item.area || 0),
         bedrooms: Number(item.bedrooms || 0),
+        suites: Number(item.suites || 0),
         bathrooms: Number(item.bathrooms || 0),
         parkingSpots: Number(item.parking_spots || 0),
         acceptsFinancing: Boolean(item.accepts_financing),
@@ -254,16 +259,18 @@ export async function POST(req: NextRequest) {
       .insert([sanitized])
       .select();
 
-    // Fallback gracioso caso a coluna 'tags' ou 'is_featured' ainda não tenha sido criada no Supabase pelo usuário
-    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+    // Fallback gracioso caso a coluna 'tags', 'is_featured' ou 'suites' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
       console.warn("[API/Properties] POST: Coluna ainda não criada no Supabase. Inserindo com campos de fallback:", error.message);
       const fallbackSanitized = { ...sanitized };
       if (error.message?.includes('tags')) delete fallbackSanitized.tags;
       if (error.message?.includes('is_featured')) delete fallbackSanitized.is_featured;
+      if (error.message?.includes('suites')) delete fallbackSanitized.suites;
       // Se genérico 42703, remove ambos preventivamente
       if (error.code === '42703') {
         delete fallbackSanitized.tags;
         delete fallbackSanitized.is_featured;
+        delete fallbackSanitized.suites;
       }
       const retry = await supabase
         .from('properties')
@@ -364,15 +371,17 @@ export async function PATCH(req: NextRequest) {
 
     let { error } = await updateQuery;
 
-    // Fallback gracioso caso a coluna 'tags' ou 'is_featured' ainda não tenha sido criada no Supabase pelo usuário
-    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+    // Fallback gracioso caso a coluna 'tags', 'is_featured' ou 'suites' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
       console.warn(`[API/Properties] PATCH ID ${id}: Coluna ainda não criada no Supabase. Atualizando com fallback:`, error.message);
       const fallbackSanitized = { ...sanitized };
       if (error.message?.includes('tags')) delete fallbackSanitized.tags;
       if (error.message?.includes('is_featured')) delete fallbackSanitized.is_featured;
+      if (error.message?.includes('suites')) delete fallbackSanitized.suites;
       if (error.code === '42703') {
         delete fallbackSanitized.tags;
         delete fallbackSanitized.is_featured;
+        delete fallbackSanitized.suites;
       }
       let retryQuery = supabase
         .from('properties')

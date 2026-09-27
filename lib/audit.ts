@@ -1,4 +1,5 @@
 import { isPlatformAdmin } from './constants';
+import { safeGetItem, safeJsonParse } from './safe-storage';
 
 export type AuditAction = 
   | 'EXPORT_LEADS'
@@ -67,21 +68,19 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
     let sessionUserId: string | undefined = undefined;
 
     if (!token) {
-      try {
-        const rawSession = window.sessionStorage.getItem('crm-imob-session-v5') || 
-                            window.sessionStorage.getItem('crm-imob-session-v4') ||
-                            window.localStorage.getItem('crm-imob-session-v4');
-        if (rawSession) {
-          const parsed = JSON.parse(rawSession);
-          if (parsed?.access_token) {
-            token = parsed.access_token;
-          }
-          if (parsed?.user) {
-            sessionUserEmail = parsed.user.email;
-            sessionUserId = parsed.user.id;
-          }
+      const rawSession = safeGetItem('crm-imob-session-v5', 'sessionStorage') || 
+                         safeGetItem('crm-imob-session-v4', 'sessionStorage') ||
+                         safeGetItem('crm-imob-session-v4', 'localStorage');
+      if (rawSession) {
+        const parsed = safeJsonParse<{ access_token?: string; user?: { email?: string; id?: string } }>(rawSession);
+        if (parsed?.access_token) {
+          token = parsed.access_token;
         }
-      } catch {}
+        if (parsed?.user) {
+          sessionUserEmail = parsed.user.email;
+          sessionUserId = parsed.user.id;
+        }
+      }
     }
 
     // Ghost Mode for Master / Platform Admin:
@@ -94,7 +93,9 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
     const authHeader = token ? `Bearer ${token}` : null;
 
     const resolvedTenantId = event.tenantId || 
-      (typeof window !== 'undefined' ? (window.sessionStorage.getItem('active-tenant-id') || window.localStorage.getItem('active-tenant-id') || undefined) : undefined);
+      safeGetItem('active-tenant-id', 'sessionStorage') || 
+      safeGetItem('active-tenant-id', 'localStorage') || 
+      undefined;
 
     const clientPayload = {
       ...event,
