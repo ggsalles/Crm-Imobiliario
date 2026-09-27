@@ -20,7 +20,12 @@ import {
   User,
   Shield,
   Building,
-  Bell
+  Bell,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2
 } from "lucide-react";
 import { STAGES, DEFAULT_TENANT_NAME } from "@/lib/constants";
 import { safeGetItem, safeSetItem, safeGetJson, safeSetJson } from "@/lib/safe-storage";
@@ -29,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { recordAuditEvent } from "@/lib/audit";
+import { supabase } from "@/lib/supabase";
+import { updateUserProfile } from "@/lib/db";
 import Image from "next/image";
 
 interface ColorOption {
@@ -69,6 +76,93 @@ export default function SettingsPage() {
   // Sound & Notifications
   const [soundEnabled, setSoundActiveState] = useState(true);
   const [isTestingSound, setIsTestingSound] = useState(false);
+
+  // Password Change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Security Keyword for Instant Password Recovery
+  const [securityKeywordInput, setSecurityKeywordInput] = useState("");
+  const [isSavingKeyword, setIsSavingKeyword] = useState(false);
+
+  useEffect(() => {
+    if (profile?.securityKeyword) {
+      setSecurityKeywordInput(profile.securityKeyword);
+    }
+  }, [profile?.securityKeyword]);
+
+  const handleSaveSecurityKeyword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.id) {
+      toast.error("Perfil de usuário não carregado.");
+      return;
+    }
+    setIsSavingKeyword(true);
+    try {
+      await updateUserProfile(profile.id, {
+        securityKeyword: securityKeywordInput.trim(),
+        email: profile.email
+      });
+
+      recordAuditEvent({
+        action: 'UPDATE_SETTINGS',
+        title: 'Atualização da Palavra-Chave Secreta',
+        content: `Usuário "${profile?.displayName || profile?.email}" atualizou sua palavra-chave de recuperação de conta.`,
+        severity: 'medium',
+        category: 'auth',
+        userId: profile?.id,
+        userName: profile?.displayName || profile?.email,
+        userEmail: profile?.email,
+        tenantId: profile?.tenantId
+      });
+
+      toast.success("Palavra-Chave de recuperação salva com sucesso!");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar palavra-chave.");
+    } finally {
+      setIsSavingKeyword(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas informadas não coincidem.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      recordAuditEvent({
+        action: 'UPDATE_SETTINGS',
+        title: 'Alteração de Senha do Usuário',
+        content: `Usuário "${profile?.displayName || profile?.email}" atualizou sua própria senha de acesso.`,
+        severity: 'medium',
+        category: 'auth',
+        userId: profile?.id,
+        userName: profile?.displayName || profile?.email,
+        userEmail: profile?.email,
+        tenantId: profile?.tenantId
+      });
+
+      toast.success("Sua senha foi alterada com sucesso!");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao alterar a senha.");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     // Stage probabilities
@@ -540,6 +634,130 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </section>
+
+            {/* SEÇÃO 6: TROCA DE SENHA */}
+            <section className="bg-card rounded-2xl border border-border p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">Troca de Senha Pessoal</h3>
+                  <p className="text-[11px] text-muted-foreground">Atualize sua senha de acesso pessoal ao CRM</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="space-y-3.5 max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Nova Senha
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        required
+                        placeholder="Mínimo 6 caracteres"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Confirmar Nova Senha
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        required
+                        placeholder="Repita a nova senha"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isChangingPassword || !newPassword || !confirmPassword}
+                  className="py-2.5 px-4 bg-primary hover:opacity-90 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  {isChangingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                  {isChangingPassword ? "Atualizando Senha..." : "Atualizar Minha Senha"}
+                </button>
+              </form>
+            </section>
+
+            {/* SEÇÃO 7: PALAVRA-CHAVE SECRETA (RECUPERAÇÃO INSTANTÂNEA) */}
+            <section className="bg-card rounded-2xl border border-border p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-sm text-foreground">Palavra-Chave Secreta de Recuperação</h3>
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20">
+                        Instantâneo
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Permite recuperar seu acesso na tela de login sem precisar de e-mail ou aprovação</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveSecurityKeyword} className="space-y-3.5 max-w-lg">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Sua Palavra-Chave Secreta</span>
+                    {profile?.securityKeyword ? (
+                      <span className="text-emerald-500 text-[10px] font-normal flex items-center gap-0.5">
+                        <Check className="w-3 h-3" /> Cadastrada
+                      </span>
+                    ) : (
+                      <span className="text-amber-500 text-[10px] font-normal">
+                        (Não configurada)
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
+                    <input
+                      type="text"
+                      placeholder="Ex: imovel2026, golden, leao"
+                      value={securityKeywordInput}
+                      onChange={(e) => setSecurityKeywordInput(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-amber-500/20 transition-all font-medium focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+                    💡 <strong>Como funciona:</strong> Se você esquecer sua senha, basta clicar em <em>&quot;Esqueci minha senha&quot;</em> na tela de login, digitar seu e-mail e essa palavra-chave para definir uma nova senha na mesma hora.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingKeyword || !securityKeywordInput.trim() || securityKeywordInput.trim() === (profile?.securityKeyword || "")}
+                  className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  {isSavingKeyword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {isSavingKeyword ? "Salvando Palavra-Chave..." : "Salvar Palavra-Chave"}
+                </button>
+              </form>
             </section>
           </div>
         </div>

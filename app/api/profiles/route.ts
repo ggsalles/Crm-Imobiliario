@@ -7,6 +7,10 @@ import {
   getUserInactiveDetail, 
   setUserInactiveInStore 
 } from '@/lib/user-status';
+import {
+  getSecurityKeywordFromStore,
+  setSecurityKeywordInStore
+} from '@/lib/security-keywords';
 
 export const dynamic = 'force-dynamic';
 
@@ -255,10 +259,30 @@ export async function GET(req: NextRequest) {
         console.warn("Tabela profile_tenants pode nao ter sido criada ainda:", e);
       }
 
+      // Se o usuário foi associado a imobiliárias específicas, garanta que seu tenantId ativo seja válido
+      let activeTenantId = data.tenant_id;
+      if (tenantIds.length > 0) {
+        if (!activeTenantId || !tenantIds.includes(activeTenantId)) {
+          // Prioriza o primeiro tenant explicitamente associado
+          activeTenantId = tenantIds[0];
+          
+          // Corrige no banco se for service key para persistência imediata
+          if (supabaseServiceKey && data.id) {
+            try {
+              const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+              await adminSupabase.from('profiles').update({ tenant_id: activeTenantId }).eq('id', data.id);
+            } catch {}
+          }
+        }
+      } else if (!activeTenantId) {
+        activeTenantId = DEFAULT_TENANT_ID;
+      }
+
       const inactiveDetail = getUserInactiveDetail(data.id);
       const isLocallyInactive = isUserInactiveInStore(data.id);
       const isActive = !isLocallyInactive && (data.is_active !== false);
       const inactiveReason = inactiveDetail?.reason || data.inactive_reason || null;
+      const securityKeyword = data.security_keyword || getSecurityKeywordFromStore(data.id, data.email) || null;
 
       return NextResponse.json({
         id: data.id,
@@ -268,10 +292,11 @@ export async function GET(req: NextRequest) {
         role: data.role,
         userType: data.user_type,
         isAdmin: data.is_admin,
-        tenantId: data.tenant_id,
-        tenantIds,
+        tenantId: activeTenantId,
+        tenantIds: tenantIds.length > 0 ? tenantIds : [activeTenantId],
         isActive,
-        inactiveReason
+        inactiveReason,
+        securityKeyword
       });
     }
 
@@ -295,15 +320,36 @@ export async function GET(req: NextRequest) {
       const isLocallyInactive = isUserInactiveInStore(data.id);
       const isActive = !isLocallyInactive && (data.is_active !== false);
       const inactiveReason = inactiveDetail?.reason || data.inactive_reason || null;
+      const securityKeyword = data.security_keyword || getSecurityKeywordFromStore(data.id, data.email) || null;
+
+      let emailTenantIds = [data.tenant_id || DEFAULT_TENANT_ID];
+      try {
+        const adminSupabase = supabaseServiceKey 
+          ? createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+          : supabase;
+        const { data: assoc } = await adminSupabase.from('profile_tenants').select('tenant_id').eq('profile_id', data.id);
+        if (assoc && assoc.length > 0) {
+          emailTenantIds = assoc.map((a: any) => a.tenant_id);
+        }
+      } catch (e) {}
+
+      let resolvedEmailTenantId = data.tenant_id;
+      if (emailTenantIds.length > 0 && (!resolvedEmailTenantId || !emailTenantIds.includes(resolvedEmailTenantId))) {
+        resolvedEmailTenantId = emailTenantIds[0];
+      } else if (!resolvedEmailTenantId) {
+        resolvedEmailTenantId = DEFAULT_TENANT_ID;
+      }
 
       return NextResponse.json({ 
         id: data.id, 
-        tenantId: data.tenant_id,
+        tenantId: resolvedEmailTenantId,
+        tenantIds: emailTenantIds,
         displayName: data.display_name,
         email: data.email,
         role: data.role,
         isActive,
-        inactiveReason
+        inactiveReason,
+        securityKeyword
       });
     }
 
@@ -351,13 +397,14 @@ export async function GET(req: NextRequest) {
     const callerUser = getAuthenticatedUser(req);
     const callerIsMaster = callerUser?.email ? isPlatformAdmin(callerUser.email) : false;
     const requestedTenantId = searchParams.get('tenantId');
-    const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser) : null);
+    const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser, req) : null);
 
     let items = (profiles || []).map((item: any) => {
       const inactiveDetail = getUserInactiveDetail(item.id);
       const isLocallyInactive = isUserInactiveInStore(item.id);
       const isActive = !isLocallyInactive && (item.is_active !== false);
       const inactiveReason = inactiveDetail?.reason || item.inactive_reason || null;
+      const securityKeyword = item.security_keyword || getSecurityKeywordFromStore(item.id, item.email) || null;
 
       return {
         id: item.id,
@@ -370,7 +417,8 @@ export async function GET(req: NextRequest) {
         tenantId: item.tenant_id,
         tenantIds: associationsMap[item.id] || [item.tenant_id || DEFAULT_TENANT_ID],
         isActive,
-        inactiveReason
+        inactiveReason,
+        securityKeyword
       };
     });
 
@@ -403,7 +451,8 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const body = await req.json();
     
-    const { tenantIds, ...profileData } = body;
+    const { tenantIds, password, initialPassword, ...profileData } = body;
+    const userPassword = password || initialPassword || null;
 
     let initialIsActive: boolean = true;
     let initialReason: string | undefined = undefined;
@@ -414,6 +463,46 @@ export async function POST(req: NextRequest) {
       profileData.inactive_reason = initialReason || null;
       delete profileData.isActive;
       delete profileData.inactiveReason;
+    }
+
+    // Provisionar ou sincronizar credenciais no Supabase Auth se uma senha foi fornecida
+    let createdAuthUserId: string | null = null;
+    if (userPassword && supabaseServiceKey) {
+      try {
+        const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+        const { data: authCreated, error: authCreateErr } = await adminSupabase.auth.admin.createUser({
+          email: profileData.email.toLowerCase(),
+          password: userPassword,
+          email_confirm: true,
+          user_metadata: {
+            display_name: profileData.display_name,
+            tenant_id: profileData.tenant_id,
+            role: profileData.role
+          }
+        });
+
+        if (authCreated?.user?.id) {
+          createdAuthUserId = authCreated.user.id;
+        } else if (authCreateErr && authCreateErr.message?.toLowerCase().includes('already')) {
+          // Usuário já existe no Auth, busca pelo e-mail e atualiza a senha
+          const { data: usersList } = await adminSupabase.auth.admin.listUsers();
+          const matchAuth = usersList?.users?.find(u => u.email?.toLowerCase() === profileData.email.toLowerCase());
+          if (matchAuth?.id) {
+            createdAuthUserId = matchAuth.id;
+            await adminSupabase.auth.admin.updateUserById(matchAuth.id, {
+              password: userPassword,
+              email_confirm: true,
+              user_metadata: {
+                display_name: profileData.display_name,
+                tenant_id: profileData.tenant_id,
+                role: profileData.role
+              }
+            });
+          }
+        }
+      } catch (authErr) {
+        console.warn("[API/Profiles] Aviso ao provisionar senha no Supabase Auth:", authErr);
+      }
     }
 
     // Serves as real-time multi-tenant association. We first check if a profile with this email already exists inside CRM.
@@ -443,16 +532,22 @@ export async function POST(req: NextRequest) {
         await supabase.from('profiles').update(updatePayload).eq('id', profileId);
       }
     } else {
+      const newProfileToInsert = { ...profileData };
+      if (createdAuthUserId) {
+        newProfileToInsert.id = createdAuthUserId;
+      }
+
       let { data: result, error } = await supabase
         .from('profiles')
-        .insert([profileData])
+        .insert([newProfileToInsert])
         .select();
 
-      if (error && (error.message?.includes('is_active') || error.message?.includes('inactive_reason') || error.code === '42703')) {
-        console.warn("[API/Profiles] POST: Coluna is_active/inactive_reason ainda não no Supabase. Fallback inserindo sem essas colunas...");
-        const fallbackInsert = { ...profileData };
+      if (error && (error.message?.includes('is_active') || error.message?.includes('inactive_reason') || error.message?.includes('security_keyword') || error.code === '42703')) {
+        console.warn("[API/Profiles] POST: Coluna opcional ainda não no Supabase. Fallback inserindo sem essas colunas...");
+        const fallbackInsert = { ...newProfileToInsert };
         delete fallbackInsert.is_active;
         delete fallbackInsert.inactive_reason;
+        delete fallbackInsert.security_keyword;
         const res = await supabase.from('profiles').insert([fallbackInsert]).select();
         result = res.data;
         error = res.error;
@@ -533,6 +628,14 @@ export async function PATCH(req: NextRequest) {
     const data = await req.json();
     const { tenantIds, ...otherData } = data;
 
+    // Trata palavra-chave secreta
+    const kw = otherData.securityKeyword !== undefined ? otherData.securityKeyword : otherData.security_keyword;
+    if (kw !== undefined) {
+      setSecurityKeywordInStore(id, otherData.email || null, kw);
+      otherData.security_keyword = kw ? String(kw).trim() : null;
+      delete otherData.securityKeyword;
+    }
+
     // Trata atualização de status ativo/inativo
     if (otherData.isActive !== undefined || otherData.is_active !== undefined) {
       const isActive = otherData.isActive !== undefined ? Boolean(otherData.isActive) : Boolean(otherData.is_active);
@@ -563,11 +666,17 @@ export async function PATCH(req: NextRequest) {
         .update(otherData)
         .eq('id', id);
 
-      if (error && (error.message?.includes('is_active') || error.message?.includes('inactive_reason') || error.code === '42703')) {
-        console.warn("[API/Profiles] Coluna is_active/inactive_reason ainda não no Supabase. Fallback aplicado com persistência local.");
+      if (error && (
+        error.message?.includes('is_active') || 
+        error.message?.includes('inactive_reason') || 
+        error.message?.includes('security_keyword') || 
+        error.code === '42703'
+      )) {
+        console.warn("[API/Profiles] Colunas novas ainda não no Supabase. Fallback aplicado com persistência local.");
         const fallbackData = { ...otherData };
         delete fallbackData.is_active;
         delete fallbackData.inactive_reason;
+        delete fallbackData.security_keyword;
         if (Object.keys(fallbackData).length > 0) {
           const res = await supabase.from('profiles').update(fallbackData).eq('id', id);
           error = res.error;

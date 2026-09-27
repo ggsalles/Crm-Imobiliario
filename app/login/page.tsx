@@ -14,16 +14,20 @@ import {
   Mail, 
   Lock, 
   Eye, 
+  EyeOff,
   ArrowRight,
   ShieldCheck,
   Zap,
-  Github
+  Github,
+  X,
+  Check,
+  KeyRound
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { isPlatformAdmin } from "@/lib/constants";
+import { isPlatformAdmin, DEFAULT_TENANT_ID } from "@/lib/constants";
 import { getTenants } from "@/lib/db";
 
 export default function LoginPage() {
@@ -46,6 +50,20 @@ export default function LoginPage() {
   const [hasConfirmedTenant, setHasConfirmedTenant] = useState(false);
   const [isLoadingUserTenants, setIsLoadingUserTenants] = useState(false);
   const [isSwitchingTenant, setIsSwitchingTenant] = useState(false);
+
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotTab, setForgotTab] = useState<"keyword" | "email">("keyword");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotEmailSent, setForgotEmailSent] = useState(false);
+
+  // Keyword-based recovery state
+  const [recoveryKeyword, setRecoveryKeyword] = useState("");
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState("");
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [isResettingWithKeyword, setIsResettingWithKeyword] = useState(false);
+  const [keywordResetSuccess, setKeywordResetSuccess] = useState(false);
 
   const handleEmailChange = (val: string) => {
     setEmail(val);
@@ -74,10 +92,20 @@ export default function LoginPage() {
     async function checkAndLoadUserTenants() {
       if (user && profile && !authLoading && !hasConfirmedTenant) {
         const isPlatform = isPlatformAdmin(profile.email);
-        const userTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
+        const rawTenantIds = Array.from(new Set([...(profile.tenantIds || []), profile.tenantId].filter(Boolean)));
+        
+        // Para corretores e membros normais, se possuem uma imobiliária real atribuída, ignoramos o fallback global
+        const nonDefaultIds = rawTenantIds.filter(id => id !== DEFAULT_TENANT_ID);
+        const userTenantIds = (!isPlatform && nonDefaultIds.length > 0) ? nonDefaultIds : rawTenantIds;
 
         // Fast Path: Non-platform users with 1 or fewer tenants bypass modal and navigate immediately
         if (!isPlatform && userTenantIds.length <= 1) {
+          const targetTenantId = userTenantIds[0] || profile.tenantId;
+          if (targetTenantId && targetTenantId !== profile.tenantId) {
+            try {
+              await changeTenant(targetTenantId);
+            } catch {}
+          }
           setHasConfirmedTenant(true);
           router.push("/");
           return;
@@ -114,7 +142,7 @@ export default function LoginPage() {
       }
     }
     checkAndLoadUserTenants();
-  }, [user, profile, authLoading, hasConfirmedTenant, router]);
+  }, [user, profile, authLoading, hasConfirmedTenant, router, changeTenant]);
 
   // 2. Navigation redirect when tenant selection is secure and completed
   useEffect(() => {
@@ -176,18 +204,78 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      toast.info("Por favor, digite seu e-mail no campo acima primeiro.");
+  const handleOpenForgotPassword = () => {
+    setForgotEmail(email || "");
+    setForgotEmailSent(false);
+    setRecoveryKeyword("");
+    setRecoveryNewPassword("");
+    setRecoveryConfirmPassword("");
+    setKeywordResetSuccess(false);
+    setForgotTab("keyword");
+    setShowForgotModal(true);
+  };
+
+  const handleResetWithKeyword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.info("Por favor, digite seu e-mail.");
+      return;
+    }
+    if (!recoveryKeyword.trim()) {
+      toast.info("Por favor, digite sua palavra-chave secreta.");
+      return;
+    }
+    if (!recoveryNewPassword || recoveryNewPassword.length < 6) {
+      toast.error("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      toast.error("As senhas informadas não coincidem.");
+      return;
+    }
+
+    setIsResettingWithKeyword(true);
+    try {
+      const response = await fetch('/api/auth/keyword-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          securityKeyword: recoveryKeyword.trim(),
+          newPassword: recoveryNewPassword
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || "Erro ao redefinir senha com palavra-chave.");
+      }
+
+      setKeywordResetSuccess(true);
+      toast.success("Senha redefinida com sucesso!");
+      setEmail(forgotEmail.trim());
+      setPassword(recoveryNewPassword);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao redefinir senha.");
+    } finally {
+      setIsResettingWithKeyword(false);
+    }
+  };
+
+  const handleSendRecoveryEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      toast.info("Por favor, digite seu e-mail.");
       return;
     }
 
     setIsResettingPassword(true);
     try {
-      await resetPassword(email);
-      toast.success("E-mail de redefinição enviado! Verifique sua caixa de entrada.");
+      await resetPassword(forgotEmail);
+      setForgotEmailSent(true);
+      toast.success("E-mail de recuperação enviado com sucesso!");
     } catch (error: any) {
-      toast.error(error.message || "Erro ao enviar e-mail de redefinição.");
+      toast.error(error.message || "Erro ao enviar e-mail de recuperação.");
     } finally {
       setIsResettingPassword(false);
     }
@@ -349,11 +437,10 @@ export default function LoginPage() {
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Senha</label>
                 <button 
                   type="button" 
-                  disabled={isResettingPassword}
-                  onClick={handleForgotPassword}
-                  className="text-xs font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
+                  onClick={handleOpenForgotPassword}
+                  className="text-xs font-semibold text-primary hover:text-primary/80 cursor-pointer"
                 >
-                  {isResettingPassword ? "Enviando..." : "Esqueci minha senha"}
+                  Esqueci minha senha
                 </button>
               </div>
               <div className="relative">
@@ -548,6 +635,264 @@ export default function LoginPage() {
                   </button>
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de Recuperação de Senha */}
+        {showForgotModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-border p-6 space-y-4 max-h-[92vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground leading-tight">Recuperar Acesso</h3>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Redefinição de senha</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowForgotModal(false)}
+                  className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Tabs de Seleção de Método de Recuperação */}
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotTab("keyword");
+                    setKeywordResetSuccess(false);
+                  }}
+                  className={cn(
+                    "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    forgotTab === "keyword"
+                      ? "bg-card text-foreground shadow-xs border border-border/50"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Palavra-Chave</span>
+                  <span className="text-[9px] font-black uppercase px-1 py-0.2 bg-amber-500/10 text-amber-500 rounded">Instantâneo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotTab("email");
+                    setForgotEmailSent(false);
+                  }}
+                  className={cn(
+                    "flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    forgotTab === "email"
+                      ? "bg-card text-foreground shadow-xs border border-border/50"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Mail className="w-3.5 h-3.5 text-primary" />
+                  <span>Por E-mail</span>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 pr-0.5">
+                {/* ABA 1: RECUPERAÇÃO INSTANTÂNEA POR PALAVRA-CHAVE */}
+                {forgotTab === "keyword" && (
+                  !keywordResetSuccess ? (
+                    <form onSubmit={handleResetWithKeyword} className="space-y-3.5 pt-1">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Informe seu e-mail e a <strong>Palavra-Chave Secreta</strong> definida pelo gestor ou no seu perfil para criar uma nova senha na hora.
+                      </p>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Seu E-mail
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <input 
+                            type="email"
+                            required
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            placeholder="corretor@imobiliaria.com"
+                            className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-medium focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Palavra-Chave Secreta
+                        </label>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
+                          <input 
+                            type="text"
+                            required
+                            value={recoveryKeyword}
+                            onChange={(e) => setRecoveryKeyword(e.target.value)}
+                            placeholder="Ex: imovel2026, golden"
+                            className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-medium focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Nova Senha
+                          </label>
+                          <div className="relative">
+                            <input 
+                              type={showRecoveryPassword ? "text" : "password"}
+                              required
+                              placeholder="Mín. 6 caracteres"
+                              value={recoveryNewPassword}
+                              onChange={(e) => setRecoveryNewPassword(e.target.value)}
+                              className="w-full pl-3 pr-8 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowRecoveryPassword(!showRecoveryPassword)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                            >
+                              {showRecoveryPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Confirmar Senha
+                          </label>
+                          <div className="relative">
+                            <input 
+                              type={showRecoveryPassword ? "text" : "password"}
+                              required
+                              placeholder="Repita a nova senha"
+                              value={recoveryConfirmPassword}
+                              onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                              className="w-full pl-3 pr-3 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotModal(false)}
+                          className="flex-1 py-2.5 border border-border hover:bg-muted text-muted-foreground rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isResettingWithKeyword || !forgotEmail || !recoveryKeyword || !recoveryNewPassword || !recoveryConfirmPassword}
+                          className="flex-1 py-2.5 bg-primary hover:opacity-90 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          {isResettingWithKeyword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          {isResettingWithKeyword ? "Validando..." : "Redefinir e Entrar"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-4 text-center py-4">
+                      <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto border border-emerald-500/20">
+                        <Check className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-foreground">Sua Senha foi Redefinida com Sucesso!</h4>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                          Seus dados já foram preenchidos no formulário de login. Clique no botão abaixo para acessar o sistema.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotModal(false)}
+                        className="w-full py-2.5 bg-primary hover:opacity-90 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
+                      >
+                        Acessar Minha Conta
+                      </button>
+                    </div>
+                  )
+                )}
+
+                {/* ABA 2: RECUPERAÇÃO VIA LINK POR E-MAIL */}
+                {forgotTab === "email" && (
+                  !forgotEmailSent ? (
+                    <form onSubmit={handleSendRecoveryEmail} className="space-y-4 pt-1">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Informe o e-mail cadastrado na sua imobiliária. Enviaremos um link exclusivo e seguro para você criar uma nova senha.
+                      </p>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Seu E-mail
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <input 
+                            type="email"
+                            required
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            placeholder="corretor@imobiliaria.com"
+                            className="w-full pl-10 pr-4 py-2.5 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-medium focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotModal(false)}
+                          className="flex-1 py-2.5 border border-border hover:bg-muted text-muted-foreground rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isResettingPassword || !forgotEmail}
+                          className="flex-1 py-2.5 bg-primary hover:opacity-90 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          {isResettingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                          {isResettingPassword ? "Enviando..." : "Enviar Link"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-4 text-center py-4">
+                      <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto border border-emerald-500/20">
+                        <Check className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-foreground">E-mail de Recuperação Enviado!</h4>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                          Verifique a caixa de entrada de <strong>{forgotEmail}</strong> (e a pasta de spam) e clique no link para redefinir sua senha.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotModal(false)}
+                        className="w-full py-2.5 bg-primary hover:opacity-90 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
+                      >
+                        Entendido, voltar para o Login
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
             </motion.div>
           </div>
         )}

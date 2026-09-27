@@ -279,6 +279,7 @@ export interface UserProfile {
   tenantIds?: string[];
   isActive?: boolean;
   inactiveReason?: string;
+  securityKeyword?: string | null;
 }
 
 // Constants
@@ -882,6 +883,8 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
   if (data.tenantIds !== undefined) updateData.tenantIds = data.tenantIds;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.inactiveReason !== undefined) updateData.inactiveReason = data.inactiveReason;
+  if (data.securityKeyword !== undefined) updateData.security_keyword = data.securityKeyword;
+  if (data.security_keyword !== undefined) updateData.security_keyword = data.security_keyword;
 
   try {
     if (typeof window !== "undefined") {
@@ -900,6 +903,8 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
             if (data.tenantIds !== undefined) parsed.tenantIds = data.tenantIds;
             if (data.isActive !== undefined) parsed.isActive = data.isActive;
             if (data.inactiveReason !== undefined) parsed.inactiveReason = data.inactiveReason;
+            if (data.securityKeyword !== undefined) parsed.securityKeyword = data.securityKeyword;
+            if (data.security_keyword !== undefined) parsed.securityKeyword = data.security_keyword;
             sessionStorage.setItem(cacheKey, JSON.stringify(parsed));
           }
         } catch (e) {
@@ -924,7 +929,8 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
               tenantId: data.tenantId !== undefined ? data.tenantId : u.tenantId,
               tenantIds: data.tenantIds !== undefined ? data.tenantIds : u.tenantIds,
               isActive: data.isActive !== undefined ? data.isActive : u.isActive,
-              inactiveReason: data.inactiveReason !== undefined ? data.inactiveReason : u.inactiveReason
+              inactiveReason: data.inactiveReason !== undefined ? data.inactiveReason : u.inactiveReason,
+              securityKeyword: data.securityKeyword !== undefined ? data.securityKeyword : (data.security_keyword !== undefined ? data.security_keyword : u.securityKeyword)
             };
           }
           return u;
@@ -977,6 +983,8 @@ export async function createUserProfile(data: {
   tenantIds?: string[];
   isActive?: boolean;
   inactiveReason?: string;
+  securityKeyword?: string;
+  password?: string;
 }) {
   const tempId = crypto.randomUUID();
   
@@ -990,7 +998,9 @@ export async function createUserProfile(data: {
     tenant_id: data.tenantId || null,
     tenantIds: data.tenantIds || (data.tenantId ? [data.tenantId] : [DEFAULT_TENANT_ID]),
     isActive: data.isActive !== undefined ? data.isActive : true,
-    inactiveReason: data.inactiveReason || null
+    inactiveReason: data.inactiveReason || null,
+    security_keyword: data.securityKeyword || null,
+    password: data.password || undefined
   };
 
   try {
@@ -1393,6 +1403,27 @@ async function apiFetchImpl(url: string, options: any = {}) {
  
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Injeta cabeçalho x-tenant-id da sessão ativa do navegador caso não tenha sido explicitado
+      if (!isServer && typeof window !== 'undefined' && !headers['x-tenant-id']) {
+        try {
+          const userId = session?.user?.id;
+          let activeTenant = userId ? sessionStorage.getItem(`active-tenant-id:${userId}`) : null;
+          if (!activeTenant) {
+            activeTenant = sessionStorage.getItem('login-chosen-tenant-id');
+          }
+          if (!activeTenant && userId) {
+            const cachedProfileStr = sessionStorage.getItem(`local-profile:${userId}`);
+            if (cachedProfileStr) {
+              const cachedProf = JSON.parse(cachedProfileStr);
+              activeTenant = cachedProf?.tenantId || null;
+            }
+          }
+          if (activeTenant && activeTenant !== 'undefined' && activeTenant !== 'null') {
+            headers['x-tenant-id'] = activeTenant;
+          }
+        } catch (e) {}
       }
  
       const controller = new AbortController();

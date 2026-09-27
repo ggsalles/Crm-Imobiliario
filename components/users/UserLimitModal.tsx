@@ -62,7 +62,7 @@ export function UserLimitModal({
           {/* Status Box */}
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3.5 space-y-2">
             <p className="text-xs text-amber-950 dark:text-amber-200 font-medium leading-relaxed">
-              Sua imobiliária <strong>{currentTenant.name}</strong> está utilizando todas as <strong>{tenantUserLimit} de {tenantUserLimit}</strong> licenças ativas contratadas no seu plano atual.
+              Sua imobiliária <strong>{currentTenant?.name || 'Imobiliária'}</strong> está utilizando todas as <strong>{tenantUserLimit} de {tenantUserLimit}</strong> licenças ativas contratadas no seu plano atual.
             </p>
             <div className="flex items-center justify-between pt-2 border-t border-amber-500/20 text-xs font-mono font-bold">
               <span className="text-amber-800 dark:text-amber-300">Licenças Ocupadas:</span>

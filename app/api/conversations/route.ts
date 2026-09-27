@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     if (id) {
       let query = supabase.from('conversations').select('*').eq('id', id);
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
     if (activeTenantId) {
       data.tenant_id = activeTenantId;
     }
@@ -153,7 +153,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     let query = supabase.from('conversations').update(data).eq('id', id);
     if (activeTenantId) {
@@ -184,7 +184,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     // Clear messages first due to foreign key constraints if any
     let deleteMessagesQuery = supabase.from('messages').delete().eq('conversation_id', id);

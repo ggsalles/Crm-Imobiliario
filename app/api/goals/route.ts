@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch active tenant from user profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     let query = supabase.from('goals').select('*').order('month', { ascending: false });
     if (ownerId && ownerId !== 'undefined') {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch active tenant from user profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     if (activeTenantId) {
       data.tenant_id = activeTenantId;

@@ -1,8 +1,19 @@
 'use client';
 
-import React from 'react';
-import { X, UserPlus, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  X, 
+  UserPlus, 
+  Loader2, 
+  KeyRound, 
+  Eye, 
+  EyeOff, 
+  Sparkles, 
+  Check, 
+  Share2 
+} from 'lucide-react';
 import { Tenant } from '@/lib/db';
+import { toast } from 'sonner';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -16,6 +27,8 @@ interface CreateUserModalProps {
     userType: "funcionário" | "cliente";
     tenantId: string;
     tenantIds: string[];
+    password?: string;
+    securityKeyword?: string;
   };
   setNewUserData: React.Dispatch<React.SetStateAction<{
     displayName: string;
@@ -24,6 +37,8 @@ interface CreateUserModalProps {
     userType: "funcionário" | "cliente";
     tenantId: string;
     tenantIds: string[];
+    password?: string;
+    securityKeyword?: string;
   }>>;
   isAdmin: boolean;
   tenants: Tenant[];
@@ -39,27 +54,49 @@ export function CreateUserModal({
   isAdmin,
   tenants
 }: CreateUserModalProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
   if (!isOpen) return null;
+
+  const handleGeneratePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    const special = "@#$&*!";
+    let pass = "";
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    pass += special.charAt(Math.floor(Math.random() * special.length));
+    pass += Math.floor(10 + Math.random() * 90);
+    setNewUserData(prev => ({ ...prev, password: pass }));
+    setShowPassword(true);
+    toast.success("Senha segura gerada!");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-      <div className="bg-card rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 border border-border">
-        <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 border border-border flex flex-col max-h-[92vh]">
+        {/* Header */}
+        <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+            <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
               <UserPlus className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-bold text-sm text-foreground leading-tight">Cadastrar Usuário</h3>
-              <p className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground">Preencha os dados de acesso</p>
+              <p className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground">Preencha os dados e credenciais de acesso</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
+          <button 
+            onClick={onClose} 
+            className="p-1.5 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+          >
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
         
-        <form onSubmit={onSubmit} className="p-4 space-y-3">
+        {/* Form */}
+        <form onSubmit={onSubmit} className="p-4 sm:p-5 space-y-3 overflow-y-auto flex-1">
+          {/* Nome */}
           <div className="space-y-1">
             <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">Nome de Exibição</label>
             <input 
@@ -72,18 +109,76 @@ export function CreateUserModal({
             />
           </div>
 
+          {/* E-mail */}
           <div className="space-y-1">
-            <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">E-mail (Google)</label>
+            <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">E-mail de Acesso</label>
             <input 
               type="email"
               required
-              placeholder="email@gmail.com"
+              placeholder="corretor@imobiliaria.com"
               value={newUserData.email}
               onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
               className="w-full px-3 py-1.5 bg-muted/30 border border-border rounded-lg text-xs text-foreground focus:ring-2 focus:ring-primary/10 transition-all font-medium focus:outline-none"
             />
           </div>
 
+          {/* Senha Inicial */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">
+                Senha Inicial (Opcional)
+              </label>
+              <button
+                type="button"
+                onClick={handleGeneratePassword}
+                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                Gerar Senha Forte
+              </button>
+            </div>
+            <div className="relative">
+              <input 
+                type={showPassword ? "text" : "password"}
+                placeholder="Definir senha provisória ou gerar"
+                value={newUserData.password || ""}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, password: e.target.value }))}
+                className="w-full pl-3 pr-9 py-1.5 bg-muted/30 border border-border rounded-lg text-xs text-foreground focus:ring-2 focus:ring-primary/10 transition-all font-mono focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <p className="text-[9px] text-muted-foreground leading-tight">
+              Se deixar em branco, o usuário poderá definir a senha através de &quot;Esqueci minha senha&quot; no primeiro acesso.
+            </p>
+          </div>
+
+          {/* Palavra-Chave Secreta de Recuperação */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5 flex items-center gap-1">
+                <KeyRound className="w-3 h-3 text-amber-500" />
+                Palavra-Chave de Recuperação (Opcional)
+              </label>
+            </div>
+            <input 
+              type="text"
+              placeholder="Ex: imovel2026, golden, leao"
+              value={newUserData.securityKeyword || ""}
+              onChange={(e) => setNewUserData(prev => ({ ...prev, securityKeyword: e.target.value }))}
+              className="w-full px-3 py-1.5 bg-muted/30 border border-border rounded-lg text-xs text-foreground focus:ring-2 focus:ring-primary/10 transition-all font-medium focus:outline-none"
+            />
+            <p className="text-[9px] text-muted-foreground leading-tight">
+              Permite ao usuário recuperar a conta na tela de login de forma instantânea, sem precisar de e-mail.
+            </p>
+          </div>
+
+          {/* Tipo e Nível */}
           <div className="grid grid-cols-2 gap-2.5">
             <div className="space-y-1">
               <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">Tipo</label>
@@ -115,7 +210,7 @@ export function CreateUserModal({
           {isAdmin && tenants.length > 0 && (
             <div className="space-y-1">
               <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">Vincular a Imobiliárias / Empresas</label>
-              <div className="border border-border bg-muted/20 rounded-lg p-2.5 space-y-1.5 max-h-[140px] overflow-y-auto">
+              <div className="border border-border bg-muted/20 rounded-lg p-2.5 space-y-1.5 max-h-[120px] overflow-y-auto">
                 {tenants.map(t => {
                   const isNewChecked = (newUserData.tenantIds || []).includes(t.id);
                   return (
@@ -149,19 +244,17 @@ export function CreateUserModal({
             </div>
           )}
 
-          <div className="bg-primary/5 border border-primary/10 p-2.5 rounded-lg">
-            <p className="text-[10px] text-primary leading-tight font-medium">
-              <strong>Informação Importante:</strong> Após o cadastro aqui, o usuário deve acessar a tela de login, clicar em <strong>&quot;Não tem uma senha ainda? Cadastre-se aqui&quot;</strong> e definir sua senha inicial usando o e-mail informado.
-            </p>
+          {/* Submit */}
+          <div className="pt-2">
+            <button 
+              type="submit" 
+              disabled={isCreating}
+              className="w-full bg-primary text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md"
+            >
+              {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+              {isCreating ? "Cadastrando Usuário..." : "Finalizar Cadastro"}
+            </button>
           </div>
-
-          <button 
-            type="submit" 
-            disabled={isCreating}
-            className="w-full bg-primary text-white py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 mt-1 cursor-pointer"
-          >
-            {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Finalizar Cadastro"}
-          </button>
         </form>
       </div>
     </div>

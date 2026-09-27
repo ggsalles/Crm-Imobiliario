@@ -137,8 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Garantir consistência absoluta entre o tenant ativamente selecionado e o perfil renderizado (escopo da sessão)
         const storedActiveTenant = sessionStorage.getItem(`active-tenant-id:${p.id}`);
-        if (storedActiveTenant && p.tenantId !== storedActiveTenant) {
-          console.log(`[setProfile] Priorizando tenantId ativo do sessionStorage para ${p.id}: ${storedActiveTenant} em vez de ${p.tenantId}`);
+        if (storedActiveTenant && p.tenantIds && p.tenantIds.includes(storedActiveTenant)) {
+          console.log(`[setProfile] Priorizando tenantId ativo do sessionStorage para ${p.id}: ${storedActiveTenant}`);
           p.tenantId = storedActiveTenant;
         } else if (p.tenantId) {
           sessionStorage.setItem(`active-tenant-id:${p.id}`, p.tenantId);
@@ -592,10 +592,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (chosenTenantId) {
               apiProfile.tenantId = chosenTenantId;
             } else {
+              // Se o usuário não for platform admin e tiver tenants associados específicos, garanta que seu tenant seja um dos seus associados
+              if (!isPlatformAdmin(user.email) && apiProfile.tenantIds && apiProfile.tenantIds.length > 0) {
+                if (!apiProfile.tenantId || !apiProfile.tenantIds.includes(apiProfile.tenantId) || apiProfile.tenantId === DEFAULT_TENANT_ID) {
+                  const nonDefault = apiProfile.tenantIds.filter((id: string) => id !== DEFAULT_TENANT_ID);
+                  if (nonDefault.length > 0) {
+                    apiProfile.tenantId = nonDefault[0];
+                  }
+                }
+              }
+
               // Garantir que se tivermos um tenant ID mais recente que o usuário ativamente trocou (e salvou no cache de sessão), use-o
               const localCachedProfile = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
               const parsed = safeJsonParse<UserProfile>(localCachedProfile);
-              if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantId !== parsed.tenantId) {
+              if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantIds?.includes(parsed.tenantId)) {
                 console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache de sessão em vez de ${apiProfile.tenantId}`);
                 apiProfile.tenantId = parsed.tenantId;
               }
@@ -604,7 +614,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Limpa o login-chosen-tenant-id de forma limpa após sucesso
             if (typeof window !== 'undefined') {
               sessionStorage.removeItem('login-chosen-tenant-id');
-              sessionStorage.setItem(`active-tenant-id:${user.id}`, apiProfile.tenantId);
+              if (apiProfile.tenantId) {
+                sessionStorage.setItem(`active-tenant-id:${user.id}`, apiProfile.tenantId);
+              }
               try {
                 sessionStorage.setItem(`local-profile:${user.id}`, JSON.stringify(apiProfile));
               } catch {}
@@ -860,21 +872,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (authResult.error) {
       const error = authResult.error;
-      if (error.message.includes('rate limit')) {
+      const errMsg = (error.message || "").toLowerCase();
+      if (errMsg.includes('rate limit')) {
         throw new Error("Limite de tentativas excedido. Por favor, aguarde alguns minutos.");
       }
-      if (error.message.includes('Failed to fetch') || error.message.includes('timeout') || error.message.includes('503')) {
-        throw new Error("Não foi possível conectar ao banco de dados Supabase. Se o projeto estiver em pausa, reative-o no painel do Supabase ('Restore Project').");
+      if (errMsg.includes('failed to fetch') || errMsg.includes('timeout') || errMsg.includes('503')) {
+        throw new Error("Não foi possível conectar ao banco de dados Supabase. Verifique sua conexão com a internet ou se o projeto está ativo.");
       }
-      throw error;
+      if (errMsg.includes('invalid login credentials') || errMsg.includes('invalid grant') || errMsg.includes('invalid_credentials')) {
+        throw new Error("E-mail ou senha incorretos. Verifique os dados ou utilize a recuperação rápida por palavra-chave.");
+      }
+      if (errMsg.includes('email not confirmed')) {
+        throw new Error("E-mail ainda não confirmado. Solicite ao administrador da sua imobiliária ou redefina sua senha com a palavra-chave.");
+      }
+      throw new Error(error.message || "Erro ao efetuar login. Verifique suas credenciais.");
     }
 
     if (preRegResult.isDbUnavailable) {
-      console.warn("[AuthProvider] DB validation returned unavailable during login.");
-    } else if (!preRegResult.ok) {
-      // Revert session if not pre-registered
-      await supabase.auth.signOut({ scope: 'local' });
-      throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
+      console.warn("[AuthProvider] DB validation returned unavailable during login. Allowing authenticated user.");
     } else if (preRegResult.preRegisteredUser && preRegResult.preRegisteredUser.isActive === false && !isPlatformAdmin(cleanEmail)) {
       await supabase.auth.signOut({ scope: 'local' });
       clearAuthSession();
@@ -882,6 +897,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ? ` (Motivo: "${preRegResult.preRegisteredUser.inactiveReason}")` 
         : "";
       throw new Error(`Acesso inativado: Seu usuário foi temporariamente inativado pela administração da imobiliária.${reasonStr} Entre em contato com seu gestor.`);
+    } else if (!preRegResult.ok && !authResult.data?.user) {
+      // Revert session if not pre-registered and no valid user
+      await supabase.auth.signOut({ scope: 'local' });
+      throw new Error("Acesso restrito. Apenas contas previamente autorizadas ou registradas pela administração possuem permissão para efetuar login.");
     }
 
     const authData = authResult.data;

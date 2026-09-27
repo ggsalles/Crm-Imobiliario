@@ -68,9 +68,9 @@ export function TenantLicenseBanner({
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground font-medium mt-0.5 flex flex-wrap items-center gap-1.5">
-              <span className="font-semibold text-foreground">{currentTenant.name}</span>
+              <span className="font-semibold text-foreground">{currentTenant?.name || "Imobiliária"}</span>
               <span className="px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-[9.5px] font-bold border border-emerald-500/20">
-                Plano: {currentTenant.brokerLimit ?? 2} corr. + {currentTenant.adminLimit ?? 1} adm
+                Plano: {currentTenant?.brokerLimit ?? 2} corr. + {currentTenant?.adminLimit ?? 1} adm
               </span>
               {tenantUsers.filter(u => u.userType !== 'cliente' && u.isActive === false).length > 0 && (
                 <span className="px-1.5 py-0.2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded text-[9.5px] font-bold border border-rose-500/20">

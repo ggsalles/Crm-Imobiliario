@@ -38,6 +38,8 @@ import { TenantLicenseBanner } from "@/components/users/TenantLicenseBanner";
 import { UserTableRow } from "@/components/users/UserTableRow";
 import { InactivateUserModal } from "@/components/users/InactivateUserModal";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
+import { AdminResetPasswordModal } from "@/components/users/AdminResetPasswordModal";
+import { UserCreatedSuccessModal } from "@/components/users/UserCreatedSuccessModal";
 
 export default function UsersPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -68,13 +70,31 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [newUserData, setNewUserData] = useState({
+  const [userToResetPassword, setUserToResetPassword] = useState<UserProfile | null>(null);
+  const [createdUserSuccessData, setCreatedUserSuccessData] = useState<{
+    displayName: string;
+    email: string;
+    password?: string;
+    role: string;
+    tenantName?: string;
+  } | null>(null);
+
+  const [newUserData, setNewUserData] = useState<{
+    displayName: string;
+    email: string;
+    role: "Membro" | "Admin";
+    userType: "funcionário" | "cliente";
+    tenantId: string;
+    tenantIds: string[];
+    password?: string;
+  }>({
     displayName: "",
     email: "",
-    role: "Membro" as "Membro" | "Admin",
-    userType: "funcionário" as "funcionário" | "cliente",
+    role: "Membro",
+    userType: "funcionário",
     tenantId: DEFAULT_TENANT_ID,
-    tenantIds: [DEFAULT_TENANT_ID]
+    tenantIds: [DEFAULT_TENANT_ID],
+    password: ""
   });
 
   const isAdmin = profile?.role === 'Admin';
@@ -387,6 +407,24 @@ export default function UsersPage() {
     }
   }, [isLimitReached, isPlatformAdmin, forceDataResync]);
 
+  const handleOpenAddUserModal = () => {
+    setNewUserData({
+      displayName: "",
+      email: "",
+      role: "Membro",
+      userType: "funcionário",
+      tenantId: currentTenantId,
+      tenantIds: [currentTenantId],
+      password: "",
+      securityKeyword: ""
+    });
+    if (isLimitReached) {
+      setShowLimitModal(true);
+    } else {
+      setShowAddModal(true);
+    }
+  };
+
   const handleCreateUser = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin && !isPlatformAdmin) {
@@ -400,11 +438,14 @@ export default function UsersPage() {
       return;
     }
     setIsCreating(true);
+    const assignedTenantId = newUserData.tenantId || currentTenantId;
+    const assignedTenantIds = newUserData.tenantIds && newUserData.tenantIds.length > 0 ? newUserData.tenantIds : [assignedTenantId];
+
     try {
       await createUserProfile({
         ...newUserData,
-        tenantId: currentTenantId,
-        tenantIds: newUserData.tenantIds && newUserData.tenantIds.length > 0 ? newUserData.tenantIds : [currentTenantId]
+        tenantId: assignedTenantId,
+        tenantIds: assignedTenantIds
       });
 
       recordAuditEvent({
@@ -418,27 +459,38 @@ export default function UsersPage() {
           displayName: newUserData.displayName,
           email: newUserData.email,
           role: newUserData.role,
-          tenantId: currentTenantId
+          tenantId: assignedTenantId
         }
       });
 
       setShowAddModal(false);
+      setCreatedUserSuccessData({
+        displayName: newUserData.displayName,
+        email: newUserData.email,
+        password: newUserData.password,
+        securityKeyword: newUserData.securityKeyword,
+        role: newUserData.role,
+        tenantName: currentTenant?.name || "Imobiliária"
+      });
       setNewUserData({ 
         displayName: "", 
         email: "", 
         role: "Membro", 
         userType: "funcionário",
         tenantId: currentTenantId,
-        tenantIds: [currentTenantId]
+        tenantIds: [currentTenantId],
+        password: "",
+        securityKeyword: ""
       });
-      toast.success("Usuário cadastrado com sucesso. Ele agora pode fazer login.");
+      toast.success("Usuário cadastrado com sucesso!");
       await fetchTenants();
+      forceDataResync();
     } catch (error: any) {
       toast.error(error.message || "Erro ao cadastrar usuário");
     } finally {
       setIsCreating(false);
     }
-  }, [isAdmin, isPlatformAdmin, isLimitReached, newUserData, currentTenantId, fetchTenants]);
+  }, [isAdmin, isPlatformAdmin, isLimitReached, newUserData, currentTenantId, currentTenant?.name, fetchTenants, forceDataResync]);
 
   const confirmDeleteUser = useCallback(async () => {
     if (!userToDelete) return;
@@ -564,13 +616,7 @@ export default function UsersPage() {
 
             {(isAdmin || isPlatformAdmin) && (
               <button 
-                onClick={() => {
-                  if (isLimitReached) {
-                    setShowLimitModal(true);
-                  } else {
-                    setShowAddModal(true);
-                  }
-                }}
+                onClick={handleOpenAddUserModal}
                 className={cn(
                   "px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-xs cursor-pointer",
                   isLimitReached
@@ -762,6 +808,7 @@ export default function UsersPage() {
                       }}
                       onInactivateClick={(target) => setInactivatingUser(target)}
                       onReactivateClick={handleReactivateUser}
+                      onResetPasswordClick={(target) => setUserToResetPassword(target)}
                     />
                   ))}
 
@@ -837,6 +884,21 @@ export default function UsersPage() {
           itemType="usuário"
           warningNote="ATENÇÃO: A exclusão permanente removerá o cadastro do colaborador. Caso deseje apenas suspender o login mantendo o histórico de negócios intacto, utilize a opção 'Inativar Usuário'."
           isDeleting={isDeletingUser}
+        />
+
+        {/* Modal de Redefinição de Senha Administrativa */}
+        <AdminResetPasswordModal
+          isOpen={!!userToResetPassword}
+          onClose={() => setUserToResetPassword(null)}
+          user={userToResetPassword}
+          tenantName={currentTenant?.name || "Imobiliária"}
+        />
+
+        {/* Modal de Sucesso com Credenciais Prontas para Envio */}
+        <UserCreatedSuccessModal
+          isOpen={!!createdUserSuccessData}
+          onClose={() => setCreatedUserSuccessData(null)}
+          userData={createdUserSuccessData}
         />
       </main>
     </div>

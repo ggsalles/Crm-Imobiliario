@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json([]);
     }
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     if (id && id !== 'undefined' && id !== 'null') {
       let singleQuery = supabase.from('deals').select('*').eq('id', id);
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
     if (activeTenantId) {
       data.tenant_id = activeTenantId;
     }

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -12,12 +13,16 @@ export interface ServerAuthUser {
 }
 
 // In-memory tenant cache to avoid redundant profile queries during parallel API calls
-// Map: userId -> { tenantId: string | null, expiresAt: number }
+// Map: cacheKey -> { tenantId: string | null, expiresAt: number }
 const tenantCache = new Map<string, { tenantId: string | null; expiresAt: number }>();
 
 export function invalidateTenantCache(userId?: string) {
   if (userId) {
-    tenantCache.delete(userId);
+    for (const key of tenantCache.keys()) {
+      if (key.startsWith(userId)) {
+        tenantCache.delete(key);
+      }
+    }
   } else {
     tenantCache.clear();
   }
@@ -91,28 +96,104 @@ export function getAuthenticatedUser(req: NextRequest): ServerAuthUser | null {
 
 /**
  * Resolves the active tenant ID for the user.
- * Employs a 30-second in-memory cache to deduplicate simultaneous requests.
+ * Supports x-tenant-id header, URL search params, and intelligent multi-tenant fallback.
  */
-export async function getActiveTenantId(supabase: any, user: ServerAuthUser | null): Promise<string | null> {
+export async function getActiveTenantId(
+  supabase: any, 
+  user: ServerAuthUser | null, 
+  req?: NextRequest
+): Promise<string | null> {
   if (!user?.id) return null;
 
+  // 1. Extrai tenant solicitado via Header ou Query Param
+  let requestedTenantId: string | null = null;
+  if (req) {
+    const headerTenant = req.headers.get('x-tenant-id');
+    if (headerTenant && headerTenant !== 'undefined' && headerTenant !== 'null' && headerTenant !== 'all') {
+      requestedTenantId = headerTenant;
+    } else {
+      try {
+        const url = new URL(req.url);
+        const qTenant = url.searchParams.get('tenantId') || url.searchParams.get('tenant');
+        if (qTenant && qTenant !== 'undefined' && qTenant !== 'null' && qTenant !== 'all') {
+          requestedTenantId = qTenant;
+        }
+      } catch (e) {}
+    }
+  }
+
+  const callerIsMaster = user.email ? isPlatformAdmin(user.email) : false;
+  if (callerIsMaster && requestedTenantId) {
+    return requestedTenantId;
+  }
+
   const now = Date.now();
-  const cached = tenantCache.get(user.id);
+  const cacheKey = `${user.id}:${requestedTenantId || 'auto'}`;
+  const cached = tenantCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.tenantId;
   }
 
   try {
+    // 2. Consulta o perfil principal
     const { data: profile } = await supabase
       .from('profiles')
       .select('tenant_id')
       .eq('id', user.id)
       .maybeSingle();
 
-    const tenantId = profile?.tenant_id || null;
-    tenantCache.set(user.id, { tenantId, expiresAt: now + 30000 }); // 30 seconds
+    // 3. Consulta associações multi-tenant
+    const { data: assocs } = await supabase
+      .from('profile_tenants')
+      .select('tenant_id')
+      .eq('profile_id', user.id);
+
+    const allowedTenantIds = new Set<string>();
+    if (profile?.tenant_id) allowedTenantIds.add(profile.tenant_id);
+    if (assocs && Array.isArray(assocs)) {
+      assocs.forEach((a: any) => {
+        if (a.tenant_id) allowedTenantIds.add(a.tenant_id);
+      });
+    }
+
+    // 4. Consulta se o usuário é proprietário/contato de alguma imobiliária
+    if (user.email) {
+      const { data: ownedTenants } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('contact_email', user.email.toLowerCase());
+      if (ownedTenants && Array.isArray(ownedTenants)) {
+        ownedTenants.forEach((t: any) => {
+          if (t.id) allowedTenantIds.add(t.id);
+        });
+      }
+    }
+
+    // Se o inquilino solicitado é válido e permitido para este usuário:
+    if (requestedTenantId && (allowedTenantIds.has(requestedTenantId) || callerIsMaster)) {
+      tenantCache.set(cacheKey, { tenantId: requestedTenantId, expiresAt: now + 30000 });
+      return requestedTenantId;
+    }
+
+    // Se o profile tem tenant_id definido e NÃO é o default genérico, usa-o
+    if (profile?.tenant_id && profile.tenant_id !== DEFAULT_TENANT_ID) {
+      tenantCache.set(cacheKey, { tenantId: profile.tenant_id, expiresAt: now + 30000 });
+      return profile.tenant_id;
+    }
+
+    // Se profile.tenant_id é default, mas o usuário pertence a uma imobiliária personalizada, prioriza a personalizada!
+    const nonDefaultTenants = Array.from(allowedTenantIds).filter(id => id !== DEFAULT_TENANT_ID);
+    if (nonDefaultTenants.length > 0) {
+      const preferredTenant = nonDefaultTenants[0];
+      tenantCache.set(cacheKey, { tenantId: preferredTenant, expiresAt: now + 30000 });
+      return preferredTenant;
+    }
+
+    const tenantId = profile?.tenant_id || DEFAULT_TENANT_ID;
+    tenantCache.set(cacheKey, { tenantId, expiresAt: now + 30000 });
     return tenantId;
   } catch (err) {
     return null;
   }
 }
+

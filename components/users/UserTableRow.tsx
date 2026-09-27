@@ -14,7 +14,8 @@ import {
   X, 
   Loader2, 
   UserX, 
-  UserCheck 
+  UserCheck,
+  KeyRound 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isPlatformAdmin as checkPlatformAdmin } from '@/lib/constants';
@@ -35,6 +36,7 @@ interface UserTableRowProps {
   onDeleteUser: (id: string) => void;
   onInactivateClick?: (u: UserProfile) => void;
   onReactivateClick?: (u: UserProfile) => void;
+  onResetPasswordClick?: (u: UserProfile) => void;
 }
 
 export const UserTableRow = memo(function UserTableRow({
@@ -52,7 +54,8 @@ export const UserTableRow = memo(function UserTableRow({
   onCancelEdit,
   onDeleteUser,
   onInactivateClick,
-  onReactivateClick
+  onReactivateClick,
+  onResetPasswordClick
 }: UserTableRowProps) {
   const isSuperAdminEmail = checkPlatformAdmin(userItem.email);
   const isInactive = userItem.isActive === false;
@@ -309,6 +312,17 @@ export const UserTableRow = memo(function UserTableRow({
                   title="Editar Perfil"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* Botão de Redefinir Senha pelo Admin */}
+              {isAdmin && (
+                <button 
+                  onClick={() => onResetPasswordClick?.(userItem)}
+                  className="p-1.5 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-500 rounded-lg transition-colors cursor-pointer"
+                  title="Redefinir Senha do Usuário"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
                 </button>
               )}
 

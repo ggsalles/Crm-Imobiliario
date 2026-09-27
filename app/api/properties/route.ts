@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     if (id && id !== 'undefined' && id !== 'null') {
       const isPublic = searchParams.get('public') === 'true';
       const user = getAuthenticatedUser(req);
-      const activeTenantId = await getActiveTenantId(supabase, user);
+      const activeTenantId = await getActiveTenantId(supabase, user, req);
 
       let singleQuery = supabase
         .from('properties')
@@ -102,13 +102,10 @@ export async function GET(req: NextRequest) {
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     const isPublic = searchParams.get('public') === 'true';
-    const rawTenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
-    const tenantParam = (rawTenantParam === 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f')
-      ? DEFAULT_TENANT_ID 
-      : rawTenantParam;
+    const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
     
     // Strict tenant isolation: force active company tenant for CRM / authenticated requests.
     // For public showcase queries, allow target showcase tenantParam or activeTenantId, with fallback to DEFAULT_TENANT_ID.
@@ -224,7 +221,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
     const resolvedTenantId = activeTenantId || data.tenant_id || DEFAULT_TENANT_ID;
     data.tenant_id = resolvedTenantId;
     
@@ -330,7 +327,7 @@ export async function PATCH(req: NextRequest) {
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
     
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     const { imageUrls, ...sanitized } = data;
     if (activeTenantId) {
@@ -435,7 +432,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const user = getAuthenticatedUser(req);
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     console.log(`[API/Properties] DELETE ID ${id}: Iniciando remoção...`);
 

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     let query = supabase
       .from('messages')
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
     if (activeTenantId) {
       data.tenant_id = activeTenantId;
     }
@@ -81,7 +81,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou expirada." }, { status: 401 });
     }
 
-    const activeTenantId = await getActiveTenantId(supabase, user);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     let query = supabase.from('messages').delete().eq('id', id);
     if (activeTenantId) {
