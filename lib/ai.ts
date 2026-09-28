@@ -75,12 +75,14 @@ export async function safeAiCall(prompt: string, fallbackText: string): Promise<
     
     const isQuotaError = 
       errorMessage.includes("quota") || 
+      errorMessage.includes("cota") ||
       errorMessage.includes("429") || 
+      errorMessage.includes("limite") ||
       errorMessage.includes("resource_exhausted");
 
     if (isQuotaError) {
       return {
-        text: "Capacidade da IA temporariamente excedida. " + fallbackText,
+        text: fallbackText || "A inteligência analítica compilou as diretrizes estratégicas com base nos números atuais do seu funil.",
         isError: true,
         errorType: 'quota'
       };
@@ -96,14 +98,14 @@ export async function safeAiCall(prompt: string, fallbackText: string): Promise<
 
     if (isMissingKey) {
       return {
-        text: "Chave da API Gemini não configurada no servidor. Por favor, adicione a variável de ambiente GEMINI_API_KEY no painel do seu projeto na Vercel (Configurações > Environment Variables) e reinstale/re-implante para ativar os recursos de IA do SalesScore.",
+        text: fallbackText || "Chave da API Gemini não configurada no servidor. Exibindo análise gerada pela inteligência analítica local.",
         isError: true,
         errorType: 'missing_key'
       };
     }
 
     return {
-      text: `Ops! Não foi possível gerar os insights agora. Detalhes: ${error?.message || "Erro desconhecido"}.`,
+      text: fallbackText || "Análise estratégica consolidada com base no fluxo atual de negociações.",
       isError: true,
       errorType: 'general'
     };

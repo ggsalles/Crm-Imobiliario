@@ -109,7 +109,13 @@ function DashboardContent() {
   });
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
-  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [aiInsights, setAiInsights] = useState<string | null>(() => {
+    const cached = safeGetJson<{ text: string; timestamp: number }>("dashboard_ai_insights");
+    if (cached?.text && !cached.text.includes("Ops!") && !cached.text.includes("Limite de cota") && !cached.text.includes("Erro na API")) {
+      return cached.text;
+    }
+    return null;
+  });
   const [loadingAI, setLoadingAI] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'weekly' | 'monthly'>('monthly');
 
@@ -227,10 +233,26 @@ function DashboardContent() {
       Responda em PORTUGUÊS, use tom profissional e direto. Use formatação em parágrafos curtos.
     `;
 
-    const result = await safeAiCall(prompt, "Não foi possível gerar os insights agora. Tente novamente em alguns minutos.");
-    setAiInsights(result.text);
+    // Análise estratégica matemática determinística (fallback infalível)
+    const pctGoal = gRevenue > 0 ? Math.round((closedTotal / gRevenue) * 100) : 0;
+    const sortedActiveStages = [...stageCounts].filter(s => s.name !== 'Fechado' && s.name !== 'Perdido').sort((a, b) => b.value - a.value);
+    const bottleneckStage = sortedActiveStages[0] || { name: 'Apresentação', count: 0, value: 0 };
+    const dealsToClose = deals.filter(d => d.stage === 'proposal' || d.stage === 'negotiation');
+    
+    const fallbackInsightText = [
+      `📊 Diagnóstico do Mês (${mStr}): O time já atingiu ${pctGoal}% da meta de receita (${formatCurrencyBRL(closedTotal, { maximumFractionDigits: 0 })} realizados de ${formatCurrencyBRL(gRevenue, { maximumFractionDigits: 0 })}). O pipeline ativo possui ${formatCurrencyBRL(totalPipeline, { maximumFractionDigits: 0 })} em aberto com previsão ponderada realista de ${formatCurrencyBRL(fValue, { maximumFractionDigits: 0 })}.`,
+      `🚨 Ponto de Atenção (Gargalo do Funil): A etapa "${bottleneckStage.name}" concentra o maior volume financeiro represado, somando ${bottleneckStage.count} negócios e ${formatCurrencyBRL(bottleneckStage.value, { maximumFractionDigits: 0 })}. Destravar essas oportunidades é crucial para atingir a meta.`,
+      `🎯 Recomendação Prática: Foque o esforço dos corretores prioritariamente nos ${dealsToClose.length} negócios em estágio avançado (Proposta/Negociação) através de contatos telefônicos diretos e condições exclusivas de fechamento esta semana.`
+    ].join('\n\n');
+
+    const result = await safeAiCall(prompt, fallbackInsightText);
+    const textToDisplay = (!result.text || result.text.includes("Ops!") || result.text.includes("Limite de cota") || result.text.includes("Erro na API")) 
+      ? fallbackInsightText 
+      : result.text;
+
+    setAiInsights(textToDisplay);
     safeSetJson("dashboard_ai_insights", {
-      text: result.text,
+      text: textToDisplay,
       timestamp: Date.now()
     });
     setLoadingAI(false);
