@@ -212,10 +212,10 @@ export default function PublicPropertyCapturePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-8">
         <div className="space-y-4 text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground font-medium animate-pulse">Carregando detalhes do imóvel...</p>
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-slate-400 font-medium animate-pulse">Carregando detalhes do imóvel...</p>
         </div>
       </div>
     );
@@ -223,16 +223,16 @@ export default function PublicPropertyCapturePage() {
 
   if (!property) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
-        <div className="max-w-md bg-white p-8 rounded-3xl border border-slate-200/50 shadow-xl space-y-6">
-          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto text-3xl font-bold">!</div>
-          <h2 className="text-2xl font-black text-slate-800">Imóvel Indisponível</h2>
-          <p className="text-muted-foreground text-sm">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-8 text-center">
+        <div className="max-w-md bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
+          <div className="w-16 h-16 bg-red-500/15 border border-red-500/30 text-red-400 rounded-full flex items-center justify-center mx-auto text-3xl font-bold">!</div>
+          <h2 className="text-2xl font-black text-white">Imóvel Indisponível</h2>
+          <p className="text-slate-400 text-sm">
             Este imóvel não foi encontrado ou não está mais ativo para visualização pública.
           </p>
           <button 
             onClick={() => router.push('/')}
-            className="w-full bg-slate-800 text-white rounded-xl py-3 px-4 font-bold hover:bg-slate-700 transition"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-3 px-4 font-bold transition shadow-lg shadow-blue-600/20 cursor-pointer"
           >
             Voltar ao início
           </button>
@@ -244,17 +244,17 @@ export default function PublicPropertyCapturePage() {
   const images = property.imageUrls && property.imageUrls.length > 0 ? property.imageUrls : fallbackImages;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 overflow-x-hidden selection:bg-primary/10 selection:text-primary">
-      {/* Elegante Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 py-4 px-6 sticky top-0 z-40 shadow-sm">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-16 overflow-x-hidden selection:bg-blue-600/30 selection:text-blue-200">
+      {/* Elegante Header Dark */}
+      <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 py-4 px-6 sticky top-0 z-40 shadow-md shadow-black/20">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-extrabold shadow-md shadow-primary/20">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold shadow-md shadow-blue-600/30">
               S
             </div>
             <div>
-              <h1 className="font-bold text-slate-800 tracking-tight leading-none text-sm md:text-base">SalesScore CRM</h1>
-              <p className="text-[10px] text-muted-foreground leading-none">Imóvel de Interesse do Cliente</p>
+              <h1 className="font-bold text-white tracking-tight leading-none text-sm md:text-base">SalesScore CRM</h1>
+              <p className="text-[10px] text-slate-400 leading-none mt-0.5">Imóvel de Interesse do Cliente</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -263,13 +263,13 @@ export default function PublicPropertyCapturePage() {
                 const targetUrl = property?.tenantId ? `/vitrine?tenant=${property.tenantId}` : '/vitrine';
                 router.push(targetUrl);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
               title="Voltar para a vitrine com todos os imóveis disponíveis"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               <span>Ver Todos os Imóveis</span>
             </button>
-            <span className="hidden sm:inline-block text-xs font-bold uppercase py-1 px-3 bg-primary/10 text-primary border border-primary/20 rounded-full">
+            <span className="hidden sm:inline-block text-xs font-bold uppercase py-1 px-3 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-full">
               Vitrine Conectada
             </span>
           </div>
@@ -283,8 +283,8 @@ export default function PublicPropertyCapturePage() {
         <section className="lg:col-span-7 space-y-8">
           
           {/* Cover & Gallery Slider */}
-          <div className="bg-white rounded-3xl border border-slate-200/50 shadow-sm overflow-hidden relative">
-            <div className="relative h-[25rem] md:h-[32rem] w-full bg-slate-900 group">
+          <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden relative">
+            <div className="relative h-[25rem] md:h-[32rem] w-full bg-slate-950 group">
               <Image 
                 src={images[activeImage]} 
                 alt={property.title} 
@@ -292,7 +292,7 @@ export default function PublicPropertyCapturePage() {
                 className="object-cover object-center transition-all duration-500 group-hover:scale-102"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/10 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
 
               {/* Badges Overlay */}
               <div className="absolute top-6 left-6 flex flex-wrap gap-2">
@@ -301,7 +301,7 @@ export default function PublicPropertyCapturePage() {
                     <Sparkles className="w-3.5 h-3.5 fill-white" /> Destaque
                   </span>
                 )}
-                <span className="capitalize py-1 px-3 bg-white/90 backdrop-blur-sm text-slate-900 rounded-full text-xs font-extrabold shadow-sm">
+                <span className="capitalize py-1 px-3 bg-slate-900/90 backdrop-blur-sm text-slate-100 rounded-full text-xs font-extrabold shadow-sm border border-slate-700/60">
                   {property.type}
                 </span>
                 {(() => {
@@ -334,7 +334,7 @@ export default function PublicPropertyCapturePage() {
                   );
                 })()}
                 {property.acceptsFinancing && (
-                  <span className="py-1 px-4 bg-primary text-white rounded-full text-[10px] font-black uppercase tracking-wider shadow-md shadow-primary/25 flex items-center gap-1.5 border border-white/10">
+                  <span className="py-1 px-4 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-wider shadow-md shadow-blue-600/25 flex items-center gap-1.5 border border-white/10">
                     <Coins className="w-3 h-3" /> Aceita Financiamento
                   </span>
                 )}
@@ -345,13 +345,13 @@ export default function PublicPropertyCapturePage() {
                 <>
                   <button 
                     onClick={() => setActiveImage(prev => prev === 0 ? images.length - 1 : prev - 1)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/95 rounded-full text-slate-800 shadow-lg hover:bg-white transition-all hover:scale-110 active:scale-95"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 bg-slate-900/80 backdrop-blur-sm rounded-full text-white border border-slate-700 shadow-lg hover:bg-slate-800 transition-all hover:scale-110 active:scale-95 cursor-pointer"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button 
                     onClick={() => setActiveImage(prev => prev === images.length - 1 ? 0 : prev + 1)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/95 rounded-full text-slate-800 shadow-lg hover:bg-white transition-all hover:scale-110 active:scale-95"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-slate-900/80 backdrop-blur-sm rounded-full text-white border border-slate-700 shadow-lg hover:bg-slate-800 transition-all hover:scale-110 active:scale-95 cursor-pointer"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -361,27 +361,27 @@ export default function PublicPropertyCapturePage() {
               {/* Title & Price Bottom Overlay */}
               <div className="absolute bottom-6 left-6 right-6 text-white text-left">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-black tracking-widest text-[#60a5fa] leading-none mb-1">CÓD: {property.id.slice(0, 8).toUpperCase()}</span>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-blue-400 leading-none mb-1">CÓD: {property.id.slice(0, 8).toUpperCase()}</span>
                   <h2 className="text-xl md:text-3xl font-black tracking-tight drop-shadow-sm leading-tight inline-flex items-center gap-1.5">{property.title}</h2>
                   {property.buildingName && (
-                    <p className="text-xs md:text-sm font-semibold text-blue-200 mt-0.5 flex items-center gap-1.5">
+                    <p className="text-xs md:text-sm font-semibold text-slate-300 mt-0.5 flex items-center gap-1.5">
                       <span>🏢</span>
                       <span>{property.buildingName}</span>
                     </p>
                   )}
-                  <p className="text-lg md:text-2xl font-extrabold text-blue-300 tracking-tight leading-none mt-2">{formatPrice(property.price)}</p>
+                  <p className="text-lg md:text-2xl font-extrabold text-blue-400 tracking-tight leading-none mt-2">{formatPrice(property.price)}</p>
                 </div>
               </div>
             </div>
 
             {/* Gallery Thumbnails List */}
             {images.length > 1 && (
-              <div className="p-4 border-t border-slate-100 flex gap-2 overflow-x-auto scrollbar-hide">
+              <div className="p-4 border-t border-slate-800/80 bg-slate-900/90 flex gap-2 overflow-x-auto scrollbar-hide">
                 {images.map((img, idx) => (
                   <button 
                     key={idx}
                     onClick={() => setActiveImage(idx)}
-                    className={`relative w-20 h-16 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all duration-300 ${activeImage === idx ? 'border-primary ring-2 ring-primary/20 scale-95' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                    className={`relative w-20 h-16 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all duration-300 cursor-pointer ${activeImage === idx ? 'border-blue-500 ring-2 ring-blue-500/30 scale-95' : 'border-transparent opacity-60 hover:opacity-100'}`}
                   >
                     <Image 
                       src={img} 
@@ -398,75 +398,75 @@ export default function PublicPropertyCapturePage() {
 
           {/* Key Characteristics Panel (Bento row) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
                 <Square className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none mb-0.5">Área total</p>
-                <p className="font-bold text-slate-800 text-sm leading-none">{property.area} m²</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Área total</p>
+                <p className="font-bold text-white text-sm leading-none">{property.area} m²</p>
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
                 <Bed className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none mb-0.5">Dormitórios</p>
-                <p className="font-bold text-slate-800 text-sm leading-none">{property.bedrooms || 0} Quartos</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Dormitórios</p>
+                <p className="font-bold text-white text-sm leading-none">{property.bedrooms || 0} Quartos</p>
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
                 <Bath className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none mb-0.5">Sanitários</p>
-                <p className="font-bold text-slate-800 text-sm leading-none">{property.bathrooms || 0} Banheiros</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Sanitários</p>
+                <p className="font-bold text-white text-sm leading-none">{property.bathrooms || 0} Banheiros</p>
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                 <Car className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none mb-0.5">Vagas</p>
-                <p className="font-bold text-slate-800 text-sm leading-none">{property.parkingSpots || 0} vagas</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Vagas</p>
+                <p className="font-bold text-white text-sm leading-none">{property.parkingSpots || 0} vagas</p>
               </div>
             </div>
           </div>
 
           {/* Encargos Periódicos (Condomínio e IPTU) */}
           {((property.condoFee && property.condoFee > 0) || (property.iptu && property.iptu > 0)) && (
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-md">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm">
                   R$
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none">Encargos Periódicos</p>
-                  <p className="text-xs text-slate-700 font-medium mt-0.5">Despesas adicionais do imóvel</p>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none">Encargos Periódicos</p>
+                  <p className="text-xs text-slate-300 font-medium mt-0.5">Despesas adicionais do imóvel</p>
                 </div>
               </div>
               <div className="flex items-center gap-6">
                 {property.condoFee && property.condoFee > 0 ? (
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Condomínio</p>
-                    <p className="text-sm sm:text-base font-extrabold text-slate-800">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Condomínio</p>
+                    <p className="text-sm sm:text-base font-extrabold text-white">
                       {formatPrice(property.condoFee)}
-                      <span className="text-[10px] font-normal text-muted-foreground">/mês</span>
+                      <span className="text-[10px] font-normal text-slate-400">/mês</span>
                     </p>
                   </div>
                 ) : null}
                 {property.iptu && property.iptu > 0 ? (
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">IPTU</p>
-                    <p className="text-sm sm:text-base font-extrabold text-slate-800">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">IPTU</p>
+                    <p className="text-sm sm:text-base font-extrabold text-white">
                       {formatPrice(property.iptu)}
-                      <span className="text-[10px] font-normal text-muted-foreground">/ano</span>
+                      <span className="text-[10px] font-normal text-slate-400">/ano</span>
                     </p>
                   </div>
                 ) : null}
@@ -476,18 +476,18 @@ export default function PublicPropertyCapturePage() {
 
           {/* Diferenciais & Comodidades (Tags) */}
           {property.tags && property.tags.length > 0 && (
-            <div className="bg-white rounded-3xl border border-slate-200/50 p-6 md:p-8 shadow-sm space-y-4">
+            <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 md:p-8 shadow-md space-y-4">
               <div>
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" /> Diferenciais & Comodidades
+                <h3 className="font-black text-white text-lg uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-400" /> Diferenciais & Comodidades
                 </h3>
-                <div className="h-0.5 w-12 bg-primary rounded-full" />
+                <div className="h-0.5 w-12 bg-blue-500 rounded-full" />
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {property.tags.map((tag, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary font-bold text-xs border border-primary/20 shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-500/10 text-blue-400 font-bold text-xs border border-blue-500/25 shadow-sm"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>{tag}</span>
@@ -498,41 +498,41 @@ export default function PublicPropertyCapturePage() {
           )}
 
           {/* Description Card */}
-          <div className="bg-white rounded-3xl border border-slate-200/50 p-6 md:p-8 shadow-sm space-y-6">
+          <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 md:p-8 shadow-md space-y-6">
             <div>
-              <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider mb-2 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" /> Descrição do Imóvel
+              <h3 className="font-black text-white text-lg uppercase tracking-wider mb-2 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-blue-400" /> Descrição do Imóvel
               </h3>
-              <div className="h-0.5 w-12 bg-primary rounded-full" />
+              <div className="h-0.5 w-12 bg-blue-500 rounded-full" />
             </div>
 
             {property.description ? (
-              <p className="text-slate-600 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+              <p className="text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
                 {property.description}
               </p>
             ) : (
-              <p className="text-muted-foreground italic text-sm">
+              <p className="text-slate-500 italic text-sm">
                 Nenhuma descrição detalhada foi informada para este imóvel. Para mais dados, envie sua solicitação no formulário lateral.
               </p>
             )}
 
             {/* Location block */}
-            <div className="border-t border-slate-100 pt-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-500 mt-0.5 flex-shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mt-0.5 flex-shrink-0">
                   <MapPin className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider leading-none mb-1">Localização aproximada</p>
-                  <p className="font-extrabold text-slate-800 text-base leading-tight">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Localização aproximada</p>
+                  <p className="font-extrabold text-white text-base leading-tight">
                     {property.neighborhood ? `${property.neighborhood}, ` : ''}{property.city || 'Cidade não especificada'} - {property.state || ''}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">A localização exata é compartilhada apenas com clientes qualificados.</p>
+                  <p className="text-xs text-slate-400 mt-0.5">A localização exata é compartilhada apenas com clientes qualificados.</p>
                 </div>
               </div>
               
-              <div className="text-xs font-bold text-muted-foreground bg-slate-100 py-2 px-4 rounded-xl flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Transação Segura e Exclusiva
+              <div className="text-xs font-bold text-slate-300 bg-slate-800/80 border border-slate-700 py-2 px-4 rounded-xl flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Transação Segura e Exclusiva
               </div>
             </div>
           </div>
