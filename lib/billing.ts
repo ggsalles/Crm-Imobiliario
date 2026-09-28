@@ -19,6 +19,7 @@ function getSupabaseAdmin() {
 
 export * from './billing-types';
 import { SaaSAdminConfig } from './billing-types';
+import { safeJsonParse } from './safe-storage';
 
 const RESERVED_CONFIG_TENANT_ID = '99999999-9999-9999-9999-999999999999';
 const CACHE_FILE_PATH = path.join(process.cwd(), 'blocked_tenants.json');
@@ -40,7 +41,7 @@ function readConfigFromFile(): SaaSAdminConfig {
   try {
     if (fs.existsSync(CACHE_FILE_PATH)) {
       const txt = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
-      const data = JSON.parse(txt);
+      const data = safeJsonParse(txt);
       if (data && Array.isArray(data.blockedTenantIds)) {
         if (!Array.isArray(data.unlockedTenantIds)) {
           data.unlockedTenantIds = [];
@@ -92,7 +93,7 @@ export async function getSaaSConfig(bypassCache = false): Promise<SaaSAdminConfi
 
     if (!error && data && data.slug && data.slug.startsWith('saas_cfg:')) {
       const jsonStr = data.slug.replace('saas_cfg:', '');
-      const parsed = JSON.parse(jsonStr);
+      const parsed = safeJsonParse(jsonStr);
       if (parsed && Array.isArray(parsed.blockedTenantIds)) {
         config = parsed as SaaSAdminConfig;
         writeConfigToFile(config);

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { safeJsonParse } from './safe-storage';
 
 export interface SecurityKeywordsStore {
   keywordsByUserId: Record<string, string>;
@@ -17,7 +18,7 @@ export function getSecurityKeywordsStore(): SecurityKeywordsStore {
   try {
     if (fs.existsSync(KEYWORDS_STORE_PATH)) {
       const content = fs.readFileSync(KEYWORDS_STORE_PATH, 'utf-8');
-      const parsed = JSON.parse(content);
+      const parsed = safeJsonParse<any>(content);
       if (parsed) {
         return {
           keywordsByUserId: parsed.keywordsByUserId || {},

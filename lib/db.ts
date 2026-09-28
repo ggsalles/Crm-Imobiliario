@@ -1615,6 +1615,10 @@ async function apiFetchImpl(url: string, options: any = {}) {
         throw new Error(`Resposta do servidor inválida (HTML recebido em vez de JSON) para ${url}`);
       }
 
+      if (!rawText || rawText.trim() === '') {
+        return null;
+      }
+
       try {
         return JSON.parse(rawText);
       } catch (jsonErr: any) {

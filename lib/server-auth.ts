@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
+import { safeJsonParse } from '@/lib/safe-storage';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -72,7 +73,8 @@ export function getAuthenticatedUser(req: NextRequest): ServerAuthUser | null {
     // Decode base64url payload
     const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-    const payload = JSON.parse(payloadJson);
+    const payload = safeJsonParse<any>(payloadJson);
+    if (!payload) return null;
 
     // Validate expiration
     if (payload.exp && typeof payload.exp === 'number') {

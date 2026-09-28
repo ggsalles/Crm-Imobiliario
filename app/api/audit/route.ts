@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser } from '@/lib/server-auth';
 import { isPlatformAdmin } from '@/lib/constants';
+import { safeJsonParse } from '@/lib/safe-storage';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
                      req.headers.get('x-real-ip') || 
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
         if (parts.length === 3) {
           const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
           const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-          const payload = JSON.parse(payloadJson);
+          const payload = safeJsonParse<any>(payloadJson);
           if (payload?.sub) {
             authUser = {
               id: payload.sub,

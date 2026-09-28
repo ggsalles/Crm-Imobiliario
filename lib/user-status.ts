@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { safeJsonParse } from './safe-storage';
 
 export interface InactiveUserDetails {
   inactive: boolean;
@@ -24,7 +25,7 @@ export function getInactiveUsersStore(): InactiveUsersStore {
   try {
     if (fs.existsSync(INACTIVE_STORE_PATH)) {
       const content = fs.readFileSync(INACTIVE_STORE_PATH, 'utf-8');
-      const parsed = JSON.parse(content);
+      const parsed = safeJsonParse<any>(content);
       if (parsed && Array.isArray(parsed.inactiveUserIds)) {
         return {
           inactiveUserIds: parsed.inactiveUserIds,
