@@ -8,8 +8,8 @@ import { POPULAR_PROPERTY_TAGS } from '@/lib/property-tags';
 export interface ShowcaseFiltersProps {
   filteredCount: number;
   loading: boolean;
-  selectedStatus: string;
-  setSelectedStatus: (status: string) => void;
+  selectedStatus?: string;
+  setSelectedStatus?: (status: string) => void;
   minBedrooms: number | 'all';
   setMinBedrooms: (beds: number | 'all') => void;
   minParking: number | 'all';
@@ -113,35 +113,7 @@ export function ShowcaseFilters({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="pt-4 pb-2 border-t border-border/80 mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 max-w-7xl mx-auto">
-              {/* Status Comercial */}
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
-                  Status Comercial
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {[
-                    { id: 'all', label: 'Todos' },
-                    { id: 'disponível', label: 'Disp.' },
-                    { id: 'reservado', label: 'Reserv.' },
-                    { id: 'vendido', label: 'Vend.' },
-                  ].map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => setSelectedStatus(st.id)}
-                      className={`py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                        selectedStatus === st.id
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-card border-border text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
+            <div className="pt-4 pb-2 border-t border-border/80 mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 max-w-7xl mx-auto">
               {/* Dormitórios */}
               <div>
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">

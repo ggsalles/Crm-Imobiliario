@@ -234,22 +234,12 @@ function VitrineContent() {
         if (!pType.includes(selectedType)) return false;
       }
 
-      // Commercial Status
+      // Status Comercial: A vitrine pública exibe ESTRITAMENTE imóveis disponíveis.
+      // Imóveis reservados, vendidos ou alugados são ocultados automaticamente da vitrine.
       const pStatus = (p.status || 'disponível').toLowerCase().trim();
       const isAvailable = pStatus === 'disponível' || pStatus === 'disponivel' || pStatus === 'available' || !pStatus;
-      const isReserved = pStatus === 'reservado' || pStatus === 'reserved';
-      
-      if (selectedStatus === 'all') {
-        // Vitrine padrão: exibe imóveis ativos (disponíveis e reservados)
-        if (!isAvailable && !isReserved) return false;
-      } else if (selectedStatus === 'disponível') {
-        if (!isAvailable) return false;
-      } else if (selectedStatus === 'reservado') {
-        if (!isReserved) return false;
-      } else if (selectedStatus === 'vendido') {
-        if (pStatus !== 'vendido' && pStatus !== 'sold') return false;
-      } else if (selectedStatus === 'alugado') {
-        if (pStatus !== 'alugado' && pStatus !== 'rented') return false;
+      if (!isAvailable) {
+        return false;
       }
 
       // Bedrooms
@@ -295,7 +285,7 @@ function VitrineContent() {
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, selectedStatus, minBedrooms, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
+  }, [properties, searchTerm, selectedType, minBedrooms, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
@@ -313,7 +303,6 @@ function VitrineContent() {
 
   const activeFiltersCount = [
     selectedType !== 'all',
-    selectedStatus !== 'all',
     minBedrooms !== 'all',
     minParking !== 'all',
     minPrice !== '',

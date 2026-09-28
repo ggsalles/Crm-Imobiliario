@@ -124,8 +124,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (isPublic) {
-      // Vitrine pública: traz imóveis ativos (disponíveis e reservados com badge informativa)
-      query = query.in('status', ['disponível', 'disponivel', 'available', 'reservado', 'reserved']);
+      // Vitrine pública: estritamente imóveis disponíveis para venda ou locação.
+      // Imóveis reservados, vendidos ou alugados são automaticamente removidos da vitrine pública.
+      query = query.in('status', ['disponível', 'disponivel', 'available']);
     }
 
     if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
@@ -153,7 +154,7 @@ export async function GET(req: NextRequest) {
       console.warn("[API/Properties] Erro ao carregar fotos:", imagesError);
     }
 
-    const items = properties.map((item: any) => {
+    let items = properties.map((item: any) => {
       let urls: string[] = (images || [])
         .filter((img: any) => img.property_id === item.id)
         .map((img: any) => String(img.url));
@@ -205,6 +206,13 @@ export async function GET(req: NextRequest) {
         updatedAt: item.updated_at
       };
     });
+
+    if (isPublic) {
+      items = items.filter(item => {
+        const s = (item.status || 'disponível').toLowerCase().trim();
+        return s === 'disponível' || s === 'disponivel' || s === 'available';
+      });
+    }
 
     return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
