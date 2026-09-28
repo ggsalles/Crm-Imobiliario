@@ -549,20 +549,28 @@ export default function PublicPropertyCapturePage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.3 }}
-                className="bg-card rounded-3xl border border-border shadow-xl p-6 md:p-8 space-y-6 bg-gradient-to-b from-white to-slate-50"
+                className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl shadow-slate-950/50 p-6 md:p-8 space-y-6 relative overflow-hidden text-white"
               >
+                {/* Subtle decorative glow */}
+                <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+
                 {/* Header state */}
-                <div className="text-start">
-                  <span className="text-[9px] uppercase tracking-widest bg-primary/10 text-primary border border-primary/20 py-1 px-3 rounded-full font-black mb-3 inline-block">Fale Conosco</span>
-                  <h3 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">Tenho Interesse!</h3>
-                  <p className="text-xs text-muted-foreground mt-1.5">Preencha seus dados abaixo. Nossa equipe entrará em contato prontamente via WhatsApp para enviar a ficha técnica ou agendar uma visita.</p>
+                <div className="text-start relative z-10">
+                  <span className="text-[10px] uppercase tracking-widest bg-blue-500/15 text-blue-400 border border-blue-500/30 py-1 px-3 rounded-full font-black mb-3 inline-block shadow-sm">
+                    Fale Conosco
+                  </span>
+                  <h3 className="text-xl md:text-2xl font-black text-white leading-tight tracking-tight">Tenho Interesse!</h3>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    Preencha seus dados abaixo. Nossa equipe entrará em contato prontamente via WhatsApp para enviar a ficha técnica ou agendar uma visita.
+                  </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
                   {/* Name field */}
                   <div className="space-y-1.5 text-left">
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider ml-1 flex items-center gap-1">
-                      <User className="w-3 h-3 text-slate-400" /> Nome Completo *
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-wider ml-1 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-blue-400" /> Nome Completo *
                     </label>
                     <input 
                       type="text" 
@@ -570,14 +578,14 @@ export default function PublicPropertyCapturePage() {
                       placeholder="Ex: João da Silva"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/5 bg-white text-sm outline-none transition font-medium"
+                      className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700/80 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 text-white placeholder:text-slate-500 text-sm outline-none transition duration-200 font-medium"
                     />
                   </div>
 
                   {/* Email field */}
                   <div className="space-y-1.5 text-left">
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider ml-1 flex items-center gap-1">
-                      <Mail className="w-3 h-3 text-slate-400" /> E-mail *
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-wider ml-1 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-blue-400" /> E-mail *
                     </label>
                     <input 
                       type="email" 
@@ -585,14 +593,14 @@ export default function PublicPropertyCapturePage() {
                       placeholder="exemplo@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/5 bg-white text-sm outline-none transition font-medium"
+                      className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700/80 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 text-white placeholder:text-slate-500 text-sm outline-none transition duration-200 font-medium"
                     />
                   </div>
 
                   {/* Phone field */}
                   <div className="space-y-1.5 text-left">
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider ml-1 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-slate-400" /> WhatsApp / Telefone *
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-wider ml-1 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-blue-400" /> WhatsApp / Telefone *
                     </label>
                     <input 
                       type="tel" 
@@ -600,21 +608,21 @@ export default function PublicPropertyCapturePage() {
                       placeholder="(11) 99999-9999"
                       value={phone}
                       onChange={handlePhoneChange}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/5 bg-white text-sm outline-none transition font-medium"
+                      className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700/80 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 text-white placeholder:text-slate-500 text-sm outline-none transition duration-200 font-medium"
                     />
                   </div>
 
                   {/* Message field */}
                   <div className="space-y-1.5 text-left">
-                    <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider ml-1 flex items-center gap-1">
-                      <MessageSquareIcon className="w-3 h-3 text-slate-400" /> Mensagem Adicional (Opcional)
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-wider ml-1 flex items-center gap-1.5">
+                      <MessageSquareIcon className="w-3.5 h-3.5 text-blue-400" /> Mensagem Adicional (Opcional)
                     </label>
                     <textarea 
                       placeholder="Gostaria de agendar uma visita ou receber mais fotos..."
                       rows={3}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/5 bg-white text-sm outline-none transition font-medium resize-none"
+                      className="w-full px-4 py-3 bg-slate-800/90 border border-slate-700/80 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 text-white placeholder:text-slate-500 text-sm outline-none transition duration-200 font-medium resize-none"
                     />
                   </div>
 
@@ -622,7 +630,7 @@ export default function PublicPropertyCapturePage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-primary hover:bg-opacity-95 text-white rounded-xl py-3 px-4 font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition duration-300 disabled:opacity-50 text-sm mt-2"
+                    className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white rounded-xl py-3.5 px-4 font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 hover:shadow-blue-500/40 transition-all duration-200 disabled:opacity-50 text-sm mt-3 cursor-pointer"
                   >
                     {submitting ? (
                       <>
@@ -640,8 +648,8 @@ export default function PublicPropertyCapturePage() {
 
                 {/* Broker profile integration if present */}
                 {broker && (
-                  <div className="border-t border-slate-200/60 pt-4 flex items-center gap-3.5 text-left">
-                    <div className="relative w-11 h-11 rounded-full bg-primary/10 overflow-hidden flex-shrink-0 border border-slate-200">
+                  <div className="border-t border-slate-800 pt-4 flex items-center gap-3.5 text-left relative z-10">
+                    <div className="relative w-11 h-11 rounded-full bg-slate-800 overflow-hidden flex-shrink-0 border border-slate-700">
                       {broker.photoUrl ? (
                         <Image 
                           src={broker.photoUrl} 
@@ -651,16 +659,16 @@ export default function PublicPropertyCapturePage() {
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-primary bg-primary/5">
+                        <div className="w-full h-full flex items-center justify-center font-bold text-blue-400 bg-blue-500/10">
                           {broker.displayName[0]}
                         </div>
                       )}
                     </div>
                     <div>
-                      <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-black leading-none mb-0.5">Corretor Responsável</p>
-                      <p className="font-bold text-slate-800 text-xs leading-tight mb-0.5">{broker.displayName}</p>
-                      <p className="text-muted-foreground text-[10px] leading-none flex items-center gap-1">
-                        <Mail className="w-2.5 h-2.5 text-slate-400" /> {broker.email}
+                      <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black leading-none mb-0.5">Corretor Responsável</p>
+                      <p className="font-bold text-white text-xs leading-tight mb-0.5">{broker.displayName}</p>
+                      <p className="text-slate-400 text-[10px] leading-none flex items-center gap-1">
+                        <Mail className="w-2.5 h-2.5 text-slate-500" /> {broker.email}
                       </p>
                     </div>
                   </div>
@@ -673,33 +681,33 @@ export default function PublicPropertyCapturePage() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.4 }}
-                className="bg-white rounded-3xl border border-emerald-100 shadow-xl p-8 text-center space-y-6 relative overflow-hidden"
+                className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl shadow-slate-950/50 p-8 text-center space-y-6 relative overflow-hidden text-white"
               >
                 {/* Visual success background sparkles */}
-                <div className="absolute top-0 inset-x-0 h-1.5 bg-emerald-500" />
-                <div className="absolute -right-12 -top-12 w-32 h-32 bg-emerald-50/40 rounded-full blur-2xl" />
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                <div className="absolute -right-12 -top-12 w-36 h-36 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
 
-                <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-md">
+                <div className="w-16 h-16 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
                   <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-black text-slate-900 leading-tight">Excelente, {name.split(" ")[0]}!</h3>
-                  <p className="text-slate-600 text-sm leading-relaxed px-2">
-                    Seus dados foram sincronizados instantaneamente ao nosso funil. Um especialista foi notificado de forma inteligente sobre seu interesse no <strong>{property.title}</strong>.
+                  <h3 className="text-2xl font-black text-white leading-tight">Excelente, {name.split(" ")[0]}!</h3>
+                  <p className="text-slate-300 text-sm leading-relaxed px-2">
+                    Seus dados foram sincronizados instantaneamente ao nosso funil. Um especialista foi notificado sobre seu interesse no <strong>{property.title}</strong>.
                   </p>
                 </div>
 
-                <div className="bg-slate-50 rounded-2xl p-4 text-xs font-medium border border-slate-100 text-slate-500 text-left space-y-2">
-                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Lead salvo em: <strong>Instagram - Captura Pública</strong></div>
-                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Negócio criado no funil: <strong>Estágio &quot;Novo Lead&quot;</strong></div>
-                  <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Valor do negócio: <strong>{formatPrice(property.price)}</strong></div>
+                <div className="bg-slate-800/80 rounded-2xl p-4 text-xs font-medium border border-slate-700/80 text-slate-300 text-left space-y-2.5">
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" /> Lead salvo em: <strong className="text-white">Instagram - Captura Pública</strong></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full" /> Negócio criado no funil: <strong className="text-white">Estágio &quot;Novo Lead&quot;</strong></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-400 rounded-full" /> Valor do negócio: <strong className="text-white">{formatPrice(property.price)}</strong></div>
                 </div>
 
                 <div className="space-y-3 pt-2">
                   <button
                     onClick={handleWhatsAppRedirect}
-                    className="w-full bg-[#25D366] hover:bg-opacity-95 text-white rounded-xl py-3 px-4 font-bold flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/20 transition-all text-sm group"
+                    className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl py-3.5 px-4 font-bold flex items-center justify-center gap-2 shadow-lg shadow-[#25D366]/25 transition-all text-sm group cursor-pointer"
                   >
                     <Phone className="w-4 h-4 fill-white group-hover:scale-110 transition-transform" />
                     Falar Agora no WhatsApp
@@ -713,7 +721,7 @@ export default function PublicPropertyCapturePage() {
                       setPhone('');
                       setMessage('');
                     }}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-2.5 px-4 font-bold text-xs transition duration-300"
+                    className="w-full bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl py-2.5 px-4 font-bold text-xs border border-slate-700 transition duration-300 cursor-pointer"
                   >
                     Enviar outra proposta
                   </button>
