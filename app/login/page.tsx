@@ -62,6 +62,9 @@ export default function LoginPage() {
   const [recoveryNewPassword, setRecoveryNewPassword] = useState("");
   const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(false);
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
   const [isResettingWithKeyword, setIsResettingWithKeyword] = useState(false);
   const [keywordResetSuccess, setKeywordResetSuccess] = useState(false);
 
@@ -191,10 +194,15 @@ export default function LoginPage() {
         setIsLoggingIn(false);
       }
     } else {
+      if (password !== registerConfirmPassword) {
+        toast.error("As senhas informadas não coincidem. Digite novamente a confirmação de senha.");
+        return;
+      }
       setIsRegistering(true);
       try {
         await register(cleanEmail, password, cleanDisplayName, companyName);
         toast.success("Conta criada com sucesso!");
+        setRegisterConfirmPassword("");
         setMode("login"); // Switched to login mode
       } catch (error: any) {
         toast.error(error.message || "Erro ao criar conta");
@@ -435,13 +443,15 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Senha</label>
-                <button 
-                  type="button" 
-                  onClick={handleOpenForgotPassword}
-                  className="text-xs font-semibold text-primary hover:text-primary/80 cursor-pointer"
-                >
-                  Esqueci minha senha
-                </button>
+                {mode === "login" && (
+                  <button 
+                    type="button" 
+                    onClick={handleOpenForgotPassword}
+                    className="text-xs font-semibold text-primary hover:text-primary/80 cursor-pointer"
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
               </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -451,17 +461,44 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-11 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
+                  className="w-full pl-11 pr-11 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground font-mono"
                 />
                 <button 
-                  type="button"
+                  type="button" 
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  title={showPassword ? "Ocultar senha" : "Exibir senha"}
                 >
-                  <Eye className="w-4 h-4" />
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
+
+            {/* Confirmar Senha no Cadastro de Conta */}
+            {mode === "register" && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Confirmar Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input 
+                    type={showRegisterConfirmPassword ? "text" : "password"} 
+                    value={registerConfirmPassword}
+                    onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full pl-11 pr-11 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground font-mono"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                    title={showRegisterConfirmPassword ? "Ocultar senha" : "Exibir senha"}
+                  >
+                    {showRegisterConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 px-1">
               <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary bg-muted" />
@@ -777,13 +814,21 @@ export default function LoginPage() {
                           </label>
                           <div className="relative">
                             <input 
-                              type={showRecoveryPassword ? "text" : "password"}
+                              type={showRecoveryConfirmPassword ? "text" : "password"}
                               required
                               placeholder="Repita a nova senha"
                               value={recoveryConfirmPassword}
                               onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
-                              className="w-full pl-3 pr-3 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
+                              className="w-full pl-3 pr-8 py-2 bg-muted/30 border border-border rounded-xl text-xs text-foreground focus:ring-2 focus:ring-primary/20 transition-all font-mono focus:outline-none"
                             />
+                            <button
+                              type="button"
+                              onClick={() => setShowRecoveryConfirmPassword(!showRecoveryConfirmPassword)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                              title={showRecoveryConfirmPassword ? "Ocultar senha" : "Exibir senha"}
+                            >
+                              {showRecoveryConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
                           </div>
                         </div>
                       </div>

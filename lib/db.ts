@@ -300,6 +300,115 @@ function createVisibilityAwarePoll(callback: () => void, intervalMs = POLL_INTER
 // Cache global para evitar que dados sumam durante re-subscriptions ou hibernação
 const dataCache: Record<string, any> = {};
 
+function safePersistSnapshot(key: string, data: any) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (Array.isArray(data) && data.length > 0) {
+      sessionStorage.setItem(`db-cache:${key}`, JSON.stringify(data.slice(0, 100)));
+    }
+  } catch {}
+}
+
+function safeRestoreSnapshot(key: string): any[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`db-cache:${key}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return null;
+}
+
+export function getCachedProperties(ownerId?: string): Property[] | null {
+  const specificKey = `properties:${ownerId || 'all'}`;
+  if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
+    return dataCache[specificKey];
+  }
+  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('properties:all');
+  if (restored) {
+    dataCache[specificKey] = restored;
+    return restored;
+  }
+  const allKey = 'properties:all';
+  if (dataCache[allKey] && Array.isArray(dataCache[allKey]) && dataCache[allKey].length > 0) {
+    return dataCache[allKey];
+  }
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('properties:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
+      return dataCache[k];
+    }
+  }
+  return null;
+}
+
+export function getCachedActivities(ownerId?: string): Activity[] | null {
+  const specificKey = `activities:${ownerId || 'all'}`;
+  if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
+    return dataCache[specificKey];
+  }
+  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('activities:all');
+  if (restored) {
+    dataCache[specificKey] = restored;
+    return restored;
+  }
+  const allKey = 'activities:all';
+  if (dataCache[allKey] && Array.isArray(dataCache[allKey]) && dataCache[allKey].length > 0) {
+    return dataCache[allKey];
+  }
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('activities:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
+      return dataCache[k];
+    }
+  }
+  return null;
+}
+
+export function getCachedContacts(ownerId?: string): Contact[] | null {
+  const specificKey = `contacts:${ownerId || 'all'}`;
+  if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
+    return dataCache[specificKey];
+  }
+  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('contacts:all');
+  if (restored) {
+    dataCache[specificKey] = restored;
+    return restored;
+  }
+  const allKey = 'contacts:all';
+  if (dataCache[allKey] && Array.isArray(dataCache[allKey]) && dataCache[allKey].length > 0) {
+    return dataCache[allKey];
+  }
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('contacts:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
+      return dataCache[k];
+    }
+  }
+  return null;
+}
+
+export function getCachedDeals(ownerId?: string): Deal[] | null {
+  const specificKey = `deals:${ownerId || 'all'}`;
+  if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
+    return dataCache[specificKey];
+  }
+  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('deals:all');
+  if (restored) {
+    dataCache[specificKey] = restored;
+    return restored;
+  }
+  const allKey = 'deals:all';
+  if (dataCache[allKey] && Array.isArray(dataCache[allKey]) && dataCache[allKey].length > 0) {
+    return dataCache[allKey];
+  }
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('deals:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
+      return dataCache[k];
+    }
+  }
+  return null;
+}
+
 // Helper to wake up the app and force data refresh
 export function forceDataResync() {
   if (typeof window !== 'undefined') {
@@ -404,6 +513,7 @@ export function subscribeToContacts(callback: (contacts: Contact[]) => void, own
       const data = await getContacts(ownerId);
       if (data && Array.isArray(data)) {
         dataCache[cacheKey] = data;
+        safePersistSnapshot(cacheKey, data);
         callback(data);
       } else if (!dataCache[cacheKey]) {
         callback([]); 
@@ -647,6 +757,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
       const data = await getDeals(ownerId);
       if (data && Array.isArray(data)) {
         dataCache[cacheKey] = data;
+        safePersistSnapshot(cacheKey, data);
         callback(data);
       } else if (!dataCache[cacheKey]) {
         callback([]);
@@ -1039,6 +1150,7 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
       if (data && Array.isArray(data)) {
         const result = data as Activity[];
         dataCache[cacheKey] = result;
+        safePersistSnapshot(cacheKey, result);
         callback(result);
       } else if (!dataCache[cacheKey]) {
         callback([]);
@@ -1553,6 +1665,7 @@ export async function getProperties(ownerId?: string) {
     const data = await apiFetch(url);
     if (Array.isArray(data)) {
       dataCache[cacheKey] = data;
+      safePersistSnapshot(cacheKey, data);
     }
     console.log(`[lib/db] getProperties concluído em ${Date.now() - startTime}ms`);
     return (data || []) as Property[];
@@ -1635,6 +1748,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
       const data = await getProperties(ownerId);
       if (data && Array.isArray(data)) {
         dataCache[cacheKey] = data;
+        safePersistSnapshot(cacheKey, data);
         callback(data);
       } else if (!dataCache[cacheKey]) {
         callback([]);

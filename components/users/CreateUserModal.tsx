@@ -55,6 +55,8 @@ export function CreateUserModal({
   tenants
 }: CreateUserModalProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   if (!isOpen) return null;
 
@@ -68,8 +70,32 @@ export function CreateUserModal({
     pass += special.charAt(Math.floor(Math.random() * special.length));
     pass += Math.floor(10 + Math.random() * 90);
     setNewUserData(prev => ({ ...prev, password: pass }));
+    setConfirmPassword(pass);
     setShowPassword(true);
+    setShowConfirmPassword(true);
     toast.success("Senha segura gerada!");
+  };
+
+  const handleModalClose = () => {
+    setConfirmPassword("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    onClose();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newUserData.password && newUserData.password.trim() !== "") {
+      if (newUserData.password.length < 6) {
+        toast.error("A senha deve ter no mínimo 6 caracteres.");
+        return;
+      }
+      if (newUserData.password !== confirmPassword) {
+        toast.error("As senhas não coincidem. Verifique a confirmação de senha.");
+        return;
+      }
+    }
+    onSubmit(e);
   };
 
   return (
@@ -87,7 +113,7 @@ export function CreateUserModal({
             </div>
           </div>
           <button 
-            onClick={onClose} 
+            onClick={handleModalClose} 
             className="p-1.5 hover:bg-muted rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4 text-muted-foreground" />
@@ -95,7 +121,7 @@ export function CreateUserModal({
         </div>
         
         {/* Form */}
-        <form onSubmit={onSubmit} className="p-4 sm:p-5 space-y-3 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3 overflow-y-auto flex-1">
           {/* Nome */}
           <div className="space-y-1">
             <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">Nome de Exibição</label>
@@ -157,6 +183,32 @@ export function CreateUserModal({
               Se deixar em branco, o usuário poderá definir a senha através de &quot;Esqueci minha senha&quot; no primeiro acesso.
             </p>
           </div>
+
+          {/* Confirmar Senha Inicial */}
+          {newUserData.password && newUserData.password.length > 0 && (
+            <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
+              <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider ml-0.5">
+                Confirmar Senha
+              </label>
+              <div className="relative">
+                <input 
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Repita a senha inicial para confirmar"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full pl-3 pr-9 py-1.5 bg-muted/30 border border-border rounded-lg text-xs text-foreground focus:ring-2 focus:ring-primary/10 transition-all font-mono focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                  title={showConfirmPassword ? "Ocultar senha" : "Exibir senha"}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Palavra-Chave Secreta de Recuperação */}
           <div className="space-y-1">

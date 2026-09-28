@@ -25,6 +25,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -158,9 +160,30 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [activeTenant, setActiveTenant] = useState<any | null>(null);
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
   const { billingStatus, billingSuspensionDate, dueDay, diffDays } = useAuth();
 
   const navRef = useRef<HTMLElement>(null);
+
+  // Reset navigating indicator when pathname or tab updates
+  useEffect(() => {
+    setNavigatingTo(null);
+  }, [pathname, currentTab]);
+
+  // Background warm-up of key routes for instantaneous transitions
+  useEffect(() => {
+    const keyRoutes = ['/pipeline', '/properties', '/contacts', '/activities', '/calendar'];
+    const timer = setTimeout(() => {
+      keyRoutes.forEach((route, i) => {
+        setTimeout(() => {
+          try {
+            router.prefetch(route);
+          } catch {}
+        }, i * 250);
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   // Restore the scroll position of the sidebar when navigating
   useEffect(() => {
@@ -443,14 +466,24 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
               key={item.href}
               href={targetHref}
               prefetch={true}
-              onClick={() => setIsMobileMenuOpen(false)}
+              onMouseEnter={() => {
+                try { router.prefetch(targetHref); } catch {}
+              }}
+              onPointerDown={() => {
+                try { router.prefetch(targetHref); } catch {}
+              }}
+              onClick={() => {
+                if (!isActive) setNavigatingTo(targetHref);
+                if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+              }}
               title={isCollapsed ? item.label : undefined}
               className={cn(
                 "flex items-center rounded-lg text-xs font-medium transition-all group relative",
                 isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
                 isActive 
                   ? "bg-primary/10 text-primary font-semibold" 
-                  : "hover:bg-muted/80 hover:text-foreground"
+                  : "hover:bg-muted/80 hover:text-foreground",
+                navigatingTo === targetHref ? "ring-1 ring-primary/40 bg-primary/10" : ""
               )}
             >
               <item.icon className={cn(
@@ -458,7 +491,10 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
                 isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
               )} />
               {!isCollapsed && <span className="truncate">{item.label}</span>}
-              {item.label === "Mensagens" && unreadCount > 0 && (
+              {navigatingTo === targetHref && !isCollapsed && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping ml-auto shrink-0" />
+              )}
+              {item.label === "Mensagens" && unreadCount > 0 && navigatingTo !== targetHref && (
                 isCollapsed ? (
                   <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-card" />
                 ) : (
@@ -474,32 +510,52 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         <Link
           href="/settings"
           prefetch={true}
-          onClick={() => setIsMobileMenuOpen(false)}
+          onMouseEnter={() => {
+            try { router.prefetch("/settings"); } catch {}
+          }}
+          onClick={() => {
+            if (pathname !== "/settings") setNavigatingTo("/settings");
+            if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+          }}
           title={isCollapsed ? "Configurações" : undefined}
           className={cn(
             "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5",
             isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
-            pathname === "/settings" ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/80 hover:text-foreground"
+            pathname === "/settings" ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/80 hover:text-foreground",
+            navigatingTo === "/settings" ? "ring-1 ring-primary/40 bg-primary/5" : ""
           )}
         >
           <Settings className={cn("w-4 h-4 shrink-0", pathname === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
           {!isCollapsed && <span className="truncate">Configurações</span>}
+          {navigatingTo === "/settings" && !isCollapsed && (
+            <Loader2 className="w-3 h-3 animate-spin text-primary ml-auto shrink-0" />
+          )}
         </Link>
 
         {(profile?.role === 'Admin' || profile?.isAdmin || isPlatformAdmin(profile?.email)) && (
           <Link
             href="/audit"
             prefetch={true}
-            onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => {
+              try { router.prefetch("/audit"); } catch {}
+            }}
+            onClick={() => {
+              if (pathname !== "/audit") setNavigatingTo("/audit");
+              if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+            }}
             title={isCollapsed ? "Auditoria & Segurança" : undefined}
             className={cn(
               "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400",
               isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
-              pathname === "/audit" ? "bg-emerald-500/15 text-emerald-400" : ""
+              pathname === "/audit" ? "bg-emerald-500/15 text-emerald-400" : "",
+              navigatingTo === "/audit" ? "ring-1 ring-emerald-500/40 bg-emerald-500/5" : ""
             )}
           >
             <ShieldAlert className={cn("w-4 h-4 shrink-0 text-emerald-500 group-hover:text-emerald-400")} />
             {!isCollapsed && <span className="truncate">Auditoria</span>}
+            {navigatingTo === "/audit" && !isCollapsed && (
+              <Loader2 className="w-3 h-3 animate-spin text-emerald-500 ml-auto shrink-0" />
+            )}
           </Link>
         )}
 
@@ -507,16 +563,53 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
           <Link
             href="/admin/billing"
             prefetch={true}
-            onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => {
+              try { router.prefetch("/admin/billing"); } catch {}
+            }}
+            onClick={() => {
+              if (pathname !== "/admin/billing") setNavigatingTo("/admin/billing");
+              if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+            }}
             title={isCollapsed ? "Gestão SaaS & Cobrança" : undefined}
             className={cn(
               "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
               isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
-              pathname === "/admin/billing" ? "bg-indigo-500/15 text-indigo-300" : ""
+              pathname === "/admin/billing" ? "bg-indigo-500/15 text-indigo-300" : "",
+              navigatingTo === "/admin/billing" ? "ring-1 ring-indigo-500/40 bg-indigo-500/5" : ""
             )}
           >
             <CreditCard className={cn("w-4 h-4 shrink-0 text-indigo-400 group-hover:text-indigo-300")} />
             {!isCollapsed && <span className="truncate">Gestão SaaS & Cobrança</span>}
+            {navigatingTo === "/admin/billing" && !isCollapsed && (
+              <Loader2 className="w-3 h-3 animate-spin text-indigo-400 ml-auto shrink-0" />
+            )}
+          </Link>
+        )}
+
+        {profile?.email?.toLowerCase().trim() === 'ggsalles@gmail.com' && (
+          <Link
+            href="/admin/reset"
+            prefetch={true}
+            onMouseEnter={() => {
+              try { router.prefetch("/admin/reset"); } catch {}
+            }}
+            onClick={() => {
+              if (pathname !== "/admin/reset") setNavigatingTo("/admin/reset");
+              if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
+            }}
+            title={isCollapsed ? "Zerar APP (Dev Master)" : undefined}
+            className={cn(
+              "flex items-center rounded-lg text-xs font-medium transition-all group mt-0.5 font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300",
+              isCollapsed ? "justify-center p-2" : "gap-2 px-2.5 py-1.5",
+              pathname === "/admin/reset" ? "bg-rose-500/15 text-rose-300" : "",
+              navigatingTo === "/admin/reset" ? "ring-1 ring-rose-500/40 bg-rose-500/5" : ""
+            )}
+          >
+            <RotateCcw className={cn("w-4 h-4 shrink-0 text-rose-400 group-hover:text-rose-300")} />
+            {!isCollapsed && <span className="truncate">Zerar APP (Dev)</span>}
+            {navigatingTo === "/admin/reset" && !isCollapsed && (
+              <Loader2 className="w-3 h-3 animate-spin text-rose-400 ml-auto shrink-0" />
+            )}
           </Link>
         )}
       </nav>

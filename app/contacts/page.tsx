@@ -40,7 +40,8 @@ import {
   createTimelineEvent,
   findOrCreateConversation,
   createUserProfile,
-  isEmailRegistered
+  isEmailRegistered,
+  getCachedContacts
 } from "@/lib/db";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "motion/react";
@@ -71,10 +72,16 @@ function ContactsContent() {
   }, [tabParam]);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = getCachedContacts();
+    return cached && cached.length > 0 ? cached : [];
+  });
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedContacts();
+    return !(cached && cached.length > 0);
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
@@ -109,8 +116,11 @@ function ContactsContent() {
   useEffect(() => {
     if (!user || !profile) return;
 
-    setLoading(true);
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    const existing = getCachedContacts(ownerId);
+    if (!existing || existing.length === 0) {
+      setLoading(true);
+    }
 
     const unsubContacts = subscribeToContacts((data) => {
       setContacts(data);

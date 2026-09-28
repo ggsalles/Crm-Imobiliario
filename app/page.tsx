@@ -52,7 +52,11 @@ import {
   getDeals,
   getContacts,
   getGoals,
-  getProperties
+  getProperties,
+  getCachedDeals,
+  getCachedContacts,
+  getCachedProperties,
+  getCachedActivities
 } from "@/lib/db";
 
 const ITEM_VARIANTS = {
@@ -79,15 +83,30 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [deals, setDeals] = useState<Deal[]>(() => {
+    const cached = getCachedDeals();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = getCachedContacts();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [properties, setProperties] = useState<Property[]>(() => {
+    const cached = getCachedProperties();
+    return cached && cached.length > 0 ? cached : [];
+  });
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    const cached = getCachedActivities();
+    return cached && cached.length > 0 ? cached : [];
+  });
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activeTab, setActiveTab] = useState<string>("Visão Geral");
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedDeals();
+    return !(cached && cached.length > 0);
+  });
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
   const [aiInsights, setAiInsights] = useState<string | null>(null);

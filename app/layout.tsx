@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { DatabaseStatusBanner } from "@/components/DatabaseStatusBanner";
 import { BillingAlertBanner } from "@/components/BillingAlertBanner";
 import { NewLeadSoundNotifier } from "@/components/NewLeadSoundNotifier";
+import { NavigationProgress } from "@/components/NavigationProgress";
+import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,6 +27,9 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
+            <Suspense fallback={null}>
+              <NavigationProgress />
+            </Suspense>
             <DatabaseStatusBanner />
             <BillingAlertBanner />
             <NewLeadSoundNotifier />

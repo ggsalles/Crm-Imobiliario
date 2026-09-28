@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  reactStrictMode: false,
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      'date-fns',
+      'recharts',
+      'motion',
+      '@supabase/supabase-js'
+    ],
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

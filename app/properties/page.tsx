@@ -23,7 +23,9 @@ import {
   togglePropertyFeatured,
   Property, 
   getContacts, 
-  Contact 
+  Contact,
+  getCachedProperties,
+  getCachedContacts
 } from "@/lib/db";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import { toast } from "sonner";
@@ -43,9 +45,18 @@ export default function PropertiesPage() {
   const router = useRouter();
 
   const [view, setView] = useState<'list' | 'form'>('list');
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [properties, setProperties] = useState<Property[]>(() => {
+    const cached = getCachedProperties();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = getCachedContacts();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedProperties();
+    return !(cached && cached.length > 0);
+  });
 
   // Modals & Selection States
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
@@ -399,7 +410,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     });
   }, []);
 
-  if (authLoading || (loading && properties.length === 0)) {
+  if (authLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -557,6 +568,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   ))}
                 </AnimatePresence>
               </div>
+
+              {filteredProperties.length === 0 && loading && (
+                <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Carregando inventário de imóveis...</p>
+                </div>
+              )}
 
               {filteredProperties.length === 0 && !loading && (
                 <div className="flex flex-col items-center justify-center py-16 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40">

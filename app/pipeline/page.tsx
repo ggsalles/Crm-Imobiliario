@@ -42,6 +42,9 @@ import {
   createTimelineEvent,
   getDeals,
   getGoals,
+  getCachedDeals,
+  getCachedContacts,
+  getCachedProperties,
 } from "@/lib/db";
 
 const STAGES = PIPELINE_STAGES.map((s) => ({
@@ -74,13 +77,25 @@ export default function PipelinePage() {
   const router = useRouter();
 
   // Database Data States
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [deals, setDeals] = useState<Deal[]>(() => {
+    const cached = getCachedDeals();
+    return cached && cached.length > 0 ? cached : [];
+  });
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = getCachedContacts();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [properties, setProperties] = useState<Property[]>(() => {
+    const cached = getCachedProperties();
+    return cached && cached.length > 0 ? cached : [];
+  });
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedDeals();
+    return !(cached && cached.length > 0);
+  });
 
   // Modal States
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);

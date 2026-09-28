@@ -37,7 +37,10 @@ import {
   subscribeToContacts,
   subscribeToDeals,
   Contact,
-  Deal
+  Deal,
+  getCachedActivities,
+  getCachedContacts,
+  getCachedDeals
 } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
 import { format } from "date-fns";
@@ -52,10 +55,22 @@ import { exportActivitiesToCsv } from "@/lib/csv-export";
 export default function ActivitiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    const cached = getCachedActivities();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = getCachedContacts();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [deals, setDeals] = useState<Deal[]>(() => {
+    const cached = getCachedDeals();
+    return cached && cached.length > 0 ? cached : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedActivities();
+    return !(cached && cached.length > 0);
+  });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
@@ -85,8 +100,11 @@ export default function ActivitiesPage() {
   useEffect(() => {
     if (!user || !profile) return;
 
-    setLoading(true);
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    const existing = getCachedActivities(ownerId);
+    if (!existing || existing.length === 0) {
+      setLoading(true);
+    }
 
     // Safety timeout: force loading false after 8 seconds if it's still stuck
     const safetyTimer = setTimeout(() => {
