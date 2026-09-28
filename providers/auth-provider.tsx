@@ -35,6 +35,17 @@ if (typeof window !== "undefined") {
       return;
     }
 
+    // Intercepta e silencia erros transitórios de RSC payload fetch / fallback do roteador Next.js
+    if (
+      msg.includes("failed to fetch rsc payload") ||
+      msg.includes("falling back to browser navigation") ||
+      (msg.includes("failed to fetch") && (msg.includes("/login") || msg.includes("rsc") || isPageUnloading))
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado fallback de navegação RSC do Next.js:", reason);
+      return;
+    }
+
     // Intercepta e silencia rejeições de eventos DOM puros (ex: WebSockets do Supabase pausado, imagens, etc.)
     // que causam {"isTrusted": true} no coletor de erros do navegador
     if (
@@ -65,6 +76,17 @@ if (typeof window !== "undefined") {
         window.sessionStorage.removeItem('crm-imob-session-v5');
         window.localStorage.removeItem('crm-imob-session-v4');
       } catch {}
+      return;
+    }
+
+    // Intercepta e silencia erros transitórios de RSC payload fetch / fallback do roteador Next.js
+    if (
+      msg.includes("failed to fetch rsc payload") ||
+      msg.includes("falling back to browser navigation") ||
+      (msg.includes("failed to fetch") && (msg.includes("/login") || msg.includes("rsc") || isPageUnloading))
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Silenciado fallback de navegação RSC em window.onerror:", error);
       return;
     }
 
@@ -919,23 +941,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     }
 
-    // Record login audit event and AWAIT it so it finishes before router.push navigates
-    try {
-      await recordAuditEvent({
-        action: 'LOGIN_SUCCESS',
-        title: 'Autenticação no Sistema',
-        content: `Usuário efetuou login com sucesso: ${cleanEmail}`,
-        severity: 'info',
-        category: 'auth',
-        userId,
-        userName,
-        userEmail: cleanEmail,
-        tenantId,
-        token
-      });
-    } catch (auditErr) {
+    // Record login audit event asynchronously in the background so it doesn't delay user entry
+    recordAuditEvent({
+      action: 'LOGIN_SUCCESS',
+      title: 'Autenticação no Sistema',
+      content: `Usuário efetuou login com sucesso: ${cleanEmail}`,
+      severity: 'info',
+      category: 'auth',
+      userId,
+      userName,
+      userEmail: cleanEmail,
+      tenantId,
+      token
+    }).catch((auditErr) => {
       console.warn("[AuthProvider] Falha ao registrar log de login:", auditErr);
-    }
+    });
   };
 
   const resolveOrCreateTenant = async (email: string, companyName: string): Promise<string> => {

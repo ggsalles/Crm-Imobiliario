@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -38,6 +36,7 @@ export default function LoginPage() {
   const [displayName, setDisplayName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginStepMessage, setLoginStepMessage] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -185,13 +184,20 @@ export default function LoginPage() {
 
     if (mode === "login") {
       setIsLoggingIn(true);
+      setLoginStepMessage("Aguarde, autenticando...");
       try {
         router.prefetch("/");
         await login(cleanEmail, password);
+        setLoginStepMessage("Aguarde, acessando seu painel...");
+        // Fallback de segurança: caso o redirecionamento demore anormalmente, destrava o botão em 10s
+        setTimeout(() => {
+          setIsLoggingIn(false);
+          setLoginStepMessage("");
+        }, 10000);
       } catch (error: any) {
-        toast.error(error.message || "Erro ao fazer login");
-      } finally {
         setIsLoggingIn(false);
+        setLoginStepMessage("");
+        toast.error(error.message || "Erro ao fazer login");
       }
     } else {
       if (password !== registerConfirmPassword) {
@@ -292,8 +298,11 @@ export default function LoginPage() {
   if (authLoading || (user && !profile && !hasConfirmedTenant)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white gap-4">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">Verificando suas credenciais e perfil...</p>
+        <Loader2 className="w-9 h-9 animate-spin text-primary" />
+        <div className="text-center space-y-1.5 px-4">
+          <p className="text-base font-bold text-white tracking-wide">Aguarde um instante...</p>
+          <p className="text-xs text-slate-400">Verificando suas credenciais e preparando o seu painel de trabalho</p>
+        </div>
       </div>
     );
   }
@@ -520,16 +529,38 @@ export default function LoginPage() {
             <button 
               type="submit"
               disabled={isLoggingIn || isRegistering}
-              className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-primary/20"
+              className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-85 shadow-lg shadow-primary/20 cursor-pointer disabled:cursor-wait"
             >
-              {isLoggingIn || isRegistering ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+              {isLoggingIn ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
+                  <span>{loginStepMessage || "Aguarde, autenticando..."}</span>
+                </>
+              ) : isRegistering ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
+                  <span>Aguarde, criando conta...</span>
+                </>
               ) : mode === "login" ? (
                 <>Entrar <ArrowRight className="w-4 h-4" /></>
               ) : (
                 <>Criar Conta <ArrowRight className="w-4 h-4" /></>
               )}
             </button>
+
+            <AnimatePresence>
+              {isLoggingIn && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -4, height: 0 }}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 bg-primary/10 border border-primary/20 rounded-xl text-primary text-xs font-semibold text-center"
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
+                  <span>Aguarde um momento, validando seu acesso ao sistema...</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
           </form>
 
@@ -641,8 +672,8 @@ export default function LoginPage() {
                   >
                     {isSwitchingTenant ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Acessando Painel...
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        Aguarde, acessando painel...
                       </>
                     ) : (
                       <>Confirmar e Acessar Painel <ArrowRight className="w-4 h-4" /></>
