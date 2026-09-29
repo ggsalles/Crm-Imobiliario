@@ -388,34 +388,36 @@ export default function PublicPropertyCapturePage() {
           </div>
 
           {/* Key Characteristics Panel (Bento row) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5 sm:gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-md hover:border-slate-700 transition-colors">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                 <Square className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Área total</p>
-                <p className="font-bold text-white text-sm leading-none">{property.area} m²</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1 truncate">Área total</p>
+                <p className="font-bold text-white text-sm leading-none truncate">{property.area || 0} m²</p>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-md hover:border-slate-700 transition-colors">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
                 <Bed className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Dormitórios</p>
-                <p className="font-bold text-white text-sm leading-none">{property.bedrooms || 0} Quartos</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1 truncate">Dormitórios</p>
+                <p className="font-bold text-white text-sm leading-none truncate">
+                  {property.bedrooms || 0} {property.bedrooms === 1 ? 'Quarto' : 'Quartos'}
+                </p>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 flex items-center gap-3.5 shadow-md bg-gradient-to-br from-amber-500/10 to-transparent relative overflow-hidden">
+            <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-3.5 flex items-center gap-3 shadow-md bg-gradient-to-br from-amber-500/10 to-transparent relative overflow-hidden">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
                 <Crown className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] text-amber-400/90 font-black uppercase tracking-wider leading-none mb-1">Suítes</p>
-                <p className="font-bold text-white text-sm leading-none">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-amber-400/90 font-black uppercase tracking-wider leading-none mb-1 truncate">Suítes</p>
+                <p className="font-bold text-white text-sm leading-none truncate">
                   {property.suites !== undefined && property.suites !== null && property.suites > 0
                     ? `${property.suites} ${property.suites === 1 ? 'Suíte' : 'Suítes'}`
                     : (property.suites === 0 ? '0 Suítes' : '—')}
@@ -423,23 +425,27 @@ export default function PublicPropertyCapturePage() {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-md hover:border-slate-700 transition-colors">
               <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
                 <Bath className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Sanitários</p>
-                <p className="font-bold text-white text-sm leading-none">{property.bathrooms || 0} Banheiros</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1 truncate">Sanitários</p>
+                <p className="font-bold text-white text-sm leading-none truncate">
+                  {property.bathrooms || 0} {property.bathrooms === 1 ? 'Banheiro' : 'Banheiros'}
+                </p>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md col-span-2 sm:col-span-1">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-md col-span-2 sm:col-span-1 xl:col-span-1 hover:border-slate-700 transition-colors">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <Car className="w-5 h-5" />
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1">Vagas</p>
-                <p className="font-bold text-white text-sm leading-none">{property.parkingSpots || 0} vagas</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider leading-none mb-1 truncate">Vagas</p>
+                <p className="font-bold text-white text-sm leading-none truncate">
+                  {property.parkingSpots || 0} {property.parkingSpots === 1 ? 'Vaga' : 'Vagas'}
+                </p>
               </div>
             </div>
           </div>
