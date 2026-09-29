@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { publicLeadCaptureSchema, validateData } from '@/lib/validations';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,12 +21,14 @@ function getSupabase() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase();
-    const { propertyId, name, email, phone, message } = await req.json();
-
-    if (!propertyId || !name || !email || !phone) {
-      return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
+    const rawBody = await req.json().catch(() => ({}));
+    const validation = validateData(publicLeadCaptureSchema, rawBody);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
+
+    const { propertyId, name, email, phone, message } = validation.data;
+    const supabase = getSupabase();
 
     // 1. Fetch property details to grab the owner and tenant
     const { data: property, error: propError } = await supabase

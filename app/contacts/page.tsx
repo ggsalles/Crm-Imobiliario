@@ -2,31 +2,20 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useCallback, memo, Suspense } from "react";
-import Image from "next/image";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Users, 
-  Search, 
   Plus, 
-  Mail, 
-  Phone, 
-  Tag, 
-  ShieldCheck,
-  UserCircle,
-  X,
   Loader2,
-  Trash2,
-  Edit2,
   Download,
   Upload
 } from "lucide-react";
 import { ImportContactsModal } from "@/components/contacts/ImportContactsModal";
 import { recordAuditEvent } from "@/lib/audit";
-import { cn, formatPhone } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { 
   Contact, 
   UserProfile, 
@@ -44,8 +33,12 @@ import {
   getCachedContacts
 } from "@/lib/db";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "motion/react";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
+
+import { ContactCard } from "@/components/contacts/list/ContactCard";
+import { UserMemberCard } from "@/components/contacts/list/UserMemberCard";
+import { ContactsFilterBar } from "@/components/contacts/list/ContactsFilterBar";
+import { ContactFormModal } from "@/components/contacts/list/ContactFormModal";
 
 export default function ContactsPage() {
   return (
@@ -159,7 +152,6 @@ function ContactsContent() {
   // Memoized tab counts
   const clientCount = useMemo(() => contacts.filter(c => c.type === 'cliente').length, [contacts]);
   const teamCount = useMemo(() => {
-    // Exclui a conta do próprio usuário master/logado para manter a listagem limpa e sem ruídos
     const otherUsers = users.filter(u => 
       u.id !== user?.id && (!user?.email || u.email?.toLowerCase().trim() !== user?.email?.toLowerCase().trim())
     );
@@ -199,7 +191,7 @@ function ContactsContent() {
     return contacts.filter(c => {
       if (c.type !== activeTab) return false;
       if (activeTab === 'equipe' && c.email && registeredEmails.has(c.email.toLowerCase().trim())) {
-        return false; // Já será exibido como perfil registrado em users
+        return false;
       }
       if (activeTab === 'cliente') {
         if (selectedTemperature !== 'all' && c.temperature !== selectedTemperature) return false;
@@ -383,7 +375,6 @@ function ContactsContent() {
           }
         });
 
-        // Track temperature change for timeline
         if (activeTab === 'cliente' && editingContact.temperature !== data.temperature) {
           const tempLabels: Record<string, string> = {
             quente: "🔥 Quente",
@@ -403,7 +394,6 @@ function ContactsContent() {
         
         toast.success("Contato atualizado!");
       } else {
-        // If creating a team member, also create a profile entry
         if (activeTab === 'equipe') {
           const emailExists = await isEmailRegistered(data.email);
           if (emailExists) {
@@ -512,127 +502,21 @@ function ContactsContent() {
             </div>
           </header>
 
-          {/* Navigation & Search bar */}
-          <div className="flex flex-col sm:flex-row gap-2.5">
-            <div className="bg-card p-1 rounded-xl border border-border flex gap-1 shadow-xs shrink-0">
-              <button 
-                onClick={() => setActiveTab('cliente')}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer",
-                  activeTab === 'cliente' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <UserCircle className="w-3.5 h-3.5" />
-                Clientes ({clientCount})
-              </button>
-              <button 
-                onClick={() => setActiveTab('equipe')}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer",
-                  activeTab === 'equipe' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Equipe ({teamCount})
-              </button>
-            </div>
-
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder={`Pesquisar em ${activeTab === 'cliente' ? 'clientes' : 'equipe'}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 bg-card border border-border text-foreground rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
-              />
-            </div>
-          </div>
-
-          {/* Quick Filters for Clients (Temperature & Source) */}
-          {activeTab === 'cliente' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mr-1">Temperatura:</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTemperature('all')}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
-                    selectedTemperature === 'all' 
-                      ? "bg-primary text-primary-foreground shadow-xs" 
-                      : "bg-card border border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Todas ({clientCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTemperature('quente')}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
-                    selectedTemperature === 'quente' 
-                      ? "bg-red-500 text-white shadow-xs" 
-                      : "bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20"
-                  )}
-                >
-                  🔥 Quente ({temperatureCounts.quente})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTemperature('morno')}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
-                    selectedTemperature === 'morno' 
-                      ? "bg-amber-500 text-white shadow-xs" 
-                      : "bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
-                  )}
-                >
-                  ⚡ Morno ({temperatureCounts.morno})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTemperature('frio')}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer",
-                    selectedTemperature === 'frio' 
-                      ? "bg-indigo-500 text-white shadow-xs" 
-                      : "bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/20"
-                  )}
-                >
-                  ❄️ Frio ({temperatureCounts.frio})
-                </button>
-              </div>
-
-              {availableSources.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedSource}
-                    onChange={(e) => setSelectedSource(e.target.value)}
-                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary/20"
-                  >
-                    <option value="all">Todas as origens</option>
-                    {availableSources.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  {(selectedTemperature !== 'all' || selectedSource !== 'all' || searchQuery) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedTemperature('all');
-                        setSelectedSource('all');
-                        setSearchQuery('');
-                      }}
-                      className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-                    >
-                      Limpar filtros
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Navigation & Search bar & Filters */}
+          <ContactsFilterBar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            clientCount={clientCount}
+            teamCount={teamCount}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedTemperature={selectedTemperature}
+            setSelectedTemperature={setSelectedTemperature}
+            temperatureCounts={temperatureCounts}
+            selectedSource={selectedSource}
+            setSelectedSource={setSelectedSource}
+            availableSources={availableSources}
+          />
 
           {/* Grid Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -658,7 +542,7 @@ function ContactsContent() {
 
                 {/* Team Members (Registered Users) */}
                 {activeTab === 'equipe' && filteredUsers.map((userProfile) => (
-                  <UserCard 
+                  <UserMemberCard 
                     key={userProfile.id} 
                     user={userProfile} 
                     isCurrentUser={userProfile.id === user?.id}
@@ -694,162 +578,17 @@ function ContactsContent() {
         </div>
       </main>
 
-      {/* Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-card rounded-2xl p-5 md:p-6 w-full max-w-lg relative shadow-xl overflow-hidden border border-border"
-            >
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-muted transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
-              
-              <h2 className="text-xl font-black tracking-tight mb-4">
-                {editingContact ? 'Editar Contato' : `Novo ${activeTab === 'cliente' ? 'Cliente' : 'Membro'}`}
-              </h2>
-
-              <form onSubmit={handleSave} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Nome Completo</label>
-                    <input 
-                      name="name"
-                      required
-                      defaultValue={editingContact?.name}
-                      placeholder="Ex: Maria Oliveira"
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">E-mail</label>
-                    <input 
-                      name="email"
-                      type="email"
-                      required
-                      defaultValue={editingContact?.email}
-                      placeholder="maria@exemplo.com"
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Telefone</label>
-                    <input 
-                      name="phone"
-                      value={displayPhone}
-                      onChange={(e) => setDisplayPhone(formatPhone(e.target.value))}
-                      placeholder="55 11 99999-9999"
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                    />
-                  </div>
-                  {activeTab === 'cliente' ? (
-                    <>
-                      <div className="col-span-1">
-                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Origem (Como chegou?)</label>
-                        <select 
-                          name="source"
-                          defaultValue={editingContact?.source} 
-                          className="w-full pl-3 pr-8 py-2 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em] text-xs font-medium"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
-                        >
-                          <option value="" className="bg-card">Selecione uma origem</option>
-                          <option value="Instagram" className="bg-card">Instagram</option>
-                          <option value="WhatsApp" className="bg-card">WhatsApp</option>
-                          <option value="Facebook" className="bg-card">Facebook</option>
-                          <option value="Site" className="bg-card">Site / Landing Page</option>
-                          <option value="Indicação" className="bg-card">Indicação</option>
-                          <option value="Portal Imobiliário" className="bg-card">Portal Imobiliário</option>
-                          <option value="Telefone" className="bg-card">Ligação Direta</option>
-                          <option value="Outro" className="bg-card">Outro</option>
-                        </select>
-                      </div>
-
-                      <div className="col-span-1">
-                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Temperatura do Lead</label>
-                        <select 
-                          name="temperature"
-                          defaultValue={
-                            (editingContact as any)?.rawRole === 'manual_quente' ? 'quente' :
-                            (editingContact as any)?.rawRole === 'manual_morno' ? 'morno' :
-                            (editingContact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
-                          } 
-                          className="w-full pl-3 pr-8 py-2 rounded-xl border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em] text-xs font-medium"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
-                        >
-                          <option value="auto" className="bg-card">🤖 Inteligente (Baseado no Funil)</option>
-                          <option value="quente" className="bg-card">🔥 Forçar Quente</option>
-                          <option value="morno" className="bg-card">⚡ Forçar Morno</option>
-                          <option value="frio" className="bg-card">❄️ Forçar Frio</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Cargo / Função</label>
-                        <input 
-                          name="role"
-                          defaultValue={editingContact?.role}
-                          placeholder="Ex: Corretor Sênior"
-                          className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-bold uppercase text-muted-foreground mb-1 ml-1 block">Departamento</label>
-                        <input 
-                          name="department"
-                          defaultValue={editingContact?.department}
-                          placeholder="Ex: Vendas / Aluguel"
-                          className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  {editingContact && (
-                    <button 
-                      type="button"
-                      onClick={() => setContactToDelete(editingContact)}
-                      className="px-3 py-2 rounded-xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer"
-                      title="Excluir este contato"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button 
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit"
-                    className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer"
-                  >
-                    Salvar
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Modal de Criação / Edição de Contato */}
+      <ContactFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editingContact={editingContact}
+        activeTab={activeTab}
+        displayPhone={displayPhone}
+        setDisplayPhone={setDisplayPhone}
+        onSave={handleSave}
+        onDeleteRequest={handleDeletePrompt}
+      />
 
       {/* Modal de Confirmação de Exclusão de Contato */}
       <ConfirmDeleteModal
@@ -874,206 +613,3 @@ function ContactsContent() {
     </div>
   );
 }
-
-const ContactCard = memo(function ContactCard({ 
-  contact, 
-  companyName, 
-  onEdit, 
-  onDelete, 
-  isActiveTabEquipe, 
-  onMessage, 
-  isMessaging
-}: { 
-  contact: Contact, 
-  companyName?: string, 
-  onEdit: (contact: Contact) => void, 
-  onDelete: (contact: Contact) => void, 
-  isActiveTabEquipe: boolean, 
-  onMessage: (target: any, type: 'cliente' | 'equipe') => void, 
-  isMessaging: boolean
-}) {
-  return (
-    <div className="bg-card p-4 rounded-xl border border-border shadow-xs hover:shadow-md transition-all group h-full flex flex-col justify-between">
-      <div>
-        <div className="flex items-start justify-between mb-3 gap-2.5">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base uppercase shrink-0",
-              isActiveTabEquipe ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-500"
-            )}>
-              {contact.name.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <h3 className="font-bold text-sm md:text-base truncate text-foreground" title={contact.name}>{contact.name}</h3>
-                {!isActiveTabEquipe && contact.temperature && (
-                  contact.temperature === 'quente' ? (
-                    <span 
-                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Negociação ou proposta ativa no funil"}
-                      className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded relative select-none animate-pulse"
-                    >
-                      <span className="w-1 h-1 rounded-full bg-red-500 animate-ping inline-block" />
-                      Quente
-                    </span>
-                  ) : contact.temperature === 'morno' ? (
-                    <span 
-                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Oportunidade em qualificação"}
-                      className="inline-flex items-center gap-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none"
-                    >
-                      Morno
-                    </span>
-                  ) : (
-                    <span 
-                      title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Sem oportunidades ativas no funil"}
-                      className="inline-flex items-center gap-0.5 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider rounded select-none"
-                    >
-                      Frio
-                    </span>
-                  )
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground truncate font-medium">
-                {isActiveTabEquipe ? contact.role : (contact.source ? `Origem: ${contact.source}` : (companyName ? `Empresa: ${companyName}` : 'Sem origem'))}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-0.5 shrink-0 items-center">
-            <button 
-              onClick={(e) => { 
-                e.preventDefault(); 
-                e.stopPropagation();
-                onEdit(contact); 
-              }} 
-              className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all cursor-pointer" 
-              title="Editar"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button 
-              onClick={(e) => { 
-                e.preventDefault(); 
-                e.stopPropagation();
-                onDelete(contact);
-              }} 
-              className="p-1.5 rounded-lg transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
-              title="Excluir contato"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
-            <Mail className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{contact.email}</span>
-          </div>
-          <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
-            <Phone className="w-3.5 h-3.5 shrink-0" />
-            <span>{contact.phone}</span>
-          </div>
-          <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium border-t border-border pt-2">
-            <Tag className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{isActiveTabEquipe ? contact.department : (contact.source || 'Não informado')}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex gap-1.5">
-        <Link 
-          href={`/contacts/${contact.id}`}
-          className={cn(
-            "text-center text-xs font-bold py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-primary-foreground transition-all shadow-xs",
-            isActiveTabEquipe ? "flex-1" : "w-full"
-          )}
-        >
-          {isActiveTabEquipe ? 'Ver Detalhes' : 'Visão 360°'}
-        </Link>
-        {isActiveTabEquipe && (
-          <button 
-            onClick={() => onMessage(contact, 'equipe')}
-            disabled={isMessaging}
-            className="flex-1 text-center text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all shadow-xs disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            {isMessaging && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Mensagem
-          </button>
-        )}
-      </div>
-    </div>
-  );
-});
-
-const UserCard = memo(function UserCard({ 
-  user, 
-  isCurrentUser = false,
-  onMessage, 
-  isMessaging 
-}: { 
-  user: UserProfile, 
-  isCurrentUser?: boolean,
-  onMessage: (target: any, type: 'cliente' | 'equipe') => void, 
-  isMessaging: boolean 
-}) {
-  const isAdmin = user.role === 'Admin' || user.isAdmin === true;
-  return (
-    <div className={cn(
-      "bg-card p-4 rounded-xl border shadow-xs hover:shadow-md transition-all group h-full flex flex-col justify-between",
-      isCurrentUser ? "border-primary/40 bg-primary/[0.02]" : "border-border"
-    )}>
-      <div>
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center overflow-hidden border border-border relative">
-              {user.photoURL ? (
-                <Image src={user.photoURL} alt="Avatar" fill className="w-full h-full object-cover" referrerPolicy="no-referrer" unoptimized />
-              ) : (
-                <span className="font-bold text-base text-primary">{user.displayName?.charAt(0) || 'U'}</span>
-              )}
-            </div>
-            <div>
-              <h3 className="font-bold text-sm md:text-base flex items-center gap-1.5 text-foreground">
-                {user.displayName}
-                {isCurrentUser && (
-                  <span className="bg-muted text-muted-foreground text-[8px] uppercase px-1.5 py-0.5 rounded font-black">Você</span>
-                )}
-                <span className={cn(
-                  "text-[8px] uppercase px-1.5 py-0.5 rounded font-black",
-                  isAdmin ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-primary/10 text-primary"
-                )}>
-                  {isAdmin ? 'Admin' : 'Membro'}
-                </span>
-              </h3>
-              <p className="text-[11px] text-muted-foreground font-medium">Membro da Organização</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2.5 text-xs text-muted-foreground font-medium">
-            <Mail className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{user.email}</span>
-          </div>
-          <div className="flex items-center gap-2.5 text-xs text-primary font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            <span>Conta Vinculada</span>
-          </div>
-        </div>
-
-        {isCurrentUser ? (
-          <div className="w-full text-xs font-semibold py-1.5 bg-muted/60 text-muted-foreground rounded-lg flex items-center justify-center gap-1.5 mt-auto border border-border/50 select-none">
-            Sua Conta
-          </div>
-        ) : (
-          <button 
-            onClick={() => onMessage(user, 'equipe')}
-            disabled={isMessaging}
-            className="w-full text-xs font-bold py-1.5 bg-muted text-muted-foreground rounded-lg hover:bg-primary hover:text-primary-foreground transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-auto cursor-pointer"
-          >
-            {isMessaging && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Enviar Mensagem
-          </button>
-        )}
-      </div>
-    </div>
-  );
-});

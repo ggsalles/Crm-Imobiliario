@@ -235,7 +235,7 @@ export function DealModal({
                       </option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id} className="bg-card text-foreground">
-                          {u.displayName || u.name}
+                          {u.displayName || (u as any).name || u.email}
                         </option>
                       ))}
                     </select>

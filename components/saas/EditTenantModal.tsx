@@ -5,6 +5,7 @@ import { X, Building2, MapPin, Phone, Mail, FileText, Loader2, Check } from 'luc
 import { Tenant } from '@/lib/db';
 import { toast } from 'sonner';
 import { recordAuditEvent } from '@/lib/audit';
+import { apiClient } from '@/lib/api-client';
 
 interface EditTenantModalProps {
   isOpen: boolean;
@@ -77,16 +78,7 @@ export function EditTenantModal({ isOpen, onClose, tenant, onSuccess }: EditTena
 
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/tenants?id=${tenant.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Erro ao salvar alterações no cadastro');
-      }
+      await apiClient.put(`/api/tenants?id=${tenant.id}`, formData);
 
       toast.success('Cadastro da empresa atualizado com sucesso!');
       recordAuditEvent({

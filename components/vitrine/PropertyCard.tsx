@@ -12,7 +12,8 @@ import {
   MessageCircle, 
   Sparkles, 
   TrendingUp,
-  Briefcase 
+  Briefcase,
+  Crown
 } from 'lucide-react';
 
 export interface VitrineProperty {
@@ -30,6 +31,7 @@ export interface VitrineProperty {
   cep?: string;
   area: number;
   bedrooms?: number;
+  suites?: number;
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
@@ -75,10 +77,10 @@ export function ShowcasePropertyCard({
   return (
     <div
       onClick={() => onOpen(property.id)}
-      className="group bg-card rounded-2xl border border-border/80 overflow-hidden shadow-xs hover:shadow-xl hover:border-primary/40 transition-all duration-300 flex flex-col cursor-pointer"
+      className="group bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-black/60 hover:border-blue-500/50 transition-all duration-300 flex flex-col cursor-pointer"
     >
       {/* Photo Container */}
-      <div className="relative aspect-16/10 overflow-hidden bg-muted">
+      <div className="relative aspect-16/10 overflow-hidden bg-slate-950">
         <Image
           src={coverPhoto}
           alt={property.title}
@@ -89,12 +91,12 @@ export function ShowcasePropertyCard({
         />
         
         {/* Dark gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-90" />
 
         {/* Top Badges */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-xs">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-950/70 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-xs border border-white/10">
               {property.type || 'Imóvel'}
             </span>
             {property.isFeatured && (
@@ -103,7 +105,7 @@ export function ShowcasePropertyCard({
               </span>
             )}
             {property.acceptsFinancing && (
-              <span className="px-2 py-0.5 rounded-lg bg-primary/90 text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow-xs flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-xs flex items-center gap-1">
                 <TrendingUp className="w-2.5 h-2.5" /> Financia
               </span>
             )}
@@ -143,13 +145,13 @@ export function ShowcasePropertyCard({
         {/* Bottom Photo Info */}
         <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
           <div className="text-white">
-            <span className="text-[10px] uppercase font-semibold opacity-90 block">Valor de Venda</span>
+            <span className="text-[10px] uppercase font-semibold text-slate-300 block">Valor de Venda</span>
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-lg sm:text-xl font-extrabold tracking-tight drop-shadow-sm">
+              <span className="text-lg sm:text-xl font-extrabold tracking-tight drop-shadow-sm text-blue-400">
                 {formatPrice(property.price)}
               </span>
               {property.area > 0 && property.price > 0 && (
-                <span className="text-[10px] font-bold opacity-80 font-mono">
+                <span className="text-[10px] font-bold text-slate-300 font-mono">
                   ({formatPrice(Math.round(property.price / property.area))}/m²)
                 </span>
               )}
@@ -157,7 +159,7 @@ export function ShowcasePropertyCard({
           </div>
 
           {totalPhotos > 0 && (
-            <span className="px-2 py-0.5 rounded-md bg-black/50 backdrop-blur-sm text-white/90 text-[10px] font-bold">
+            <span className="px-2 py-0.5 rounded-md bg-slate-950/70 backdrop-blur-sm text-white/90 text-[10px] font-bold border border-white/10">
               📸 {totalPhotos} {totalPhotos === 1 ? 'foto' : 'fotos'}
             </span>
           )}
@@ -168,17 +170,17 @@ export function ShowcasePropertyCard({
       <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1.5">
           {property.buildingName && (
-            <span className="text-[11px] font-bold uppercase tracking-wider text-primary block line-clamp-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 block line-clamp-1">
               🏢 {property.buildingName}
             </span>
           )}
           
-          <h3 className="font-bold text-sm sm:text-base text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+          <h3 className="font-bold text-sm sm:text-base text-white line-clamp-1 group-hover:text-blue-400 transition-colors">
             {property.title}
           </h3>
 
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground line-clamp-1">
-            <MapPin className="w-3.5 h-3.5 shrink-0 text-primary/70" />
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 line-clamp-1">
+            <MapPin className="w-3.5 h-3.5 shrink-0 text-blue-400" />
             <span>
               {property.neighborhood ? `${property.neighborhood}, ` : ''}
               {property.city || property.location || 'Localização sob consulta'}
@@ -187,20 +189,20 @@ export function ShowcasePropertyCard({
 
           {/* Encargos Periódicos (Condomínio e IPTU) */}
           {((property.condoFee && property.condoFee > 0) || (property.iptu && property.iptu > 0)) && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground font-medium pt-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-400 font-medium pt-1">
               {property.condoFee && property.condoFee > 0 ? (
                 <span className="inline-flex items-center gap-1">
                   <span>Cond.:</span>
-                  <strong className="text-foreground">{formatPrice(property.condoFee)}</strong>
+                  <strong className="text-slate-200">{formatPrice(property.condoFee)}</strong>
                 </span>
               ) : null}
               {property.condoFee && property.condoFee > 0 && property.iptu && property.iptu > 0 ? (
-                <span className="text-border">•</span>
+                <span className="text-slate-700">•</span>
               ) : null}
               {property.iptu && property.iptu > 0 ? (
                 <span className="inline-flex items-center gap-1">
                   <span>IPTU:</span>
-                  <strong className="text-foreground">{formatPrice(property.iptu)}</strong>
+                  <strong className="text-slate-200">{formatPrice(property.iptu)}</strong>
                 </span>
               ) : null}
             </div>
@@ -212,13 +214,13 @@ export function ShowcasePropertyCard({
               {property.tags.slice(0, 3).map((tag, idx) => (
                 <span
                   key={idx}
-                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-primary/10 text-primary border border-primary/15 truncate max-w-[120px]"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 truncate max-w-[120px]"
                 >
                   {tag}
                 </span>
               ))}
               {property.tags.length > 3 && (
-                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground">
+                <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
                   +{property.tags.length - 3}
                 </span>
               )}
@@ -227,43 +229,53 @@ export function ShowcasePropertyCard({
         </div>
 
         {/* Features Badges */}
-        <div className="pt-2 border-t border-border/60 grid grid-cols-4 gap-1 text-center">
-          <div className="bg-muted/40 rounded-lg p-1.5">
-            <div className="flex items-center justify-center gap-1 text-muted-foreground text-[10px] font-medium">
-              <Bed className="w-3 h-3 text-primary/70" />
+        <div className="pt-2 border-t border-slate-800 grid grid-cols-5 gap-1 text-center">
+          <div className="bg-slate-800/80 border border-slate-700/60 rounded-lg p-1.5">
+            <div className="flex items-center justify-center gap-0.5 text-slate-400 text-[10px] font-medium">
+              <Bed className="w-3 h-3 text-blue-400" />
               <span>Qts</span>
             </div>
-            <span className="text-xs font-bold text-foreground">
+            <span className="text-xs font-bold text-white">
               {property.bedrooms || '-'}
             </span>
           </div>
 
-          <div className="bg-muted/40 rounded-lg p-1.5">
-            <div className="flex items-center justify-center gap-1 text-muted-foreground text-[10px] font-medium">
-              <Bath className="w-3 h-3 text-primary/70" />
+          <div className="bg-slate-800/80 border border-amber-500/30 rounded-lg p-1.5 bg-gradient-to-b from-amber-500/5 to-transparent">
+            <div className="flex items-center justify-center gap-0.5 text-amber-400/90 text-[10px] font-medium">
+              <Crown className="w-3 h-3 text-amber-400" />
+              <span>Sts</span>
+            </div>
+            <span className="text-xs font-bold text-white">
+              {property.suites !== undefined && property.suites !== null && property.suites > 0 ? property.suites : '-'}
+            </span>
+          </div>
+
+          <div className="bg-slate-800/80 border border-slate-700/60 rounded-lg p-1.5">
+            <div className="flex items-center justify-center gap-0.5 text-slate-400 text-[10px] font-medium">
+              <Bath className="w-3 h-3 text-cyan-400" />
               <span>Ban</span>
             </div>
-            <span className="text-xs font-bold text-foreground">
+            <span className="text-xs font-bold text-white">
               {property.bathrooms || '-'}
             </span>
           </div>
 
-          <div className="bg-muted/40 rounded-lg p-1.5">
-            <div className="flex items-center justify-center gap-1 text-muted-foreground text-[10px] font-medium">
-              <Car className="w-3 h-3 text-primary/70" />
+          <div className="bg-slate-800/80 border border-slate-700/60 rounded-lg p-1.5">
+            <div className="flex items-center justify-center gap-0.5 text-slate-400 text-[10px] font-medium">
+              <Car className="w-3 h-3 text-emerald-400" />
               <span>Vagas</span>
             </div>
-            <span className="text-xs font-bold text-foreground">
+            <span className="text-xs font-bold text-white">
               {property.parkingSpots || '-'}
             </span>
           </div>
 
-          <div className="bg-muted/40 rounded-lg p-1.5">
-            <div className="flex items-center justify-center gap-1 text-muted-foreground text-[10px] font-medium">
-              <Square className="w-3 h-3 text-primary/70" />
+          <div className="bg-slate-800/80 border border-slate-700/60 rounded-lg p-1.5">
+            <div className="flex items-center justify-center gap-0.5 text-slate-400 text-[10px] font-medium">
+              <Square className="w-3 h-3 text-blue-400" />
               <span>Área</span>
             </div>
-            <span className="text-xs font-bold text-foreground">
+            <span className="text-xs font-bold text-white">
               {property.area ? `${property.area}m²` : '-'}
             </span>
           </div>
@@ -277,7 +289,7 @@ export function ShowcasePropertyCard({
               e.stopPropagation();
               onOpen(property.id);
             }}
-            className="flex-1 py-2 px-3 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-95 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+            className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
           >
             <span>Ver Detalhes</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -287,7 +299,7 @@ export function ShowcasePropertyCard({
             <button
               type="button"
               onClick={(e) => onCreateDeal(e, property)}
-              className="p-2 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20 transition-all cursor-pointer"
+              className="p-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/20 transition-all cursor-pointer"
               title="Iniciar Negociação no Funil vinculando este imóvel"
             >
               <Briefcase className="w-4 h-4" />
@@ -298,7 +310,7 @@ export function ShowcasePropertyCard({
             <button
               type="button"
               onClick={(e) => onWhatsapp(e, property)}
-              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 transition-all cursor-pointer"
+              className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 transition-all cursor-pointer"
               title="Tirar dúvidas no WhatsApp"
             >
               <MessageCircle className="w-4 h-4 fill-current" />

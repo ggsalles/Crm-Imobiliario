@@ -411,7 +411,6 @@ export function PropertyForm({
           severity: "medium",
           category: "modification",
           relatedId: currentPropertyId,
-          entityId: currentPropertyId,
           entityType: "property",
           metadata: {
             title: data.title,
@@ -429,7 +428,6 @@ export function PropertyForm({
           severity: "info",
           category: "modification",
           relatedId: newId || undefined,
-          entityId: newId || undefined,
           entityType: "property",
           metadata: {
             title: data.title,

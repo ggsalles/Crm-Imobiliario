@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { toast } from "sonner";
 import { Volume2, VolumeX, Sparkles, ArrowRight, MessageCircle } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
+import { isPublicRoute } from "@/lib/routes";
 
 export function NewLeadSoundNotifier() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export function NewLeadSoundNotifier() {
 
   // Sync sound toggle state
   useEffect(() => {
+    if (isPublicRoute(pathname)) return;
     setSoundActive(isSoundEnabled());
 
     const handleToggle = (e: any) => {
@@ -30,7 +32,7 @@ export function NewLeadSoundNotifier() {
 
     window.addEventListener("crm-sound-toggle", handleToggle);
     return () => window.removeEventListener("crm-sound-toggle", handleToggle);
-  }, []);
+  }, [pathname]);
 
   const triggerLeadAlert = useCallback((lead: any, totalCount: number) => {
     // Only alert if user is actively authenticated and sound is enabled
@@ -88,14 +90,7 @@ export function NewLeadSoundNotifier() {
   // Listen for new deals entering the pipeline
   useEffect(() => {
     // Strictly disable on public landing pages or auth screens or when not logged in
-    const isPublicOrAuthPage = 
-      !user || 
-      pathname?.startsWith("/p/") || 
-      pathname?.startsWith("/vitrine") || 
-      pathname?.startsWith("/login") || 
-      pathname?.startsWith("/register") || 
-      pathname?.startsWith("/forgot-password") || 
-      pathname?.startsWith("/reset-password");
+    const isPublicOrAuthPage = !user || isPublicRoute(pathname);
 
     if (isPublicOrAuthPage) {
       knownDealIdsRef.current.clear();

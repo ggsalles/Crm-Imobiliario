@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, Database, ExternalLink, RefreshCw, X } from "lucide-react";
 import { forceDataResync } from "@/lib/db";
+import { isCustomerFacingRoute } from "@/lib/routes";
 
 interface DatabaseStatusDetail {
   isPaused: boolean;
@@ -10,6 +12,7 @@ interface DatabaseStatusDetail {
 }
 
 export function DatabaseStatusBanner() {
+  const pathname = usePathname();
   const [isPaused, setIsPaused] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -31,7 +34,7 @@ export function DatabaseStatusBanner() {
     };
   }, []);
 
-  if (!isPaused || dismissed) return null;
+  if (!isPaused || dismissed || isCustomerFacingRoute(pathname)) return null;
 
   const handleRetry = async () => {
     setIsChecking(true);

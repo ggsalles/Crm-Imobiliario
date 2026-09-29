@@ -17,6 +17,7 @@ import {
 import { Tenant } from '@/lib/db';
 import { EditTenantModal } from './EditTenantModal';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api-client';
 
 interface TenantPlanCardProps {
   tenant: Tenant;
@@ -84,16 +85,7 @@ export function TenantPlanCard({
         userLimit: syncedUserLimit
       };
 
-      const res = await fetch(`/api/tenants?id=${tenant.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Erro ao salvar valores do plano');
-      }
+      await apiClient.put(`/api/tenants?id=${tenant.id}`, payload);
 
       toast.success(`Valores do plano salvos! Capacidade sincronizada para ${syncedUserLimit} vagas.`);
       try {

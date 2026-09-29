@@ -449,7 +449,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     
     const { tenantIds, password, initialPassword, ...profileData } = body;
     const userPassword = password || initialPassword || null;
@@ -625,7 +625,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
     }
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     const { tenantIds, ...otherData } = data;
 
     // Trata palavra-chave secreta

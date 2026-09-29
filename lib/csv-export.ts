@@ -84,7 +84,7 @@ export function exportDealsToCsv(
 
   const rows = deals.map(deal => {
     const stageObj = STAGES.find(s => s.id === deal.stage);
-    const stageName = stageObj ? stageObj.name : deal.stage;
+    const stageName = stageObj ? stageObj.title : deal.stage;
     const contact = deal.contactId ? contactsMap[deal.contactId] : null;
     const property = deal.propertyId ? propertiesMap[deal.propertyId] : null;
 
@@ -99,7 +99,7 @@ export function exportDealsToCsv(
       contact?.email || "",
       property ? property.title : "Nenhum",
       property ? formatCurrencyBRL(property.price || 0) : "",
-      deal.lostReason || "",
+      deal.statusReason || (deal as any).lostReason || "",
       deal.createdAt ? format(new Date(deal.createdAt), "dd/MM/yyyy HH:mm") : "",
       deal.updatedAt ? format(new Date(deal.updatedAt), "dd/MM/yyyy HH:mm") : "",
       deal.ownerId || ""
@@ -213,7 +213,7 @@ export function exportExecutiveSummaryToCsv(
     const stageDeals = deals.filter(d => d.stage === st.id);
     const stageVal = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
     rows.push([
-      `Fase: ${st.name}`,
+      `Fase: ${st.title}`,
       stageDeals.length,
       formatCurrencyBRL(stageVal),
       `${totalDeals > 0 ? ((stageDeals.length / totalDeals) * 100).toFixed(1) : 0}% dos negócios`

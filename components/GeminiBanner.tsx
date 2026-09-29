@@ -117,48 +117,51 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-r from-primary to-indigo-600 p-6 rounded-[24px] shadow-lg shadow-primary/20 text-white mb-8 relative overflow-hidden group"
+      className="bg-gradient-to-r from-primary/95 via-indigo-600/95 to-primary px-3.5 py-2 sm:px-4 sm:py-2 rounded-xl shadow-xs text-white relative overflow-hidden group shrink-0 border border-white/10"
     >
-      <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
-        <Brain className="w-32 h-32" />
+      <div className="absolute -right-4 -bottom-4 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-700">
+        <Brain className="w-20 h-20" />
       </div>
       
-      <div className="relative z-10 flex items-center gap-4 min-h-[4rem] py-1">
-        <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
+      <div className="relative z-10 flex items-center gap-2.5 sm:gap-3">
+        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center shrink-0">
           {loading ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
           ) : (
-            <Sparkles className="w-6 h-6" />
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
           )}
         </div>
         
-        <div className="flex-1 overflow-hidden">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1 flex items-center gap-2">
-            Insight Inteligente
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
+              Insight Inteligente
+            </span>
             {insights.length > 1 && !quotaError && (
-              <span className="bg-white/20 px-1.5 py-0.5 rounded text-[8px]">
+              <span className="bg-white/20 px-1 py-0.2 rounded text-[8px] font-bold">
                 {currentIndex + 1}/{insights.length}
               </span>
             )}
             {quotaError && (
-              <span className="bg-red-200 text-red-700 px-1.5 py-0.5 rounded text-[8px] flex items-center gap-1">
-                <AlertCircle className="w-2 h-2" />
-                Limite da IA atingido - Dicas Padrão
+              <span className="bg-red-500/80 text-white px-1.5 py-0.2 rounded text-[8px] font-bold flex items-center gap-1">
+                <AlertCircle className="w-2.5 h-2.5" />
+                Dica Padrão
               </span>
             )}
-          </h3>
+          </div>
           
-          <div className="relative min-h-[6rem]">
+          <div className="h-5 sm:h-6 relative overflow-hidden flex items-center">
             <AnimatePresence mode="wait">
               <motion.p 
                 key={currentIndex}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.8, ease: "easeInOut" }}
-                className="text-lg font-bold leading-snug max-w-2xl absolute inset-0 flex items-center pr-12 pb-2"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+                className="text-xs sm:text-[13px] font-bold truncate leading-tight text-white/95"
+                title={insights[currentIndex]}
               >
                 {insights[currentIndex]}
               </motion.p>
@@ -166,32 +169,34 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
           </div>
         </div>
 
-        <div className="flex gap-1 ml-auto">
+        <div className="flex items-center gap-1 shrink-0">
           <button 
+            type="button"
             onClick={() => setCurrentIndex(prev => (prev - 1 + insights.length) % insights.length)}
-            className="p-2 hover:bg-white/10 rounded-xl transition-all"
-            title="Anterior"
+            className="p-1 sm:p-1.5 hover:bg-white/15 rounded-lg transition-all text-white/80 hover:text-white cursor-pointer"
+            title="Dica anterior"
           >
-            <Info className="w-4 h-4 opacity-50 rotate-180" />
+            <Info className="w-3.5 h-3.5 rotate-180" />
           </button>
           <button 
+            type="button"
             onClick={() => generateInsight(true)}
-            className="p-2 hover:bg-white/10 rounded-xl transition-all"
-            title="Gerar novos insights"
+            className="p-1 sm:p-1.5 hover:bg-white/15 rounded-lg transition-all text-white/80 hover:text-white cursor-pointer"
+            title="Atualizar insight com IA"
           >
-            <Loader2 className={cn("w-4 h-4", loading && "animate-spin")} />
+            <Loader2 className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
           </button>
         </div>
       </div>
 
       {/* Progress Bar for rotation */}
-      <div className="absolute bottom-0 left-0 h-1 bg-white/20 w-full overflow-hidden">
+      <div className="absolute bottom-0 left-0 h-0.5 bg-white/20 w-full overflow-hidden">
         <motion.div 
           key={currentIndex}
           initial={{ width: "0%" }}
           animate={{ width: "100%" }}
           transition={{ duration: 20, ease: "linear" }}
-          className="h-full bg-white/40"
+          className="h-full bg-white/60"
         />
       </div>
     </motion.div>

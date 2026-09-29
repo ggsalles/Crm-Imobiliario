@@ -6,35 +6,13 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Search, 
-  History, 
-  Edit2, 
-  MessageSquare, 
-  MoreHorizontal, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Plus, 
-  Tag, 
-  Calendar, 
-  CheckSquare, 
-  FileText, 
-  ChevronRight,
-  TrendingUp,
-  Clock,
-  ExternalLink,
-  Filter,
-  Users,
-  Zap,
-  Building2,
-  ArrowLeft,
-  Loader2,
-  Trash2,
-  Sparkles,
-  Compass,
-  X,
-  Check
+  ArrowLeft, 
+  Loader2, 
+  TrendingUp, 
+  Users, 
+  Clock, 
+  Filter 
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter, useParams } from "next/navigation";
@@ -42,31 +20,30 @@ import { recordAuditEvent } from "@/lib/audit";
 import { 
   Contact, 
   Company, 
-  Deal,
-  Activity,
-  Property,
+  Deal, 
+  Activity, 
+  Property, 
   getContact, 
   getCompany, 
-  deleteContact,
-  getDealsByContact,
-  getActivitiesByContact,
-  createActivity,
-  createTimelineEvent,
-  getProperties,
-  createDeal,
-  updateContact
+  deleteContact, 
+  getDealsByContact, 
+  getActivitiesByContact, 
+  createActivity, 
+  createTimelineEvent, 
+  getProperties, 
+  createDeal, 
+  updateContact 
 } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 
-interface InterestProfile {
-  maxPrice: number | null;
-  minBedrooms: number | null;
-  propertyType: string;
-  neighborhoods: string[];
-}
+import { ContactHeaderCard } from "@/components/contacts/detail/ContactHeaderCard";
+import { ContactInterestSection, InterestProfile } from "@/components/contacts/detail/ContactInterestSection";
+import { ContactDealsTable } from "@/components/contacts/detail/ContactDealsTable";
+import { ContactActivitiesSidebar } from "@/components/contacts/detail/ContactActivitiesSidebar";
+import { ContactInterestModal } from "@/components/contacts/detail/ContactInterestModal";
 
 const parseInterestProfile = (departmentText?: string): InterestProfile => {
   const defaultProfile: InterestProfile = {
@@ -98,7 +75,7 @@ export default function ContactDetail360Page() {
   const id = params.id as string;
 
   const [contact, setContact] = useState<Contact | null>(null);
-  const [company, setCompany] = useState<Company | null>(null);
+  const [, setCompany] = useState<Company | null>(null);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -118,49 +95,33 @@ export default function ContactDetail360Page() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-    }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    async function fetchData() {
-      if (!id || !user || !profile) return;
-      
-      // Basic UUID validation to prevent database errors for paths like /contacts/search
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(id)) {
-        router.push("/contacts");
-        return;
-      }
-
+    async function loadData() {
+      if (!id) return;
       setLoading(true);
       try {
         const contactData = await getContact(id);
+        setContact(contactData);
+        
         if (contactData) {
-          // Ownership Check for non-admins
-          if (profile.role !== 'Admin' && contactData.ownerId !== user.id) {
-            toast.error("Você não tem permissão para acessar este contato.");
-            router.push("/contacts");
-            return;
-          }
-
-          setContact(contactData);
-
-          // Audit log sensitive data access
           recordAuditEvent({
-            action: 'VIEW_SENSITIVE_DATA',
-            title: 'Visualização da Ficha Completa do Contato',
-            content: `Ficha cadastral de "${contactData.name}" (${contactData.email || 'sem email'}) foi visualizada.`,
-            severity: 'medium',
-            category: 'sensitive_view',
+            action: 'VIEW_CONTACT_DETAILS',
+            title: 'Consulta a Visão 360 do Contato',
+            content: `Usuário abriu os detalhes do contato "${contactData.name}".`,
+            severity: 'low',
+            category: 'modification',
             relatedId: contactData.id,
+            entityId: contactData.id,
             entityType: 'contact',
             metadata: {
               contactName: contactData.name,
               contactEmail: contactData.email
             }
           });
+
+          if (contactData.companyId) {
+            const companyData = await getCompany(contactData.companyId);
+            setCompany(companyData);
+          }
           
           const [dealsData, activitiesData, propertiesData] = await Promise.all([
             getDealsByContact(id),
@@ -171,157 +132,129 @@ export default function ContactDetail360Page() {
           setDeals(dealsData);
           setActivities(activitiesData);
           setProperties(propertiesData);
-
-          if (contactData.companyId) {
-            const companyData = await getCompany(contactData.companyId);
-            if (companyData) {
-              setCompany(companyData);
-            }
-          }
-        } else {
-          router.push("/contacts");
         }
-      } catch (error) {
-        console.error("Error fetching contact detail:", error);
+      } catch (err) {
+        console.error("Error loading contact detail data:", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
-  }, [id, user, profile, router]);
+    loadData();
+  }, [id]);
 
-  const handleDelete = useCallback(async () => {
-    if (!id) return;
-    if (confirm("Tem certeza que deseja excluir este contato? Esta ação não pode ser desfeita.")) {
-      try {
-        await deleteContact(id);
-        recordAuditEvent({
-          action: 'DELETE_CONTACT',
-          title: 'Exclusão de Contato',
-          content: `Contato "${contact?.name || id}" (${contact?.email || 'sem email'}) foi excluído na página de detalhes.`,
-          severity: 'critical',
-          category: 'deletion',
-          relatedId: id,
-          entityId: id,
-          entityType: 'contact',
-          metadata: {
-            contactName: contact?.name,
-            contactEmail: contact?.email
-          }
-        });
-        toast.success("Contato excluído com sucesso!");
-        router.push("/contacts");
-      } catch (err: any) {
-        console.error("Error deleting contact:", err);
-        const errorMessage = err.message || "Erro ao excluir contato.";
-        toast.error(`Erro: ${errorMessage}`);
+  const interestProfile = useMemo(() => {
+    return parseInterestProfile(contact?.department);
+  }, [contact?.department]);
+
+  // Matchmaking Algorithm
+  const matchingProperties = useMemo(() => {
+    if (!contact || contact.type !== 'cliente' || properties.length === 0) return [];
+
+    const availableProps = properties.filter(p => p.status === 'disponível');
+    const { maxPrice, minBedrooms, propertyType, neighborhoods } = interestProfile;
+
+    const hasAnyCriteria = maxPrice !== null || minBedrooms !== null || (propertyType && propertyType !== 'todos') || neighborhoods.length > 0;
+    if (!hasAnyCriteria) return [];
+
+    const scored = availableProps.map(prop => {
+      let score = 0;
+      let matchedCriteria: string[] = [];
+      const criteriaWeights = { price: 35, bedrooms: 25, type: 20, location: 20 };
+      let totalPossibleWeight = 0;
+
+      if (maxPrice !== null && maxPrice > 0) {
+        totalPossibleWeight += criteriaWeights.price;
+        if (prop.price <= maxPrice) {
+          score += criteriaWeights.price;
+          matchedCriteria.push("Preço dentro do orçamento");
+        } else if (prop.price <= maxPrice * 1.15) {
+          score += criteriaWeights.price * 0.5;
+          matchedCriteria.push("Preço próximo (até +15%)");
+        }
       }
-    }
-  }, [id, contact, router]);
+
+      if (minBedrooms !== null && minBedrooms > 0) {
+        totalPossibleWeight += criteriaWeights.bedrooms;
+        if ((prop.bedrooms || 0) >= minBedrooms) {
+          score += criteriaWeights.bedrooms;
+          matchedCriteria.push(`${prop.bedrooms || 0} quartos (mín. ${minBedrooms})`);
+        }
+      }
+
+      if (propertyType && propertyType !== "todos") {
+        totalPossibleWeight += criteriaWeights.type;
+        if (prop.type?.toLowerCase() === propertyType.toLowerCase()) {
+          score += criteriaWeights.type;
+          matchedCriteria.push(`Tipo: ${prop.type}`);
+        }
+      }
+
+      if (neighborhoods.length > 0) {
+        totalPossibleWeight += criteriaWeights.location;
+        const propLoc = `${prop.neighborhood || ''} ${prop.city || ''} ${prop.location || ''}`.toLowerCase();
+        const hasNeighborhoodMatch = neighborhoods.some(n => propLoc.includes(n.toLowerCase()));
+        if (hasNeighborhoodMatch) {
+          score += criteriaWeights.location;
+          matchedCriteria.push("Bairro compatível");
+        }
+      }
+
+      const finalPercentage = totalPossibleWeight > 0 ? Math.round((score / totalPossibleWeight) * 100) : 0;
+      return { property: prop, score: finalPercentage, criteria: matchedCriteria };
+    });
+
+    return scored
+      .filter(item => item.score >= 50)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [contact, properties, interestProfile]);
 
   const handleEdit = useCallback(() => {
-    router.push("/contacts?edit=" + id);
-  }, [id, router]);
+    router.push(`/contacts?edit=${id}`);
+  }, [router, id]);
 
-  interface MatchingProperty {
-    property: Property;
-    score: number;
-    criteria: {
-      price: boolean;
-      type: boolean;
-      bedrooms: boolean;
-      neighborhood: boolean;
-    };
-  }
+  const handleDelete = useCallback(async () => {
+    if (!contact) return;
+    if (confirm(`Tem certeza que deseja excluir o contato ${contact.name}?`)) {
+      try {
+        await deleteContact(contact.id);
+        toast.success("Contato excluído com sucesso!");
+        router.push('/contacts');
+      } catch (err) {
+        console.error(err);
+        toast.error("Erro ao excluir contato.");
+      }
+    }
+  }, [contact, router]);
 
-  // Memoized Matchmaking of Properties
-  const matchingProperties = useMemo<MatchingProperty[]>(() => {
-    if (!contact || contact.type !== 'cliente') return [];
-    
-    const profileOfInt = parseInterestProfile(contact.department);
-    
-    const isEmptyProfile = !profileOfInt.maxPrice && !profileOfInt.minBedrooms && profileOfInt.propertyType === 'todos' && profileOfInt.neighborhoods.length === 0;
-    if (isEmptyProfile) return [];
-
-    return properties
-      .filter(p => p.status === 'disponível')
-      .map(p => {
-        let finalScore = 0;
-        let possibleScore = 0;
-        
-        if (profileOfInt.maxPrice) {
-          possibleScore += 25;
-          if (p.price <= profileOfInt.maxPrice) finalScore += 25;
-          else if (p.price <= profileOfInt.maxPrice * 1.15) finalScore += 10;
-        }
-        
-        if (profileOfInt.propertyType && profileOfInt.propertyType !== 'todos') {
-          possibleScore += 25;
-          if (p.type === profileOfInt.propertyType) finalScore += 25;
-        }
-        
-        if (profileOfInt.minBedrooms) {
-          possibleScore += 25;
-          if (p.bedrooms && p.bedrooms >= profileOfInt.minBedrooms) finalScore += 25;
-        }
-        
-        if (profileOfInt.neighborhoods && profileOfInt.neighborhoods.length > 0) {
-          possibleScore += 25;
-          const propNeighborhoodClean = (p.neighborhood || "").trim().toLowerCase();
-          const matches = profileOfInt.neighborhoods.some(n => 
-            propNeighborhoodClean.includes(n.trim().toLowerCase()) || 
-            n.trim().toLowerCase().includes(propNeighborhoodClean)
-          );
-          if (matches) finalScore += 25;
-        }
-
-        const normScore = possibleScore > 0 ? Math.round((finalScore / possibleScore) * 100) : 0;
-
-        return {
-          property: p,
-          score: normScore,
-          criteria: {
-            price: profileOfInt.maxPrice ? p.price <= profileOfInt.maxPrice : true,
-            type: (profileOfInt.propertyType && profileOfInt.propertyType !== 'todos') ? p.type === profileOfInt.propertyType : true,
-            bedrooms: profileOfInt.minBedrooms ? (p.bedrooms ? p.bedrooms >= profileOfInt.minBedrooms : false) : true,
-            neighborhood: (profileOfInt.neighborhoods && profileOfInt.neighborhoods.length > 0) ? (p.neighborhood ? profileOfInt.neighborhoods.some(n => p.neighborhood!.trim().toLowerCase().includes(n.trim().toLowerCase()) || n.trim().toLowerCase().includes(p.neighborhood!.trim().toLowerCase())) : false) : true
-          }
-        };
-      })
-      .filter(mp => mp.score >= 40)
-      .sort((a, b) => b.score - a.score);
-  }, [contact, properties]);
-
-  const handleCreateDealFromMatch = useCallback(async (property: Property) => {
-    if (!contact || !user) return;
-    
+  const handleCreateDealFromMatch = useCallback(async (matchedProperty: Property) => {
+    if (!user || !contact) return;
     try {
-      const dealTitle = `${property.title} - ${contact.name}`;
-      const value = property.price;
-      
+      const dealTitle = `${matchedProperty.title} - ${contact.name}`;
+      const value = matchedProperty.price;
+
       const newDealId = await createDeal({
         title: dealTitle,
         value: value,
         stage: 'lead',
         contactId: contact.id,
-        propertyId: property.id,
+        propertyId: matchedProperty.id,
         ownerId: user.id
       });
 
       recordAuditEvent({
-        action: 'CREATE_DEAL',
-        title: 'Abertura de Oportunidade por Cruzamento',
-        content: `Novo negócio "${dealTitle}" (R$ ${value}) aberto a partir de cruzamento de preferências do contato "${contact.name}".`,
+        action: 'CREATE_DEAL_FROM_MATCH',
+        title: 'Criação de Negócio via Cruzamento Inteligente',
+        content: `Negócio "${dealTitle}" criado via match do imóvel "${matchedProperty.title}" com o contato "${contact.name}".`,
         severity: 'info',
         category: 'modification',
         relatedId: typeof newDealId === 'string' ? newDealId : undefined,
-        entityId: typeof newDealId === 'string' ? newDealId : undefined,
         entityType: 'deal',
         metadata: {
-          title: dealTitle,
-          value,
+          dealTitle,
           contactId: contact.id,
-          propertyId: property.id
+          propertyId: matchedProperty.id,
+          value
         }
       });
 
@@ -329,19 +262,18 @@ export default function ContactDetail360Page() {
         type: 'system',
         category: 'contact',
         relatedId: contact.id,
-        content: `Lead de imóvel cruzado inteligentemente: associado ao imóvel "${property.title}" com preço de R$ ${property.price.toLocaleString('pt-BR')}.`,
-        title: `Novo negócio criado de cruzamento`
+        content: `Lead de imóvel cruzado: associado ao imóvel "${matchedProperty.title}" no valor de R$ ${value.toLocaleString('pt-BR')}.`,
+        title: `Novo negócio de cruzamento`
       });
 
-      toast.success("Cruzamento realizado! Novo negócio criado com sucesso.");
-      
-      const dealsUpdated = await getDealsByContact(contact.id);
-      setDeals(dealsUpdated);
-    } catch (e: any) {
-      console.error("Error creating deal from match:", e);
-      toast.error("Erro ao cruzar imóvel e criar negócio.");
+      toast.success("Negócio criado no funil com sucesso!");
+      const updatedDeals = await getDealsByContact(contact.id);
+      setDeals(updatedDeals);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao criar negócio a partir do cruzamento.");
     }
-  }, [contact, user]);
+  }, [user, contact]);
 
   const handleSaveInterestProfile = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -508,10 +440,6 @@ export default function ContactDetail360Page() {
     return lastDate.toLocaleDateString('pt-BR');
   }, [activities]);
 
-  const interestProfile = useMemo(() => {
-    return parseInterestProfile(contact?.department);
-  }, [contact?.department]);
-
   const tasks = useMemo(() => {
     return activities.filter(a => a.type === 'task');
   }, [activities]);
@@ -530,6 +458,19 @@ export default function ContactDetail360Page() {
     { label: "ENGAJAMENTO", value: engagementLevel.label, icon: Users, color: engagementLevel.color },
     { label: "ÚLTIMO CONTATO", value: lastContactDate, icon: Clock },
   ], [totalDealsValue, engagementLevel, lastContactDate]);
+
+  const openEditProfileModal = useCallback(() => {
+    setFormMaxPrice(interestProfile.maxPrice ? formatCurrencyBRL(interestProfile.maxPrice) : "");
+    setFormMinBedrooms(interestProfile.minBedrooms ? String(interestProfile.minBedrooms) : "");
+    setFormPropertyType(interestProfile.propertyType || "todos");
+    setFormNeighborhoodsText(interestProfile.neighborhoods ? interestProfile.neighborhoods.join(", ") : "");
+    setFormTemperature(
+      (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
+      (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
+      (contact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
+    );
+    setIsProfileModalOpen(true);
+  }, [interestProfile, contact]);
 
   if (authLoading || (loading && !user)) {
     return (
@@ -593,111 +534,16 @@ export default function ContactDetail360Page() {
           </div>
           
           {/* Main Card: Profile */}
-          <section className="bg-card rounded-[32px] border border-border p-8 shadow-sm">
-            <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-xl border-4 border-card bg-primary/10 flex items-center justify-center text-4xl font-bold text-primary uppercase">
-                    {contact.name.charAt(0)}
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 border-4 border-card rounded-full shadow-sm" />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h1 className="text-3xl font-bold text-foreground tracking-tight">{contact.name}</h1>
-                    <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider rounded-lg border border-primary/20">
-                      {contact.type === 'cliente' ? 'CLIENTE' : 'MEMBRO'}
-                    </span>
-                    {contact.type === 'cliente' && contact.temperature && (
-                      contact.temperature === 'quente' ? (
-                        <span 
-                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Proposta ou negociação ativa no funil"}
-                          className="inline-flex items-center gap-1 bg-red-500/10 text-red-500 border border-red-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg relative overflow-hidden shrink-0 select-none shadow-[0_0_12px_rgba(239,68,68,0.15)] animate-pulse"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-0.5 animate-ping" />
-                          🔥 Quente
-                        </span>
-                      ) : contact.temperature === 'morno' ? (
-                        <span 
-                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Oportunidade em qualificação"}
-                          className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none shadow-[0_0_8px_rgba(245,158,11,0.1)]"
-                        >
-                          ⚡ Morno
-                        </span>
-                      ) : (
-                        <span 
-                          title={(contact as any).rawRole ? "Temperatura definida manualmente" : "Temperatura Inteligente: Sem oportunidades ativas no funil"}
-                          className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 select-none"
-                        >
-                          ❄️ Frio
-                        </span>
-                      )
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    {contact.type === 'cliente' ? (
-                      <>
-                        <Tag className="w-4 h-4" />
-                        <span>Origem: {contact.source || "Não informada"}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Building2 className="w-4 h-4" />
-                        <span>{contact.role} em {contact.department || "Empresa"}</span>
-                      </>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 pt-2">
-                    <div className="flex items-center gap-2 text-sm text-foreground bg-muted/30 px-3 py-1.5 rounded-xl border border-border">
-                      <Mail className="w-4 h-4 text-muted-foreground" />
-                      {contact.email}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-foreground bg-muted/30 px-3 py-1.5 rounded-xl border border-border">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      {contact.phone}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-foreground bg-muted/30 px-3 py-1.5 rounded-xl border border-border">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      São Paulo, BR
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 w-full lg:w-auto">
-                <button 
-                  onClick={handleEdit}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl font-bold text-foreground hover:bg-muted transition-all"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  Editar
-                </button>
-                <button 
-                  onClick={handleDelete}
-                  className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-red-500/20 rounded-xl font-bold text-red-500 hover:bg-red-500/10 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Excluir
-                </button>
-                {contact.type === 'equipe' && (
-                  <button 
-                    onClick={() => router.push('/messages')}
-                    className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Mensagem
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
+          <ContactHeaderCard
+            contact={contact}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
 
           {/* Grid Layout for the rest */}
           <div className="grid grid-cols-12 gap-8">
             
-            {/* Left Column: Stats & History */}
+            {/* Left Column: Stats, Interest & History */}
             <div className="col-span-12 lg:col-span-9 space-y-8">
               
               {/* Stat Cards */}
@@ -712,217 +558,12 @@ export default function ContactDetail360Page() {
 
               {/* Perfil de Interesse & Cruzamento Inteligente */}
               {contact.type === 'cliente' && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  {/* Perfil de Interesse Card */}
-                  <div className="bg-card rounded-[32px] border border-border p-8 shadow-sm flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                            <Compass className="w-5 h-5 animate-spin-slow-subtle" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-foreground">Perfil de Interesse</h3>
-                            <p className="text-xs text-muted-foreground">Filtros de preferência do cliente</p>
-                          </div>
-                        </div>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setFormMaxPrice(interestProfile.maxPrice ? formatCurrencyBRL(interestProfile.maxPrice) : "");
-                            setFormMinBedrooms(interestProfile.minBedrooms ? String(interestProfile.minBedrooms) : "");
-                            setFormPropertyType(interestProfile.propertyType || "todos");
-                            setFormNeighborhoodsText(interestProfile.neighborhoods ? interestProfile.neighborhoods.join(", ") : "");
-                            setFormTemperature(
-                              (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
-                              (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
-                              (contact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
-                            );
-                            setIsProfileModalOpen(true);
-                          }}
-                          className="w-10 h-10 rounded-xl bg-muted hover:bg-muted/80 flex items-center justify-center transition-all border border-border cursor-pointer group"
-                          title="Melhorar Perfil de Interesse"
-                        >
-                          <Edit2 className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </button>
-                      </div>
-
-                      {(() => {
-                        const hasProfile = interestProfile.maxPrice || interestProfile.minBedrooms || (interestProfile.propertyType && interestProfile.propertyType !== "todos") || interestProfile.neighborhoods.length > 0;
-                        
-                        if (!hasProfile) {
-                          return (
-                            <div className="py-8 text-center text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border p-5">
-                              <Compass className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">Sem critérios definidos</p>
-                              <p className="text-[11px] leading-relaxed max-w-xs mx-auto">Configure as preferências de busca para que o sistema cruze com as propriedades disponíveis.</p>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-muted/30 border border-border/80 rounded-2xl p-4 flex flex-col justify-center">
-                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Orçamento Limite</span>
-                                <span className="font-extrabold text-sm text-foreground">
-                                  {interestProfile.maxPrice ? `R$ ${interestProfile.maxPrice.toLocaleString('pt-BR')}` : "Qualquer valor"}
-                                </span>
-                              </div>
-                              
-                              <div className="bg-muted/30 border border-border/80 rounded-2xl p-4 flex flex-col justify-center">
-                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Qtd. Mín. Quartos</span>
-                                <span className="font-extrabold text-sm text-foreground">
-                                  {interestProfile.minBedrooms ? `${interestProfile.minBedrooms}+ Quartos` : "Livre"}
-                                </span>
-                              </div>
-
-                              <div className="bg-muted/30 border border-border/80 rounded-2xl p-4 flex flex-col justify-center col-span-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Tipo de Propriedade</span>
-                                  <span className="font-extrabold text-xs text-primary capitalize bg-primary/10 px-2.5 py-1 rounded-lg">
-                                    {interestProfile.propertyType && interestProfile.propertyType !== 'todos' ? interestProfile.propertyType : "Todos"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {interestProfile.neighborhoods.length > 0 && (
-                              <div className="space-y-1.5 bg-muted/20 border border-border/50 rounded-2xl p-4">
-                                <div className="text-[9px] font-black text-muted-foreground uppercase tracking-wider mb-1">Bairros de Preferência</div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {interestProfile.neighborhoods.map((n, idx) => (
-                                    <span key={idx} className="px-2.5 py-1 bg-background border border-border rounded-lg text-[9px] font-extrabold uppercase text-muted-foreground tracking-wide">
-                                      {n.trim()}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="pt-6 border-t border-border mt-6">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormMaxPrice(interestProfile.maxPrice ? formatCurrencyBRL(interestProfile.maxPrice) : "");
-                          setFormMinBedrooms(interestProfile.minBedrooms ? String(interestProfile.minBedrooms) : "");
-                          setFormPropertyType(interestProfile.propertyType || "todos");
-                          setFormNeighborhoodsText(interestProfile.neighborhoods ? interestProfile.neighborhoods.join(", ") : "");
-                          setFormTemperature(
-                            (contact as any)?.rawRole === 'manual_quente' ? 'quente' :
-                            (contact as any)?.rawRole === 'manual_morno' ? 'morno' :
-                            (contact as any)?.rawRole === 'manual_frio' ? 'frio' : 'auto'
-                          );
-                          setIsProfileModalOpen(true);
-                        }}
-                        className="w-full py-3 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-bold transition-all gap-2 flex items-center justify-center border border-primary/20 cursor-pointer"
-                      >
-                        <Compass className="w-4 h-4 text-inherit" />
-                        Definir Parâmetros de Busca
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Cruzamento Inteligente Card */}
-                  <div className="bg-card rounded-[32px] border border-border p-8 shadow-sm flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 animate-pulse">
-                            <Sparkles className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-foreground">Cruzamento Inteligente</h3>
-                            <p className="text-xs text-muted-foreground">Matchmaking automatizado de imóveis</p>
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-[#00E5FF] px-2.5 py-1.5 bg-[#00E5FF]/10 rounded-xl border border-[#00E5FF]/20">
-                          {matchingProperties.length} Match(es)
-                        </span>
-                      </div>
-
-                      {(() => {
-                        const matches = matchingProperties;
-                        if (matches.length === 0) {
-                          return (
-                            <div className="py-12 text-center text-muted-foreground bg-muted/15 rounded-2xl border border-dashed border-border p-6 flex flex-col justify-center items-center">
-                              <Sparkles className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/75 mb-1">Nenhum imóvel compatível</p>
-                              <p className="text-[11px] leading-relaxed max-w-sm mx-auto text-center">Configure filtros no Perfil de Interesse buscando bairros/preço que dêem match com o seu catálogo.</p>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="space-y-3.5 max-h-[295px] overflow-y-auto pr-1">
-                            {matches.map(({ property, score, criteria }) => (
-                              <div key={property.id} className="p-4 bg-muted/30 hover:bg-muted/65 rounded-2xl border border-border flex gap-4 transition-all hover:scale-[1.01] duration-300 relative group">
-                                <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-muted/10">
-                                  {property.imageUrls && property.imageUrls.length > 0 ? (
-                                    <Image
-                                      src={property.imageUrls[0]}
-                                      alt={property.title}
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-primary/5 text-primary text-xs font-bold">
-                                      IMÓVEL
-                                    </div>
-                                  )}
-                                  <div className="absolute top-1 left-1 bg-black/75 backdrop-blur-sm text-[8px] font-black px-1.5 py-0.5 rounded text-amber-400 uppercase tracking-widest">
-                                    {property.type}
-                                  </div>
-                                </div>
-
-                                <div className="flex-1 min-w-0 pr-12">
-                                  <h4 className="font-bold text-xs text-foreground truncate">{property.title}</h4>
-                                  <p className="text-[10px] text-muted-foreground font-semibold mt-0.5 flex items-center gap-1">
-                                    <MapPin className="w-3 h-3 text-primary shrink-0" />
-                                    <span className="truncate">{property.neighborhood ? `${property.neighborhood}, ${property.city}` : property.location}</span>
-                                  </p>
-                                  
-                                  <div className="flex items-center gap-2 mt-2 font-mono text-[10px] text-muted-foreground">
-                                    <span className="font-extrabold text-foreground">R$ {property.price.toLocaleString('pt-BR')}</span>
-                                    <span>•</span>
-                                    <span>{property.bedrooms || 0}Q</span>
-                                  </div>
-                                </div>
-
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2.5">
-                                  {/* Score Circle */}
-                                  <div className={cn(
-                                    "w-12 h-12 rounded-full border shadow-sm flex flex-col items-center justify-center select-none shrink-0",
-                                    score >= 80 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
-                                    score >= 60 ? "bg-primary/10 border-primary/30 text-primary" :
-                                    "bg-amber-500/10 border-amber-500/30 text-amber-500"
-                                  )}>
-                                    <span className="text-xs font-black leading-none">{score}%</span>
-                                    <span className="text-[6px] font-black uppercase tracking-widest mt-0.5 opacity-80">Match</span>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCreateDealFromMatch(property)}
-                                    className="w-10 h-10 rounded-xl bg-primary text-primary-foreground hover:opacity-95 transition-all flex items-center justify-center shadow shadow-primary/20 cursor-pointer"
-                                    title="Iniciar Negócio com este Imóvel"
-                                  >
-                                    <Zap className="w-4 h-4 fill-primary-foreground text-primary-foreground shrink-0" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
+                <ContactInterestSection
+                  interestProfile={interestProfile}
+                  matchingProperties={matchingProperties}
+                  onOpenModal={openEditProfileModal}
+                  onCreateDealFromMatch={handleCreateDealFromMatch}
+                />
               )}
 
               {/* History Section */}
@@ -930,7 +571,7 @@ export default function ContactDetail360Page() {
                 <div className="p-8 border-b border-border flex items-center justify-between bg-card sticky top-0 z-10">
                   <h2 className="text-xl font-bold text-foreground">Histórico de Interações</h2>
                   <div className="flex items-center gap-4">
-                    <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                    <button className="p-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                       <Filter className="w-5 h-5" />
                     </button>
                   </div>
@@ -941,105 +582,15 @@ export default function ContactDetail360Page() {
               </div>
 
               {/* Active Deals Table */}
-              <div className="bg-card rounded-[32px] border border-border overflow-hidden shadow-sm">
-                <div className="p-8 border-b border-border flex items-center justify-between text-foreground bg-card sticky top-0 z-10">
-                  <h2 className="text-xl font-bold">Negócios Ativos</h2>
-                  <button onClick={() => router.push('/pipeline')} className="text-primary font-bold text-sm hover:opacity-80">Ver todos</button>
-                </div>
-                {filteredDeals.length > 0 ? (
-                  <div className="divide-y divide-border">
-                    {filteredDeals.map((deal) => (
-                      <div key={deal.id} className="p-6 flex items-center justify-between hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                            <TrendingUp className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-foreground">{deal.title}</h4>
-                            <div className="text-sm text-muted-foreground font-medium">Estágio: <span className="text-primary uppercase text-[10px] bg-primary/10 px-2 py-0.5 rounded-md font-bold">{
-                              deal.stage === 'lead' ? 'Novo Lead' :
-                              deal.stage === 'qualification' ? 'Qualificação' :
-                              deal.stage === 'proposal' ? 'Proposta' :
-                              deal.stage === 'negotiation' ? 'Análise Jurídica' :
-                              deal.stage === 'closed' ? 'Vendido/Alugado' : deal.stage
-                            }</span></div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-foreground">R$ {deal.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                          <div className="text-xs text-muted-foreground">{new Date(deal.createdAt || '').toLocaleDateString('pt-BR')}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-20 text-center flex flex-col items-center">
-                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-                      <TrendingUp className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="font-bold text-foreground">Sem negócios ativos no momento</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Crie um novo negócio para começar o pipeline.</p>
-                  </div>
-                )}
-              </div>
+              <ContactDealsTable deals={filteredDeals} />
             </div>
 
             {/* Right Column: Quick Actions & Sidebar Widgets */}
-            <div className="col-span-12 lg:col-span-3 space-y-8">
-              
-              {/* Quick Actions Card */}
-              <div className="bg-primary rounded-[32px] p-8 text-white shadow-xl shadow-primary/10">
-                <div className="flex items-center gap-3 mb-8">
-                  <Zap className="w-5 h-5 text-white/70" />
-                  <h3 className="text-lg font-bold">Ações Rápidas</h3>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "Reunião", icon: Calendar, type: 'meeting' },
-                    { label: "Tarefa", icon: CheckSquare, type: 'task' },
-                    { label: "Documento", icon: FileText, type: 'other' },
-                    { label: "Ligação", icon: Phone, type: 'call' },
-                  ].map((action, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => handleQuickAction(action.type as any)}
-                      className="bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <action.icon className="w-5 h-5 text-white/80" />
-                      </div>
-                      <span className="text-xs font-semibold text-white/90">{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tasks & Reminders */}
-              <div className="bg-card rounded-[32px] border border-border p-8 shadow-sm">
-                <h3 className="text-lg font-bold text-foreground mb-6">Tarefas & Lembretes</h3>
-                {tasks.length > 0 ? (
-                  <div className="space-y-4">
-                    {tasks.slice(0, 3).map(task => (
-                      <div key={task.id} className="flex items-start gap-3 p-3 bg-muted/50 rounded-2xl border border-border">
-                        <div className={cn("w-5 h-5 rounded-md border-2 mt-0.5", task.status === 'completed' ? "bg-primary border-primary flex items-center justify-center" : "border-border")}>
-                          {task.status === 'completed' && <CheckSquare className="w-3 h-3 text-white" />}
-                        </div>
-                        <div>
-                          <p className={cn("text-xs font-bold", task.status === 'completed' ? "text-muted-foreground line-through" : "text-foreground")}>{task.title}</p>
-                          <p className="text-[10px] text-muted-foreground">{new Date(task.date).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-8 text-center bg-muted/50 rounded-3xl border border-dashed border-border">
-                    <CheckSquare className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Sem tarefas</p>
-                  </div>
-                )}
-              </div>
-
+            <div className="col-span-12 lg:col-span-3">
+              <ContactActivitiesSidebar
+                tasks={tasks}
+                onQuickAction={handleQuickAction}
+              />
             </div>
           </div>
 
@@ -1047,129 +598,22 @@ export default function ContactDetail360Page() {
       </main>
 
       {/* Modal Profile Edit */}
-      <AnimatePresence>
-        {isProfileModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-card w-full max-w-xl rounded-[32px] border border-border shadow-2xl overflow-hidden"
-            >
-              <div className="p-8 border-b border-border flex items-center justify-between bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <Compass className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-black text-foreground uppercase tracking-tight">Filtros de Perfil de Interesse</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsProfileModalOpen(false)}
-                  className="w-10 h-10 rounded-full hover:bg-muted flex items-center justify-center transition-all border border-border cursor-pointer text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveInterestProfile} className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Orçamento Máximo (R$)</label>
-                    <input
-                      type="text"
-                      placeholder="R$ 0,00"
-                      value={formMaxPrice}
-                      onChange={(e) => setFormMaxPrice(formatCurrencyBRL(e.target.value))}
-                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Mínimo de Quartos</label>
-                    <input
-                      type="number"
-                      placeholder="Ex: 3"
-                      value={formMinBedrooms}
-                      onChange={(e) => setFormMinBedrooms(e.target.value)}
-                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Tipo de Imóvel</label>
-                    <select
-                      value={formPropertyType}
-                      onChange={(e) => setFormPropertyType(e.target.value)}
-                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold font-sans"
-                    >
-                      <option value="todos">Todos os Tipos</option>
-                      <option value="casa">Casa</option>
-                      <option value="apartamento">Apartamento</option>
-                      <option value="terreno">Terreno</option>
-                      <option value="comercial">Comercial</option>
-                      <option value="sobrado">Sobrado</option>
-                      <option value="cobertura">Cobertura</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Temperatura do Lead</label>
-                    <select
-                      value={formTemperature}
-                      onChange={(e) => setFormTemperature(e.target.value as any)}
-                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold font-sans"
-                    >
-                      <option value="auto">🤖 Inteligente (Calculado pelo Funil)</option>
-                      <option value="quente">🔥 Forçar Quente</option>
-                      <option value="morno">⚡ Forçar Morno</option>
-                      <option value="frio">❄️ Forçar Frio</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 block mb-1.5">Bairros de Interesse (Separados por vírgula)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Icaraí, Centro, Cambuí"
-                      value={formNeighborhoodsText}
-                      onChange={(e) => setFormNeighborhoodsText(e.target.value)}
-                      className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold"
-                    />
-                    <p className="text-[9px] text-muted-foreground font-medium mt-1.5 pl-1 leading-normal">O cruzamento vai buscar imóveis cujo bairro contenha alguma dessas palavras-chave.</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-border bg-muted/5 -mx-8 -mb-8 p-6">
-                  <button
-                    type="button"
-                    onClick={() => setIsProfileModalOpen(false)}
-                    className="px-6 py-3 bg-muted hover:bg-muted/80 border border-border rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
-                  >
-                    Descartar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isUpdatingProfile}
-                    className="px-6 py-3 bg-primary text-primary-foreground hover:opacity-95 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                  >
-                    {isUpdatingProfile ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        Salvar Perfil
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ContactInterestModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        formMaxPrice={formMaxPrice}
+        setFormMaxPrice={setFormMaxPrice}
+        formMinBedrooms={formMinBedrooms}
+        setFormMinBedrooms={setFormMinBedrooms}
+        formPropertyType={formPropertyType}
+        setFormPropertyType={setFormPropertyType}
+        formTemperature={formTemperature}
+        setFormTemperature={setFormTemperature}
+        formNeighborhoodsText={formNeighborhoodsText}
+        setFormNeighborhoodsText={setFormNeighborhoodsText}
+        isUpdatingProfile={isUpdatingProfile}
+        onSubmit={handleSaveInterestProfile}
+      />
     </div>
   );
 }
-

@@ -111,6 +111,7 @@ import { User } from "@supabase/supabase-js";
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, PLATFORM_ADMIN_EMAIL, isPlatformAdmin } from "@/lib/constants";
 import { recordAuditEvent } from "@/lib/audit";
 import { safeJsonParse, safeGetItem, safeSetItem, safeRemoveItem } from "@/lib/safe-storage";
+import { isPublicRoute, isCustomerFacingRoute } from "@/lib/routes";
 
 interface AuthContextType {
   user: User | null;
@@ -291,6 +292,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         return;
       }
+      // Pula heartbeat em páginas públicas (vitrine, ficha de imóvel ou telas de login)
+      if (typeof window !== 'undefined' && isPublicRoute(window.location.pathname)) {
+        return;
+      }
       // Proactive session validation
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -350,7 +355,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const checkTenantBlock = useCallback(async () => {
-    if (!profile || !profile.tenantId) {
+    if (
+      !profile || 
+      !profile.tenantId || 
+      (typeof window !== 'undefined' && (isCustomerFacingRoute(window.location.pathname) || isPublicRoute(window.location.pathname) || isPageUnloading)) ||
+      (typeof navigator !== 'undefined' && !navigator.onLine)
+    ) {
       setIsTenantBlocked(false);
       setBillingStatus('regular');
       setBillingSuspensionDate('');
@@ -368,7 +378,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (res.ok) {
-        const tenantData = await res.json();
+        const text = await res.text();
+        const tenantData = text ? safeJsonParse(text, null) : null;
         if (tenantData) {
           const status = (tenantData.billingStatus || 'regular') as 'regular' | 'aviso_sutil' | 'aviso_critico' | 'bloqueado';
           const days = tenantData.diffDays || 0;
@@ -424,9 +435,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-    } catch (err) {
-      console.error("Error checking tenant block:", err);
-      // Do NOT set isTenantBlocked to false here to protect against transient drops
+    } catch (err: any) {
+      if (typeof window !== 'undefined' && (isPageUnloading || window.closed || !navigator.onLine)) {
+        return;
+      }
+      console.warn("[AuthProvider] Warning checking tenant block:", err?.message || err);
     }
   }, [profile]);
 
@@ -606,7 +619,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const res = await fetch(`/api/profiles?id=${user.id}`, { headers });
         if (res.ok) {
-          const apiProfile = await res.json();
+          const text = await res.text();
+          const apiProfile = text ? safeJsonParse(text, null) : null;
           if (apiProfile && apiProfile.id) {
             console.log("AuthProvider: Perfil carregado e sincronizado via API Server-Side.");
             
@@ -877,7 +891,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : fetch(`/api/profiles?email=${encodeURIComponent(cleanEmail)}`)
           .then(async (response) => {
             if (response.ok) {
-              const data = await response.json();
+              const text = await response.text();
+              const data = text ? safeJsonParse(text, null) : null;
               return { ok: !!data, preRegisteredUser: data, isDbUnavailable: false };
             }
             if (response.status === 503 || response.status >= 500) {
@@ -994,7 +1009,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`/api/tenants`);
       if (res.ok) {
-        const allTenants = await res.json();
+        const text = await res.text();
+        const allTenants = text ? safeJsonParse(text, []) : [];
         if (Array.isArray(allTenants)) {
           const matchBySlug = allTenants.find((t: any) => t.slug === targetSlug);
           if (matchBySlug) return matchBySlug.id;
@@ -1012,7 +1028,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (createRes.ok) {
-        const newTenant = await createRes.json();
+        const text = await createRes.text();
+        const newTenant = text ? safeJsonParse(text, null) : null;
         if (newTenant && newTenant.id) return newTenant.id;
       }
     } catch (err) {
@@ -1165,9 +1182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshTenantBilling: checkTenantBlock
   }), [user, profile, loading, billingStatus, billingSuspensionDate, dueDay, diffDays, tenantName, isTenantBlocked, checkTenantBlock]);
 
-  const isPublicPath = pathname === '/login' || 
-    pathname === '/register' || 
-    pathname === '/reset-password';
+  const isPublicPath = isPublicRoute(pathname);
 
   const isUserInactive = profile?.isActive === false && !isPlatformAdmin(profile?.email);
 

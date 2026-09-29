@@ -55,7 +55,7 @@ export function PropertyReverseMatchSidebar({
           possibleScore += 25;
           const propNeighborhoodClean = (p.neighborhood || "").trim().toLowerCase();
           const matches = neighborhoods.some(
-            (n) =>
+            (n: string) =>
               propNeighborhoodClean.includes(n.trim().toLowerCase()) ||
               n.trim().toLowerCase().includes(propNeighborhoodClean)
           );

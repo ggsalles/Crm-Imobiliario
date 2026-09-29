@@ -43,7 +43,6 @@ export function PropertyShareModal({
       severity: 'low',
       category: 'modification',
       relatedId: property.id,
-      entityId: property.id,
       entityType: 'property',
       metadata: {
         propertyTitle: property.title,
@@ -62,7 +61,6 @@ export function PropertyShareModal({
       severity: 'low',
       category: 'modification',
       relatedId: property.id,
-      entityId: property.id,
       entityType: 'property',
       metadata: {
         propertyTitle: property.title,
@@ -92,7 +90,6 @@ export function PropertyShareModal({
       severity: 'low',
       category: 'modification',
       relatedId: property.id,
-      entityId: property.id,
       entityType: 'property',
       metadata: {
         propertyTitle: property.title,

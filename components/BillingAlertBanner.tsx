@@ -6,15 +6,14 @@ import { usePathname } from "next/navigation";
 import { AlertCircle, AlertTriangle, ShieldAlert, ArrowRight, X, CreditCard } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { isPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "@/lib/constants";
+import { isPublicRoute } from "@/lib/routes";
 
 export function BillingAlertBanner() {
   const { billingStatus, billingSuspensionDate, dueDay, diffDays, tenantName, profile, isTenantBlocked } = useAuth();
   const [dismissed, setDismissed] = useState(false);
   const pathname = usePathname();
 
-  const isPublicPath = pathname === '/login' || pathname === '/register' || pathname === '/reset-password';
-
-  if (!billingStatus || billingStatus === 'regular' || dismissed || isPublicPath) {
+  if (!billingStatus || billingStatus === 'regular' || dismissed || isPublicRoute(pathname)) {
     return null;
   }
 

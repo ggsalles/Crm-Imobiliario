@@ -1,5 +1,6 @@
 import { isPlatformAdmin } from './constants';
 import { safeGetItem, safeJsonParse } from './safe-storage';
+import { apiClient } from './api-client';
 
 export type AuditAction = 
   | 'EXPORT_LEADS'
@@ -111,24 +112,7 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
       }
     };
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-
-    const res = await fetch('/api/audit', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(clientPayload),
-      keepalive: true,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      console.warn(`[Audit] Resposta HTTP ${res.status} ao registrar auditoria:`, errText);
-    }
+    await apiClient.post('/api/audit', clientPayload, { keepalive: true });
   } catch (err) {
     console.warn('[Audit] Falha ao despachar auditoria:', err);
   }

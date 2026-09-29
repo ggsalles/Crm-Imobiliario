@@ -13,7 +13,29 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const authUser = getAuthenticatedUser(req);
+    let authUser = getAuthenticatedUser(req);
+
+    if (!authUser || !authUser.id) {
+      const rawHeader = req.headers.get('Authorization');
+      const token = (rawHeader?.startsWith('Bearer ') ? rawHeader.substring(7) : '').trim();
+      if (token) {
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+            const payload = safeJsonParse<any>(payloadJson);
+            if (payload?.sub) {
+              authUser = {
+                id: payload.sub,
+                email: payload.email,
+                role: payload.role
+              };
+            }
+          }
+        } catch {}
+      }
+    }
 
     if (!authUser || !authUser.id) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });

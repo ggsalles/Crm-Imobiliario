@@ -108,7 +108,7 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
         title: "Negociação Criada a partir de Imóvel",
         content: `Oportunidade "${dealTitle.trim()}" criada diretamente a partir do imóvel "${property.title}" no valor de ${formatCurrencyBRL(numericValue)}.`,
         severity: "medium",
-        category: "creation",
+        category: "modification",
         relatedId: typeof newDealId === "string" ? newDealId : property.id,
         entityType: "deal",
         metadata: {
@@ -282,7 +282,7 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
                         : "bg-muted/30 text-muted-foreground border-border hover:bg-muted"
                     }`}
                   >
-                    <span className="block truncate">{stage.name}</span>
+                    <span className="block truncate">{stage.title}</span>
                   </button>
                 ))}
               </div>

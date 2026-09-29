@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/auth-provider';
 import { Sidebar } from '@/components/sidebar';
 import { subscribeToShowcaseProperties, clearPropertiesCache, getContacts, Contact } from '@/lib/db';
+import { safeJsonParse } from '@/lib/safe-storage';
+import { apiClient } from '@/lib/api-client';
 import { ShowcasePropertyCard, VitrineProperty as Property } from '@/components/vitrine/PropertyCard';
 import { ShowcaseFilters } from '@/components/vitrine/ShowcaseFilters';
 import { CreateDealFromPropertyModal } from '@/components/properties/CreateDealFromPropertyModal';
@@ -67,12 +69,14 @@ function VitrineContent() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [mounted, setMounted] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [minBedrooms, setMinBedrooms] = useState<number | 'all'>('all');
+  const [minSuites, setMinSuites] = useState<number | 'all'>('all');
   const [minParking, setMinParking] = useState<number | 'all'>('all');
   const [minPrice, setMinPrice] = useState<number | ''>('');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
@@ -83,6 +87,12 @@ function VitrineContent() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [propertyForDeal, setPropertyForDeal] = useState<any | null>(null);
+
+  useEffect(() => {
+    // Ensure dark theme is applied on vitrine for all visitors (public link and CRM)
+    document.documentElement.classList.add('dark');
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (showSidebar && user) {
@@ -103,14 +113,11 @@ function VitrineContent() {
     if (brokerParam) propUrl += `&ownerId=${encodeURIComponent(brokerParam)}`;
 
     try {
-      const propRes = await fetch(propUrl, { cache: 'no-store' });
-      if (propRes.ok) {
-        const propData = await propRes.json();
-        if (Array.isArray(propData)) {
-          setProperties(propData);
-          setLastSyncTime(new Date());
-          toast.success("Vitrine sincronizada com o cadastro de imóveis!");
-        }
+      const propData = await apiClient.get<Property[]>(propUrl, { skipAuth: true });
+      if (Array.isArray(propData)) {
+        setProperties(propData);
+        setLastSyncTime(new Date());
+        toast.success("Vitrine sincronizada com o cadastro de imóveis!");
       }
     } catch (err) {
       console.error("Erro na sincronização manual:", err);
@@ -141,8 +148,7 @@ function VitrineContent() {
 
     // 2. Fetch tenant info if provided
     if (targetTenant) {
-      fetch(`/api/tenants?id=${encodeURIComponent(targetTenant)}`)
-        .then(res => res.ok ? res.json() : null)
+      apiClient.get<any>(`/api/tenants?id=${encodeURIComponent(targetTenant)}`, { skipAuth: true })
         .then(tData => {
           if (tData) {
             setTenant({
@@ -170,8 +176,7 @@ function VitrineContent() {
 
     // 3. Fetch broker info if provided
     if (brokerParam) {
-      fetch(`/api/profiles?id=${encodeURIComponent(brokerParam)}`)
-        .then(res => res.ok ? res.json() : null)
+      apiClient.get<any>(`/api/profiles?id=${encodeURIComponent(brokerParam)}`, { skipAuth: true })
         .then(bData => {
           if (bData) {
             setBroker({
@@ -247,6 +252,11 @@ function VitrineContent() {
         if ((p.bedrooms || 0) < minBedrooms) return false;
       }
 
+      // Suites
+      if (minSuites !== 'all') {
+        if ((p.suites || 0) < minSuites) return false;
+      }
+
       // Parking
       if (minParking !== 'all') {
         if ((p.parkingSpots || 0) < minParking) return false;
@@ -285,7 +295,7 @@ function VitrineContent() {
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, minBedrooms, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
+  }, [properties, searchTerm, selectedType, minBedrooms, minSuites, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
@@ -293,6 +303,7 @@ function VitrineContent() {
     setSelectedType('all');
     setSelectedStatus('all');
     setMinBedrooms('all');
+    setMinSuites('all');
     setMinParking('all');
     setMinPrice('');
     setMaxPrice('');
@@ -304,6 +315,7 @@ function VitrineContent() {
   const activeFiltersCount = [
     selectedType !== 'all',
     minBedrooms !== 'all',
+    minSuites !== 'all',
     minParking !== 'all',
     minPrice !== '',
     maxPrice !== '',
@@ -356,33 +368,37 @@ function VitrineContent() {
   const headerContent = (
     <header className={
       showSidebar 
-        ? "h-16 shrink-0 bg-card border-b border-border pl-14 md:pl-6 px-4 md:px-6 flex items-center justify-between z-30" 
-        : "sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border shadow-xs"
+        ? "h-16 shrink-0 bg-slate-900 border-b border-slate-800 pl-14 md:pl-6 px-4 md:px-6 flex items-center justify-between z-30 text-white" 
+        : "sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 shadow-md shadow-black/20 text-white"
     }>
       <div className={showSidebar ? "w-full flex items-center justify-between gap-4" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4"}>
         
         {/* Logo & Agency Title */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-white flex items-center justify-center font-black shadow-md shadow-primary/25 shrink-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-600/30 shrink-0">
             <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-base sm:text-lg tracking-tight line-clamp-1">
+              <h1 className="font-extrabold text-base sm:text-lg tracking-tight text-white line-clamp-1">
                 {tenant?.name || 'Vitrine de Imóveis'}
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title={`Sincronizado em tempo real. Última checagem: ${lastSyncTime.toLocaleTimeString('pt-BR')}`}>
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Sincronizada ao Vivo
+              <span 
+                className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" 
+                title={mounted ? `Sincronizado em tempo real. Última checagem: ${lastSyncTime.toLocaleTimeString('pt-BR')}` : "Sincronizado em tempo real"}
+                suppressHydrationWarning
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Sincronizada ao Vivo
               </span>
               {showSidebar && (
-                <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
                   <Sparkles className="w-3 h-3" /> CRM Ativo
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground line-clamp-1">
+            <p className="text-xs text-slate-400 line-clamp-1">
               {broker?.displayName ? (
-                <span>Atendimento com <strong>{broker.displayName}</strong></span>
+                <span>Atendimento com <strong className="text-slate-300">{broker.displayName}</strong></span>
               ) : (
                 <span>{tenant?.city ? `${tenant.city} - ${tenant.state || 'Brasil'}` : 'Carteira Exclusiva de Imóveis'}</span>
               )}
@@ -396,10 +412,10 @@ function VitrineContent() {
           <button
             onClick={handleManualSync}
             disabled={isRefreshing}
-            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-60"
             title="Atualizar dados da vitrine diretamente do banco"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{isRefreshing ? 'Sincronizando...' : 'Atualizar'}</span>
           </button>
 
@@ -411,26 +427,26 @@ function VitrineContent() {
                 const url = targetTenant ? `${origin}/vitrine?tenant=${targetTenant}&mode=client` : `${origin}/vitrine?mode=client`;
                 window.open(url, '_blank');
               }}
-              className="hidden sm:flex px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              className="hidden sm:flex px-3 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold items-center gap-1.5 transition-all shadow-sm cursor-pointer"
               title="Abrir como cliente em nova aba"
             >
-              <Eye className="w-3.5 h-3.5 text-primary" />
+              <Eye className="w-3.5 h-3.5 text-blue-400" />
               <span>Ver como Cliente</span>
             </button>
           )}
 
           <button
             onClick={handleShareVitrine}
-            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
             title="Compartilhar Link da Vitrine"
           >
-            {copiedLink ? <Check className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
+            {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
             <span className="hidden sm:inline">{copiedLink ? 'Copiado!' : 'Compartilhar'}</span>
           </button>
 
           <button
             onClick={handleGeneralWhatsapp}
-            className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+            className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all active:scale-[0.98] cursor-pointer"
           >
             <MessageCircle className="w-4 h-4 shrink-0 fill-current" />
             <span className="hidden sm:inline">Falar no WhatsApp</span>
@@ -445,7 +461,7 @@ function VitrineContent() {
     <>
       {/* Top Notification if in Client Preview Mode */}
       {isClientViewMode && !!user && (
-        <div className="bg-primary text-white py-2 px-4 text-xs font-bold flex items-center justify-between shadow-xs sticky top-0 z-50">
+        <div className="bg-blue-600 text-white py-2 px-4 text-xs font-bold flex items-center justify-between shadow-md sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <Eye className="w-3.5 h-3.5" />
             <span>Visualização da Vitrine como Cliente Final</span>
@@ -459,37 +475,37 @@ function VitrineContent() {
         </div>
       )}
 
-      {/* Hero Showcase Banner */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-card to-background border-b border-border/60 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      {/* Hero Showcase Banner Dark */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 border-b border-slate-800/80 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Catálogo Oficial de Imóveis</span>
           </div>
 
-          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
             Encontre o Imóvel Perfeito para Você
           </h2>
 
-          <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
             Explore nossa seleção completa de casas, apartamentos e lançamentos atualizados em tempo real com fotos de alta qualidade e atendimento direto.
           </p>
 
           {/* Search bar inside Hero */}
           <div className="pt-4 max-w-2xl mx-auto">
             <div className="relative flex items-center">
-              <Search className="w-5 h-5 absolute left-4 text-muted-foreground pointer-events-none" />
+              <Search className="w-5 h-5 absolute left-4 text-slate-500 pointer-events-none" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por condomínio, bairro, cidade, rua..."
-                className="w-full pl-12 pr-10 py-3.5 sm:py-4 rounded-2xl bg-card border-2 border-border focus:border-primary text-sm sm:text-base font-medium shadow-lg transition-all outline-none"
+                className="w-full pl-12 pr-10 py-3.5 sm:py-4 rounded-2xl bg-slate-900/90 border-2 border-slate-700/80 focus:border-blue-500 text-white placeholder:text-slate-500 text-sm sm:text-base font-medium shadow-2xl transition-all outline-none"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3.5 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                  className="absolute right-3.5 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -504,10 +520,10 @@ function VitrineContent() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
                 onlyFeatured
                   ? 'bg-amber-500 text-white border-amber-500 shadow-sm shadow-amber-500/25 ring-2 ring-amber-500/20'
-                  : 'bg-card border-border/80 text-muted-foreground hover:text-amber-500 hover:bg-muted'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-amber-400 hover:bg-slate-800'
               }`}
             >
-              <Star className={`w-3.5 h-3.5 ${onlyFeatured ? 'fill-white text-white' : 'text-amber-500'}`} />
+              <Star className={`w-3.5 h-3.5 ${onlyFeatured ? 'fill-white text-white' : 'text-amber-400'}`} />
               <span>⭐ Oportunidades em Destaque</span>
             </button>
 
@@ -517,8 +533,8 @@ function VitrineContent() {
                 onClick={() => setSelectedType(t.value)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                   selectedType === t.value
-                    ? 'bg-primary text-white border-primary shadow-xs'
-                    : 'bg-card border-border/80 text-muted-foreground hover:bg-muted'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
                 {t.label}
@@ -536,6 +552,8 @@ function VitrineContent() {
         setSelectedStatus={setSelectedStatus}
         minBedrooms={minBedrooms}
         setMinBedrooms={setMinBedrooms}
+        minSuites={minSuites}
+        setMinSuites={setMinSuites}
         minParking={minParking}
         setMinParking={setMinParking}
         minPrice={minPrice}
@@ -558,30 +576,30 @@ function VitrineContent() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-card rounded-2xl border border-border overflow-hidden animate-pulse">
-                <div className="aspect-16/10 bg-muted" />
+              <div key={i} className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden animate-pulse">
+                <div className="aspect-16/10 bg-slate-800" />
                 <div className="p-4 space-y-3">
-                  <div className="h-5 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                  <div className="h-6 bg-muted rounded w-1/3 pt-2" />
+                  <div className="h-5 bg-slate-800 rounded w-3/4" />
+                  <div className="h-4 bg-slate-800 rounded w-1/2" />
+                  <div className="h-6 bg-slate-800 rounded w-1/3 pt-2" />
                 </div>
               </div>
             ))}
           </div>
         ) : filteredProperties.length === 0 ? (
-          <div className="bg-card border border-border rounded-3xl p-12 text-center max-w-md mx-auto my-12 space-y-4 shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-muted/60 text-muted-foreground flex items-center justify-center mx-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center max-w-md mx-auto my-12 space-y-4 shadow-xl">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
               <Home className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-foreground">
+            <h3 className="text-lg font-bold text-white">
               Nenhum imóvel encontrado
             </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               Não encontramos imóveis disponíveis com os critérios selecionados no momento. Tente remover os filtros ou buscar por outro termo.
             </p>
             <button
               onClick={resetFilters}
-              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-all shadow-xs cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/25 cursor-pointer"
             >
               Ver Todos os Imóveis
             </button>
@@ -612,15 +630,15 @@ function VitrineContent() {
         onClose={() => setPropertyForDeal(null)}
       />
 
-      {/* Footer */}
-      <footer className="bg-card border-t border-border mt-12 py-8 px-4 sm:px-6 lg:px-8 text-center text-xs text-muted-foreground space-y-2">
-        <p className="font-semibold text-foreground">
+      {/* Footer Dark */}
+      <footer className="bg-slate-900 border-t border-slate-800 mt-12 py-8 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-400 space-y-2">
+        <p className="font-semibold text-white">
           {tenant?.name || 'Vitrine Virtual de Imóveis'}
         </p>
         <p>
           Imóveis atualizados em tempo real diretamente pelo sistema de gestão imobiliária.
         </p>
-        <p className="text-[10px] text-muted-foreground/80">
+        <p className="text-[10px] text-slate-500">
           Valores, disponibilidade e condições sujeitos a alteração sem aviso prévio.
         </p>
       </footer>
@@ -630,11 +648,11 @@ function VitrineContent() {
   // If user is logged into the CRM, render with CRM Sidebar
   if (showSidebar) {
     return (
-      <div className="flex h-screen bg-background text-foreground font-sans overflow-hidden">
+      <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {headerContent}
-          <div className="flex-1 overflow-y-auto relative selection:bg-primary/20">
+          <div className="flex-1 overflow-y-auto relative selection:bg-blue-600/30 selection:text-blue-200">
             {vitrineScrollableContent}
           </div>
         </div>
@@ -644,7 +662,7 @@ function VitrineContent() {
 
   // Pure public view (for clients accessing the link or in client preview mode)
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/20">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-blue-600/30 selection:text-blue-200">
       {headerContent}
       <div className="flex-1 flex flex-col">
         {vitrineScrollableContent}
@@ -656,8 +674,8 @@ function VitrineContent() {
 export default function VitrinePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
       </div>
     }>
       <VitrineContent />

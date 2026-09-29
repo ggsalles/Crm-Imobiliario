@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getBlockedTenantIds, setTenantBlocked, setTenantUnlocked, getSaaSConfig, getTenantBillingStatus, setTenantUserLimit } from '@/lib/billing';
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT } from '@/lib/constants';
+import { tenantUpdateSchema, validateData } from '@/lib/validations';
 
 export const dynamic = 'force-dynamic';
 
@@ -191,7 +192,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     // Extract and handle userLimit if present
     const userLimitParam = data.userLimit !== undefined ? Number(data.userLimit) : undefined;
@@ -243,7 +244,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
     }
 
-    const data = await req.json();
+    const rawData = await req.json().catch(() => ({}));
+    const validation = validateData(tenantUpdateSchema, rawData);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+    const data = validation.data;
     const updatePayload: Record<string, any> = { ...data };
 
     // Catch and process userLimit

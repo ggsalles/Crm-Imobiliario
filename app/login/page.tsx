@@ -23,22 +23,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
+import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { isPlatformAdmin, DEFAULT_TENANT_ID } from "@/lib/constants";
 import { getTenants } from "@/lib/db";
 
 export default function LoginPage() {
-  const { user, profile, login, register, resetPassword, loading: authLoading, changeTenant, logout } = useAuth();
+  const { user, profile, login, resetPassword, loading: authLoading, changeTenant, logout } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [companyName, setCompanyName] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginStepMessage, setLoginStepMessage] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [mode, setMode] = useState<"login" | "register">("login");
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -62,31 +59,11 @@ export default function LoginPage() {
   const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState("");
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
   const [showRecoveryConfirmPassword, setShowRecoveryConfirmPassword] = useState(false);
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
-  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
   const [isResettingWithKeyword, setIsResettingWithKeyword] = useState(false);
   const [keywordResetSuccess, setKeywordResetSuccess] = useState(false);
 
   const handleEmailChange = (val: string) => {
     setEmail(val);
-    
-    // Auto resolution suggestion for corporate domains (Register mode only, and only if companyName is empty/pristine)
-    if (mode === "register" && val.includes("@")) {
-      const parts = val.split("@");
-      const domain = parts[1]?.toLowerCase();
-      if (domain && domain.includes(".")) {
-        const genericDomains = [
-          "gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "live.com", 
-          "icloud.com", "aol.com", "zoho.com", "protonmail.com", "yandex.com", 
-          "globomail.com", "bol.com.br", "uol.com.br", "terra.com.br", "ig.com.br"
-        ];
-        if (!genericDomains.includes(domain)) {
-          const domainName = domain.split(".")[0];
-          const suggestedName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
-          setCompanyName((prev) => prev === "" ? suggestedName : prev);
-        }
-      }
-    }
   };
 
   // 1. Check and handle tenant selection for multi-tenant users on login success
@@ -180,41 +157,22 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanDisplayName = displayName.trim();
 
-    if (mode === "login") {
-      setIsLoggingIn(true);
-      setLoginStepMessage("Aguarde, autenticando...");
-      try {
-        router.prefetch("/");
-        await login(cleanEmail, password);
-        setLoginStepMessage("Aguarde, acessando seu painel...");
-        // Fallback de segurança: caso o redirecionamento demore anormalmente, destrava o botão em 10s
-        setTimeout(() => {
-          setIsLoggingIn(false);
-          setLoginStepMessage("");
-        }, 10000);
-      } catch (error: any) {
+    setIsLoggingIn(true);
+    setLoginStepMessage("Aguarde, autenticando...");
+    try {
+      router.prefetch("/");
+      await login(cleanEmail, password);
+      setLoginStepMessage("Aguarde, acessando seu painel...");
+      // Fallback de segurança: caso o redirecionamento demore anormalmente, destrava o botão em 10s
+      setTimeout(() => {
         setIsLoggingIn(false);
         setLoginStepMessage("");
-        toast.error(error.message || "Erro ao fazer login");
-      }
-    } else {
-      if (password !== registerConfirmPassword) {
-        toast.error("As senhas informadas não coincidem. Digite novamente a confirmação de senha.");
-        return;
-      }
-      setIsRegistering(true);
-      try {
-        await register(cleanEmail, password, cleanDisplayName, companyName);
-        toast.success("Conta criada com sucesso!");
-        setRegisterConfirmPassword("");
-        setMode("login"); // Switched to login mode
-      } catch (error: any) {
-        toast.error(error.message || "Erro ao criar conta");
-      } finally {
-        setIsRegistering(false);
-      }
+      }, 10000);
+    } catch (error: any) {
+      setIsLoggingIn(false);
+      setLoginStepMessage("");
+      toast.error(error.message || "Erro ao fazer login");
     }
   };
 
@@ -250,20 +208,11 @@ export default function LoginPage() {
 
     setIsResettingWithKeyword(true);
     try {
-      const response = await fetch('/api/auth/keyword-reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: forgotEmail.trim(),
-          securityKeyword: recoveryKeyword.trim(),
-          newPassword: recoveryNewPassword
-        })
-      });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.error || "Erro ao redefinir senha com palavra-chave.");
-      }
+      await apiClient.post('/api/auth/keyword-reset', {
+        email: forgotEmail.trim(),
+        securityKeyword: recoveryKeyword.trim(),
+        newPassword: recoveryNewPassword
+      }, { skipAuth: true });
 
       setKeywordResetSuccess(true);
       toast.success("Senha redefinida com sucesso!");
@@ -383,57 +332,14 @@ export default function LoginPage() {
         >
           <div className="mb-10 text-left">
             <h2 className="text-3xl font-bold text-foreground mb-3">
-              {mode === "login" ? "Bem-vindo de volta" : "Criar sua conta"}
+              Bem-vindo de volta
             </h2>
             <p className="text-muted-foreground">
-              {mode === "login" 
-                ? "Acesse sua conta para continuar gerenciando seus negócios." 
-                : "Cadastre-se para começar a usar o SalesScore Corporate."}
+              Acesse sua conta para continuar gerenciando seus negócios.
             </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
-            {mode === "register" && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Seu Nome</label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground">
-                    <LogIn className="w-4 h-4" />
-                  </div>
-                  <input 
-                    type="text" 
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="João Silva"
-                    required
-                    className="w-full pl-11 pr-4 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Nome da Imobiliária (Apenas no Cadastro/Register) */}
-            {mode === "register" && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Nome da sua Imobiliária / Empresa</label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <input 
-                    type="text" 
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Ex: Imobiliária Prime"
-                    required
-                    className="w-full pl-11 pr-4 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground"
-                  />
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Endereço de E-mail</label>
               <div className="relative">
@@ -452,15 +358,13 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Senha</label>
-                {mode === "login" && (
-                  <button 
-                    type="button" 
-                    onClick={handleOpenForgotPassword}
-                    className="text-xs font-semibold text-primary hover:text-primary/80 cursor-pointer"
-                  >
-                    Esqueci minha senha
-                  </button>
-                )}
+                <button 
+                  type="button" 
+                  onClick={handleOpenForgotPassword}
+                  className="text-xs font-semibold text-primary hover:text-primary/80 cursor-pointer"
+                >
+                  Esqueci minha senha
+                </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -483,85 +387,25 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Confirmar Senha no Cadastro de Conta */}
-            {mode === "register" && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Confirmar Senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input 
-                    type={showRegisterConfirmPassword ? "text" : "password"} 
-                    value={registerConfirmPassword}
-                    onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full pl-11 pr-11 py-3.5 bg-muted/30 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all text-sm text-foreground font-mono"
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                    title={showRegisterConfirmPassword ? "Ocultar senha" : "Exibir senha"}
-                  >
-                    {showRegisterConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="flex items-center gap-3 px-1">
               <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary bg-muted" />
               <label className="text-sm text-muted-foreground font-medium">Lembrar de mim</label>
             </div>
 
-            <div className="text-center mt-6">
-              <button 
-                type="button" 
-                onClick={() => setMode(mode === "login" ? "register" : "login")}
-                className="text-sm font-medium text-primary hover:text-primary/80"
-              >
-                {mode === "login" 
-                  ? "Não tem uma senha ainda? Cadastre-se aqui" 
-                  : "Já tem uma conta? Entre agora"}
-              </button>
-            </div>
-
             <button 
               type="submit"
-              disabled={isLoggingIn || isRegistering}
+              disabled={isLoggingIn}
               className="w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-85 shadow-lg shadow-primary/20 cursor-pointer disabled:cursor-wait"
             >
               {isLoggingIn ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>{loginStepMessage || "Aguarde, autenticando..."}</span>
+                  <span>{loginStepMessage || "Aguarde, acessando seu painel..."}</span>
                 </>
-              ) : isRegistering ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>Aguarde, criando conta...</span>
-                </>
-              ) : mode === "login" ? (
-                <>Entrar <ArrowRight className="w-4 h-4" /></>
               ) : (
-                <>Criar Conta <ArrowRight className="w-4 h-4" /></>
+                <>Entrar <ArrowRight className="w-4 h-4" /></>
               )}
             </button>
-
-            <AnimatePresence>
-              {isLoggingIn && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: "auto" }}
-                  exit={{ opacity: 0, y: -4, height: 0 }}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 bg-primary/10 border border-primary/20 rounded-xl text-primary text-xs font-semibold text-center"
-                >
-                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
-                  <span>Aguarde um momento, validando seu acesso ao sistema...</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
           </form>
 
           <footer className="mt-10 text-center">

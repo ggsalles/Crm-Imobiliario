@@ -623,8 +623,9 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
                 <Image 
                   src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
                   alt="User" 
-                  fill 
-                  className="w-full h-full object-cover" 
+                  width={28}
+                  height={28}
+                  className="w-full h-full object-cover rounded-lg" 
                   referrerPolicy="no-referrer"
                   unoptimized
                 />
@@ -640,8 +641,9 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
                 <Image 
                   src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || "U")}&background=0D8ABC&color=fff`} 
                   alt="User" 
-                  fill 
-                  className="w-full h-full object-cover" 
+                  width={28}
+                  height={28}
+                  className="w-full h-full object-cover rounded-lg" 
                   referrerPolicy="no-referrer"
                   unoptimized
                 />

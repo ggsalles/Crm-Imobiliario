@@ -24,9 +24,12 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
-  Calendar
+  Calendar,
+  Crown
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { safeJsonParse } from '@/lib/safe-storage';
+import { apiClient } from '@/lib/api-client';
 
 interface Property {
   id: string;
@@ -44,6 +47,7 @@ interface Property {
   complement?: string | null;
   area: number;
   bedrooms?: number;
+  suites?: number;
   bathrooms?: number;
   parkingSpots?: number;
   acceptsFinancing?: boolean;
@@ -99,11 +103,10 @@ export default function PublicPropertyCapturePage() {
       try {
         setLoading(true);
         // 1. Fetch single property with no-store
-        const res = await fetch(`/api/properties?id=${id}&_t=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) {
-          throw new Error("Imóvel não encontrado");
-        }
-        const propData: Property = await res.json();
+        const propData = await apiClient.get<Property>(`/api/properties?id=${id}&_t=${Date.now()}`, { 
+          cache: 'no-store',
+          skipAuth: true 
+        });
         
         if (!propData) {
           setProperty(null);
@@ -116,17 +119,14 @@ export default function PublicPropertyCapturePage() {
         // 2. Fetch broker profile
         if (propData.ownerId) {
           try {
-            const brokerRes = await fetch(`/api/profiles?id=${propData.ownerId}`);
-            if (brokerRes.ok) {
-              const brokerData = await brokerRes.json();
-              if (brokerData) {
-                setBroker({
-                  id: brokerData.id,
-                  displayName: brokerData.displayName || brokerData.display_name || "Consultor de Vendas",
-                  email: brokerData.email || "",
-                  photoUrl: brokerData.photoUrl || brokerData.photo_url || undefined
-                });
-              }
+            const brokerData = await apiClient.get<any>(`/api/profiles?id=${propData.ownerId}`, { skipAuth: true });
+            if (brokerData) {
+              setBroker({
+                id: brokerData.id,
+                displayName: brokerData.displayName || brokerData.display_name || "Consultor de Vendas",
+                email: brokerData.email || "",
+                photoUrl: brokerData.photoUrl || brokerData.photo_url || undefined
+              });
             }
           } catch (brokerErr) {
             console.warn("Erro ao buscar dados do corretor:", brokerErr);
@@ -176,16 +176,7 @@ export default function PublicPropertyCapturePage() {
         message: message.trim() || undefined
       };
 
-      const response = await fetch('/api/public-capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Erro ao registrar interesse");
-      }
+      await apiClient.post('/api/public-capture', payload, { skipAuth: true });
 
       setSuccess(true);
       toast.success("Interesse registrado com sucesso! Entraremos em contato.");
@@ -397,9 +388,9 @@ export default function PublicPropertyCapturePage() {
           </div>
 
           {/* Key Characteristics Panel (Bento row) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5 sm:gap-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                 <Square className="w-5 h-5" />
               </div>
               <div>
@@ -409,7 +400,7 @@ export default function PublicPropertyCapturePage() {
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
                 <Bed className="w-5 h-5" />
               </div>
               <div>
@@ -418,8 +409,22 @@ export default function PublicPropertyCapturePage() {
               </div>
             </div>
 
+            <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-4 flex items-center gap-3.5 shadow-md bg-gradient-to-br from-amber-500/10 to-transparent relative overflow-hidden">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <Crown className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] text-amber-400/90 font-black uppercase tracking-wider leading-none mb-1">Suítes</p>
+                <p className="font-bold text-white text-sm leading-none">
+                  {property.suites !== undefined && property.suites !== null && property.suites > 0
+                    ? `${property.suites} ${property.suites === 1 ? 'Suíte' : 'Suítes'}`
+                    : (property.suites === 0 ? '0 Suítes' : '—')}
+                </p>
+              </div>
+            </div>
+
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
                 <Bath className="w-5 h-5" />
               </div>
               <div>
@@ -428,8 +433,8 @@ export default function PublicPropertyCapturePage() {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md col-span-2 sm:col-span-1">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <Car className="w-5 h-5" />
               </div>
               <div>

@@ -59,41 +59,40 @@ export function getSupabase(req: NextRequest) {
  */
 export function getAuthenticatedUser(req: NextRequest): ServerAuthUser | null {
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
+  let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : '';
 
-  const token = authHeader.substring(7).trim();
-  if (!token) return null;
-
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-
-    // Decode base64url payload
-    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
-    const payload = safeJsonParse<any>(payloadJson);
-    if (!payload) return null;
-
-    // Validate expiration
-    if (payload.exp && typeof payload.exp === 'number') {
-      const nowInSeconds = Math.floor(Date.now() / 1000);
-      if (payload.exp < nowInSeconds) {
-        return null;
+  if (token) {
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        // Decode base64url payload
+        const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+        const payload = safeJsonParse<any>(payloadJson);
+        if (payload?.sub) {
+          return {
+            id: payload.sub,
+            email: payload.email || payload.user_metadata?.email,
+            role: payload.role || payload.user_metadata?.role
+          };
+        }
       }
+    } catch (err) {
+      // Continue to header fallback
     }
-
-    if (!payload.sub) return null;
-
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role
-    };
-  } catch (err) {
-    return null;
   }
+
+  // Fallback to custom headers
+  const xUserId = req.headers.get('x-user-id');
+  const xUserEmail = req.headers.get('x-user-email');
+  if (xUserId && xUserId.trim() && xUserId !== 'undefined' && xUserId !== 'null') {
+    return {
+      id: xUserId.trim(),
+      email: xUserEmail?.trim() || undefined,
+    };
+  }
+
+  return null;
 }
 
 /**

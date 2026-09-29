@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSecurityKeywordFromStore } from '@/lib/security-keywords';
+import { keywordResetSchema, validateData } from '@/lib/validations';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,24 +45,13 @@ function registerSuccess(ipOrEmail: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, securityKeyword, newPassword } = body;
-
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    const cleanKeyword = (securityKeyword || '').trim().toLowerCase();
-    const cleanPassword = (newPassword || '').trim();
-
-    if (!normalizedEmail) {
-      return NextResponse.json({ error: "E-mail é obrigatório." }, { status: 400 });
+    const rawBody = await req.json().catch(() => ({}));
+    const validation = validateData(keywordResetSchema, rawBody);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    if (!cleanKeyword) {
-      return NextResponse.json({ error: "A palavra-chave secreta é obrigatória." }, { status: 400 });
-    }
-
-    if (!cleanPassword || cleanPassword.length < 6) {
-      return NextResponse.json({ error: "A nova senha deve ter no mínimo 6 caracteres." }, { status: 400 });
-    }
+    const { email: normalizedEmail, securityKeyword: cleanKeyword, newPassword: cleanPassword } = validation.data;
 
     // Anti-Brute-Force check
     const rateCheck = checkRateLimit(normalizedEmail);

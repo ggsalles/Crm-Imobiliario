@@ -5,63 +5,31 @@ export const dynamic = "force-dynamic";
 import { Sidebar } from "@/components/sidebar";
 import { useAuth } from "@/providers/auth-provider";
 import { isPlatformAdmin } from "@/lib/constants";
-import { getActionMeta, AuditSeverity } from "@/lib/audit";
 import { getTenants } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { apiClient } from "@/lib/api-client";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ShieldAlert, 
   ShieldCheck, 
-  Search, 
-  Filter, 
   RefreshCw, 
   Download, 
-  AlertTriangle, 
-  Clock, 
-  User, 
-  Globe, 
-  Laptop, 
-  CheckCircle2, 
-  FileSpreadsheet, 
   Trash2, 
-  Eye, 
-  Key, 
-  Building2, 
   ChevronRight, 
   ChevronLeft,
-  X,
   Lock,
-  ArrowUpDown,
-  FileText,
   Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { safeGetItem, safeJsonParse } from "@/lib/safe-storage";
 
-interface AuditLogItem {
-  id: string;
-  type: string;
-  category: string;
-  title: string;
-  content: string;
-  author_name: string;
-  created_by: string;
-  owner_id: string;
-  created_at: string;
-  tenant_id: string;
-  metadata?: {
-    action?: string;
-    severity?: AuditSeverity;
-    entityType?: string;
-    ip?: string;
-    userAgent?: string;
-    userEmail?: string;
-    details?: any;
-    [key: string]: any;
-  };
-}
+import { AuditLogItem } from "@/components/audit/types";
+import { AuditStatsCards } from "@/components/audit/AuditStatsCards";
+import { AuditFilterToolbar } from "@/components/audit/AuditFilterToolbar";
+import { AuditTableRow } from "@/components/audit/AuditTableRow";
+import { AuditInspectModal } from "@/components/audit/AuditInspectModal";
+import { AuditClearModal } from "@/components/audit/AuditClearModal";
 
 export default function AuditPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -127,26 +95,6 @@ export default function AuditPage() {
     else setRefreshing(true);
 
     try {
-      let authHeader = "";
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.access_token) {
-          authHeader = `Bearer ${sessionData.session.access_token}`;
-        }
-      } catch {}
-
-      if (!authHeader && typeof window !== "undefined") {
-        const rawSession = safeGetItem("crm-imob-session-v5", "sessionStorage") ||
-                           safeGetItem("crm-imob-session-v4", "sessionStorage") ||
-                           safeGetItem("crm-imob-session-v4", "localStorage");
-        if (rawSession) {
-          const parsed = safeJsonParse<{ access_token?: string }>(rawSession);
-          if (parsed?.access_token) {
-            authHeader = `Bearer ${parsed.access_token}`;
-          }
-        }
-      }
-
       const params = new URLSearchParams();
       if (isMaster && selectedTenant !== "all") {
         params.set("tenantId", selectedTenant);
@@ -156,58 +104,29 @@ export default function AuditPage() {
 
       params.set("limit", "500");
 
-      const res = await fetch(`/api/audit?${params.toString()}`, {
-        headers: {
-          ...(authHeader ? { Authorization: authHeader } : {})
-        }
-      });
-
-      if (!res.ok) {
-        if (res.status === 403) {
-          toast.error("Acesso restrito a administradores.");
-          return;
-        }
-        throw new Error("Falha ao consultar trilha de auditoria.");
-      }
-
-      const data = await res.json();
-      setLogs(Array.isArray(data.logs) ? data.logs : []);
+      const data = await apiClient.get<any>(`/api/audit?${params.toString()}`);
+      setLogs(Array.isArray(data?.logs) ? data.logs : []);
     } catch (err: any) {
       console.error("[AuditPage] Erro ao buscar logs:", err);
-      toast.error(err.message || "Erro ao atualizar auditoria.");
+      // Only toast error if not a transient unauthenticated during mount
+      if (user && err?.status !== 401) {
+        toast.error(err.message || "Erro ao atualizar auditoria.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isMaster, selectedTenant, profile?.tenantId]);
+  }, [isMaster, selectedTenant, profile?.tenantId, user]);
 
   // Clear audit logs handler
   const handleClearAuditLogs = useCallback(async () => {
     setIsClearing(true);
     try {
-      let authHeader = "";
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session?.access_token) {
-          authHeader = `Bearer ${sessionData.session.access_token}`;
-        }
-      } catch (err) {
-        console.warn("Could not get access token for clear:", err);
-      }
-
       const url = isMaster && selectedTenant && selectedTenant !== 'all'
         ? `/api/audit?tenantId=${selectedTenant}`
         : `/api/audit`;
 
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: authHeader ? { Authorization: authHeader } : {}
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Falha ao limpar logs de auditoria.");
-      }
+      await apiClient.delete(url);
 
       toast.success("Tabela de logs de auditoria limpa com sucesso!");
       setIsClearModalOpen(false);
@@ -479,150 +398,28 @@ export default function AuditPage() {
           </div>
 
           {/* Stats KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5">
-            <div className="p-2.5 sm:p-3 rounded-lg bg-card border border-border shadow-xs flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                <FileText className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">Total Auditado</p>
-                <p className="text-base sm:text-lg font-black text-foreground">{stats.total}</p>
-              </div>
-            </div>
-
-            <div className="p-2.5 sm:p-3 rounded-lg bg-card border border-border shadow-xs flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">Ações Críticas</p>
-                <p className="text-base sm:text-lg font-black text-rose-500">{stats.criticalCount}</p>
-              </div>
-            </div>
-
-            <div className="p-2.5 sm:p-3 rounded-lg bg-card border border-border shadow-xs flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">Exportações Base</p>
-                <p className="text-base sm:text-lg font-black text-amber-500">{stats.exportCount}</p>
-              </div>
-            </div>
-
-            <div className="p-2.5 sm:p-3 rounded-lg bg-card border border-border shadow-xs flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                <Key className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">Autenticações</p>
-                <p className="text-base sm:text-lg font-black text-emerald-500">{stats.authCount}</p>
-              </div>
-            </div>
-          </div>
+          <AuditStatsCards stats={stats} />
         </header>
 
         {/* Content Body */}
         <div className="p-3 sm:p-4 md:p-5 space-y-3.5 flex-1 max-w-7xl mx-auto w-full">
           {/* Filter Bar */}
-          <div className="p-3 rounded-xl bg-card border border-border shadow-xs space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-2.5">
-              {/* Search input */}
-              <div className="lg:col-span-2 relative">
-                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filtrar por corretor, IP, ação ou descrição..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-8 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Master Tenant Filter */}
-              {isMaster ? (
-                <div>
-                  <select
-                    value={selectedTenant}
-                    onChange={(e) => setSelectedTenant(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
-                  >
-                    <option value="all">Todas as Imobiliárias (Global)</option>
-                    {tenants.map(t => (
-                      <option key={t.id} value={t.id}>
-                        Imobiliária: {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
-
-              {/* Category Filter */}
-              <div className={!isMaster ? "lg:col-span-1" : ""}>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
-                >
-                  <option value="all">Todas as Categorias</option>
-                  <option value="export">Exportações (CSV)</option>
-                  <option value="deletion">Exclusões</option>
-                  <option value="sensitive_view">Dados Sensíveis</option>
-                  <option value="auth">Acessos & Logins</option>
-                </select>
-              </div>
-
-              {/* Severity Filter */}
-              <div>
-                <select
-                  value={selectedSeverity}
-                  onChange={(e) => setSelectedSeverity(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
-                >
-                  <option value="all">Todas as Gravidades</option>
-                  <option value="critical">Crítica</option>
-                  <option value="high">Alta</option>
-                  <option value="medium">Média</option>
-                  <option value="info">Informativa</option>
-                </select>
-              </div>
-
-              {/* Date Range Filter */}
-              <div>
-                <select
-                  value={selectedDateRange}
-                  onChange={(e) => setSelectedDateRange(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
-                >
-                  <option value="24h">Últimas 24 Horas</option>
-                  <option value="7d">Últimos 7 Dias</option>
-                  <option value="30d">Últimos 30 Dias</option>
-                  <option value="all">Todo o Histórico</option>
-                </select>
-              </div>
-
-              {/* Sort Order Toggle */}
-              <div className="flex items-center">
-                <button
-                  type="button"
-                  onClick={() => setSortOrder(prev => prev === "desc" ? "asc" : "desc")}
-                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-background border border-border hover:bg-muted text-foreground transition-all cursor-pointer"
-                  title="Alternar ordem cronológica"
-                >
-                  <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
-                  <span>{sortOrder === "desc" ? "Mais recentes" : "Mais antigos"}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+          <AuditFilterToolbar
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            isMaster={isMaster}
+            selectedTenant={selectedTenant}
+            setSelectedTenant={setSelectedTenant}
+            tenants={tenants}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            selectedSeverity={selectedSeverity}
+            setSelectedSeverity={setSelectedSeverity}
+            selectedDateRange={selectedDateRange}
+            setSelectedDateRange={setSelectedDateRange}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+          />
 
           {/* Table Container */}
           <div className="rounded-xl bg-card border border-border shadow-xs overflow-hidden flex flex-col">
@@ -681,7 +478,7 @@ export default function AuditPage() {
                       <select
                         value={pageSize}
                         onChange={(e) => setPageSize(Number(e.target.value))}
-                        className="bg-card border border-border rounded-md px-1.5 py-0.5 text-[11px] font-bold focus:outline-none"
+                        className="bg-card border border-border rounded-md px-1.5 py-0.5 text-[11px] font-bold focus:outline-none cursor-pointer"
                       >
                         <option value={25}>25</option>
                         <option value={50}>50</option>
@@ -721,236 +518,19 @@ export default function AuditPage() {
       </main>
 
       {/* Log Details Modal */}
-      {inspectingLog && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <h3 className="text-xs sm:text-sm font-bold text-foreground">Registro Forense de Auditoria</h3>
-                  <p className="text-[9px] font-mono text-muted-foreground">ID: {inspectingLog.id}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setInspectingLog(null)}
-                className="w-6 h-6 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
-              <div className="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-muted/40 border border-border">
-                <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Ação Registrada</p>
-                  <p className="text-xs font-bold text-foreground mt-0.5">{inspectingLog.metadata?.action || inspectingLog.title}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Data e Hora Exata</p>
-                  <p className="text-xs font-mono font-medium text-foreground mt-0.5">
-                    {new Date(inspectingLog.created_at).toLocaleString("pt-BR")}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Usuário Responsável</p>
-                  <p className="text-xs font-semibold text-foreground mt-0.5">{inspectingLog.author_name || "Sistema"}</p>
-                  <p className="text-[9px] text-muted-foreground">{inspectingLog.metadata?.userEmail || ""}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Endereço IP Origem</p>
-                  <p className="text-xs font-mono font-medium text-foreground mt-0.5">{inspectingLog.metadata?.ip || "127.0.0.1"}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Descrição Completa</p>
-                <div className="p-2.5 rounded-xl bg-background border border-border text-foreground leading-relaxed text-xs">
-                  {inspectingLog.content || inspectingLog.title}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">User-Agent / Navegador</p>
-                <div className="p-2 rounded-xl bg-background border border-border font-mono text-[9px] text-muted-foreground break-all">
-                  {inspectingLog.metadata?.userAgent || "Não informado"}
-                </div>
-              </div>
-
-              {inspectingLog.metadata && Object.keys(inspectingLog.metadata).length > 0 && (
-                <div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Payload de Metadados / Diff</p>
-                  <pre className="p-2.5 rounded-xl bg-slate-950 text-slate-200 font-mono text-[10px] overflow-x-auto border border-border/50">
-                    {JSON.stringify(inspectingLog.metadata, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 border-t border-border bg-muted/20 flex justify-end">
-              <button
-                onClick={() => setInspectingLog(null)}
-                className="px-3.5 py-1.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AuditInspectModal
+        log={inspectingLog}
+        onClose={() => setInspectingLog(null)}
+      />
 
       {/* Confirmation Modal to Clear Audit Logs - Exclusivo Master */}
-      {isMaster && isClearModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-card border border-rose-500/30 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div className="text-center space-y-1.5">
-              <h3 className="text-base font-bold text-foreground">Limpar Histórico de Auditoria?</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Esta ação apagará permanentemente todos os registros de log da tabela de auditoria ({logs.length} registros no total).
-                <br /><br />
-                <span className="font-semibold text-foreground">Nota:</span> Seus contatos, negócios no funil, imóveis e notas de clientes não serão afetados — apenas o histórico de acessos e operações será limpo.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsClearModalOpen(false)}
-                disabled={isClearing}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={handleClearAuditLogs}
-                disabled={isClearing}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-md disabled:opacity-50 cursor-pointer"
-              >
-                {isClearing ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Limpando...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Sim, Limpar Tudo
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AuditClearModal
+        isOpen={isMaster && isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={handleClearAuditLogs}
+        isClearing={isClearing}
+        totalLogsCount={logs.length}
+      />
     </div>
   );
 }
-
-// Memoized Table Row Component
-const AuditTableRow = memo(function AuditTableRow({
-  log,
-  isMaster,
-  tenantName,
-  onInspect
-}: {
-  log: AuditLogItem;
-  isMaster: boolean;
-  tenantName?: string;
-  onInspect: (log: AuditLogItem) => void;
-}) {
-  const action = log.metadata?.action || "GENERAL_AUDIT";
-  const meta = getActionMeta(action);
-  const formattedDate = new Date(log.created_at).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-
-  const ip = log.metadata?.ip || "127.0.0.1";
-  const userAgent = log.metadata?.userAgent || "Navegador";
-  const isMobile = /mobile|android|iphone/i.test(userAgent);
-
-  return (
-    <tr className="hover:bg-muted/30 transition-colors group">
-      {/* Date & Time */}
-      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-        <div className="flex items-center gap-1 font-mono text-[10px] sm:text-[11px] text-foreground">
-          <Clock className="w-3 h-3 text-muted-foreground" />
-          <span>{formattedDate}</span>
-        </div>
-      </td>
-
-      {/* User */}
-      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[9px]">
-            {log.author_name?.slice(0, 1).toUpperCase() || "U"}
-          </div>
-          <div className="min-w-0">
-            <p className="font-bold text-foreground truncate max-w-[130px] text-xs">{log.author_name || "Sistema"}</p>
-            <p className="text-[9px] text-muted-foreground truncate max-w-[130px]">{log.metadata?.userEmail || ""}</p>
-            {isMaster && log.tenant_id && tenantName && (
-              <span className="inline-block text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border mt-0.5 max-w-[130px] truncate">
-                {tenantName}
-              </span>
-            )}
-          </div>
-        </div>
-      </td>
-
-      {/* Action Badge */}
-      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-        <span className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border",
-          meta.bg,
-          meta.color
-        )}>
-          {meta.label}
-        </span>
-      </td>
-
-      {/* Content / Description */}
-      <td className="py-2 sm:py-2.5 px-3">
-        <p className="text-foreground font-medium line-clamp-1 max-w-[280px] text-xs" title={log.content}>
-          {log.content || log.title}
-        </p>
-      </td>
-
-      {/* IP & Device */}
-      <td className="py-2 sm:py-2.5 px-3 whitespace-nowrap">
-        <div className="flex flex-col text-[9px] font-mono">
-          <span className="text-foreground flex items-center gap-1">
-            <Globe className="w-2.5 h-2.5 text-muted-foreground" />
-            {ip}
-          </span>
-          <span className="text-muted-foreground text-[8px] flex items-center gap-1 mt-0.5">
-            <Laptop className="w-2.5 h-2.5 text-muted-foreground" />
-            {isMobile ? "Dispositivo Móvel" : "Desktop / Web"}
-          </span>
-        </div>
-      </td>
-
-      {/* Actions */}
-      <td className="py-2 sm:py-2.5 px-3 text-right whitespace-nowrap">
-        <button
-          type="button"
-          onClick={() => onInspect(log)}
-          className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors border border-border cursor-pointer"
-        >
-          Inspecionar
-        </button>
-      </td>
-    </tr>
-  );
-});

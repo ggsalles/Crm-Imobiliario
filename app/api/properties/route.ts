@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     console.log("[API/Properties] POST: Dados recebidos:", data);
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
@@ -331,7 +331,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
     }
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
     
     const user = getAuthenticatedUser(req);

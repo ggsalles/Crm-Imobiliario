@@ -6,14 +6,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { useAuth } from "@/providers/auth-provider";
-import { 
-  UserCircle, 
-  Search, 
-  Filter, 
-  Loader2, 
-  UserPlus, 
-  Building2 
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { 
   UserProfile, 
   subscribeToUsers, 
@@ -27,7 +20,6 @@ import {
   apiFetch
 } from "@/lib/db";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, isPlatformAdmin as checkPlatformAdmin } from "@/lib/constants";
 import { recordAuditEvent } from "@/lib/audit";
 import { EditTenantModal } from "@/components/saas/EditTenantModal";
@@ -35,11 +27,12 @@ import { TenantManagementSection } from "@/components/saas/TenantManagementSecti
 import { CreateUserModal } from "@/components/users/CreateUserModal";
 import { UserLimitModal } from "@/components/users/UserLimitModal";
 import { TenantLicenseBanner } from "@/components/users/TenantLicenseBanner";
-import { UserTableRow } from "@/components/users/UserTableRow";
 import { InactivateUserModal } from "@/components/users/InactivateUserModal";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { AdminResetPasswordModal } from "@/components/users/AdminResetPasswordModal";
 import { UserCreatedSuccessModal } from "@/components/users/UserCreatedSuccessModal";
+import { UsersHeader } from "@/components/users/UsersHeader";
+import { UsersTableContainer } from "@/components/users/UsersTableContainer";
 
 export default function UsersPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -64,7 +57,7 @@ export default function UsersPage() {
   const [isUpdatingLimit, setIsUpdatingLimit] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [savingUid, setSavingUid] = useState<string | null>(null);
-  const [deletingUid, setDeletingUid] = useState<string | null>(null);
+  const [deletingUid] = useState<string | null>(null);
   const [inactivatingUser, setInactivatingUser] = useState<UserProfile | null>(null);
   const [isInactivating, setIsInactivating] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
@@ -152,9 +145,7 @@ export default function UsersPage() {
 
   // Capacidade total sincronizada com o plano comercial (base + extras)
   const { 
-    planCapacity, 
     tenantUserLimit, 
-    staffUsers, 
     activeCount, 
     isLimitReached, 
     remainingSlots, 
@@ -237,7 +228,6 @@ export default function UsersPage() {
   useEffect(() => {
     if (!user || !profile) return;
     
-    // Only admins can see all users, members see only themselves
     const ownerId = isAdmin ? undefined : user.id;
 
     const unsub = subscribeToUsers((data) => {
@@ -274,7 +264,6 @@ export default function UsersPage() {
     if (savingUid) return;
     setSavingUid(id);
 
-    // Atualização otimista imediata para resposta visual instantânea sem latência
     const updatedTenantIds = editForm.tenantIds && editForm.tenantIds.length > 0
       ? editForm.tenantIds
       : (editForm.tenantId ? [editForm.tenantId] : []);
@@ -330,7 +319,6 @@ export default function UsersPage() {
     try {
       const targetUser = users.find(u => u.id === userId);
       
-      // Atualização otimista imediata
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: false, inactiveReason: reason } : u));
 
       await updateUserProfile(userId, {
@@ -367,7 +355,6 @@ export default function UsersPage() {
   }, [users, forceDataResync]);
 
   const handleReactivateUser = useCallback(async (targetUser: UserProfile) => {
-    // Validação preventiva de capacidade da imobiliária
     if (isLimitReached && !isPlatformAdmin) {
       toast.error("Limite de vagas atingido. Expanda as licenças contratadas para reativar este usuário.");
       setShowLimitModal(true);
@@ -375,7 +362,6 @@ export default function UsersPage() {
     }
 
     try {
-      // Atualização otimista imediata
       setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, isActive: true, inactiveReason: undefined } : u));
 
       await updateUserProfile(targetUser.id, {
@@ -415,8 +401,7 @@ export default function UsersPage() {
       userType: "funcionário",
       tenantId: currentTenantId,
       tenantIds: [currentTenantId],
-      password: "",
-      securityKeyword: ""
+      password: ""
     });
     if (isLimitReached) {
       setShowLimitModal(true);
@@ -468,7 +453,6 @@ export default function UsersPage() {
         displayName: newUserData.displayName,
         email: newUserData.email,
         password: newUserData.password,
-        securityKeyword: newUserData.securityKeyword,
         role: newUserData.role,
         tenantName: currentTenant?.name || "Imobiliária"
       });
@@ -479,8 +463,7 @@ export default function UsersPage() {
         userType: "funcionário",
         tenantId: currentTenantId,
         tenantIds: [currentTenantId],
-        password: "",
-        securityKeyword: ""
+        password: ""
       });
       toast.success("Usuário cadastrado com sucesso!");
       await fetchTenants();
@@ -539,17 +522,14 @@ export default function UsersPage() {
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter(u => {
-      // Platform master login is strictly hidden from regular companies
       if (!isPlatformAdmin && checkPlatformAdmin(u.email)) {
         return false;
       }
-      // Regular companies only see their own users
       if (!isPlatformAdmin) {
         const belongs = (u.tenantId || DEFAULT_TENANT_ID) === currentTenantId || 
                         (u.tenantIds && u.tenantIds.includes(currentTenantId));
         if (!belongs) return false;
       }
-      // Status filter
       if (statusFilter === 'active' && u.isActive === false) return false;
       if (statusFilter === 'inactive' && u.isActive !== false) return false;
 
@@ -576,69 +556,19 @@ export default function UsersPage() {
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto overflow-x-hidden">
-        <header className="h-auto md:h-16 bg-card/80 backdrop-blur-md border-b border-border pl-14 md:pl-5 px-3 sm:px-4 md:px-5 py-3 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-10 gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary shrink-0">
-              <UserCircle className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base md:text-lg font-bold leading-tight">Gestão de Usuários</h2>
-              <p className="text-[11px] text-muted-foreground font-medium tracking-tight">Controle de acessos e perfis</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder="Buscar usuário..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 bg-muted/50 border border-border rounded-lg text-xs w-36 sm:w-48 lg:w-56 focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-              />
-            </div>
-            
-            {isPlatformAdmin && (
-              <button 
-                onClick={() => setShowTenantsSection(!showTenantsSection)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 border transition-all active:scale-95 cursor-pointer",
-                  showTenantsSection 
-                    ? "bg-primary text-white border-primary" 
-                    : "bg-muted/50 border-border text-foreground hover:bg-muted"
-                )}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Painel SaaS</span>
-              </button>
-            )}
-
-            {(isAdmin || isPlatformAdmin) && (
-              <button 
-                onClick={handleOpenAddUserModal}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-xs cursor-pointer",
-                  isLimitReached
-                    ? "bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25"
-                    : "bg-primary text-white hover:opacity-90"
-                )}
-                title={isLimitReached ? "Limite de vagas atingido. Clique para ver detalhes e solicitar upgrade." : "Cadastrar novo corretor ou membro"}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Novo Usuário</span>
-                {isLimitReached && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500 text-white dark:bg-amber-600 rounded uppercase tracking-wider">
-                    Limite de vagas atingido
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-        </header>
+        {/* Header do Módulo de Usuários */}
+        <UsersHeader
+          search={search}
+          setSearch={setSearch}
+          isPlatformAdmin={isPlatformAdmin}
+          isAdmin={isAdmin}
+          showTenantsSection={showTenantsSection}
+          setShowTenantsSection={setShowTenantsSection}
+          isLimitReached={isLimitReached}
+          onOpenAddUserModal={handleOpenAddUserModal}
+        />
 
         <div className="p-3 sm:p-4 md:p-5 max-w-6xl mx-auto w-full relative space-y-3.5">
-          
           {/* Painel Expansível SaaS - Gerenciamento Multi-Tenant */}
           {showTenantsSection && isPlatformAdmin && (
             <TenantManagementSection 
@@ -710,123 +640,33 @@ export default function UsersPage() {
           />
 
           {/* Tabela de Usuários */}
-          <div className="bg-card rounded-xl border border-border shadow-xs overflow-hidden">
-            <div className="p-3 sm:p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-muted/30">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-bold text-foreground">{filteredUsers.length}</span>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Usuários</span>
-                </div>
-                <div className="h-4 w-px bg-border hidden sm:block" />
-                {/* Tabs de Filtro de Status */}
-                <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border">
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('all')}
-                    className={cn(
-                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer",
-                      statusFilter === 'all' 
-                        ? "bg-card text-foreground shadow-xs" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Todos ({statusCounts.all})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('active')}
-                    className={cn(
-                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer",
-                      statusFilter === 'active' 
-                        ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-xs" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Ativos ({statusCounts.active})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('inactive')}
-                    className={cn(
-                      "px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer",
-                      statusFilter === 'inactive' 
-                        ? "bg-card text-rose-500 shadow-xs" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    Inativos ({statusCounts.inactive})
-                  </button>
-                </div>
-              </div>
-              <div className="flex gap-1.5">
-                <button 
-                  onClick={() => setStatusFilter(statusFilter === 'all' ? 'active' : statusFilter === 'active' ? 'inactive' : 'all')}
-                  className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground flex items-center gap-1 text-xs"
-                  title="Alternar filtro rápido de status"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-medium hidden md:inline">Filtro rápido</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border text-left">
-                    <th className="px-3.5 sm:px-4 py-2.5 font-bold">Usuário</th>
-                    <th className="px-3.5 sm:px-4 py-2.5 font-bold">Tipo</th>
-                    <th className="px-3.5 sm:px-4 py-2.5 font-bold">Nível de Acesso</th>
-                    <th className="px-3.5 sm:px-4 py-2.5 font-bold">Inquilino / Empresa</th>
-                    <th className="px-3.5 sm:px-4 py-2.5 font-bold text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {filteredUsers.map((u) => (
-                    <UserTableRow 
-                      key={u.id || u.email}
-                      userItem={u}
-                      currentUserId={user?.id}
-                      isAdmin={isAdmin}
-                      isEditing={editingUser === u.id}
-                      isSaving={savingUid === u.id}
-                      editForm={editForm}
-                      setEditForm={setEditForm}
-                      tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
-                      deletingUid={deletingUid}
-                      onEditClick={handleEditClick}
-                      onSaveEdit={handleSaveEdit}
-                      onCancelEdit={() => {
-                        setEditingUser(null);
-                        setEditForm({});
-                      }}
-                      onDeleteUser={(id) => {
-                        const target = users.find(u => u.id === id);
-                        if (target) setUserToDelete(target);
-                      }}
-                      onInactivateClick={(target) => setInactivatingUser(target)}
-                      onReactivateClick={handleReactivateUser}
-                      onResetPasswordClick={(target) => setUserToResetPassword(target)}
-                    />
-                  ))}
-
-                  {filteredUsers.length === 0 && (
-                    <tr key="empty-state">
-                      <td colSpan={5} className="px-4 py-14 text-center text-muted-foreground font-medium text-xs">
-                        {statusFilter === 'inactive' 
-                          ? "Nenhum usuário inativo encontrado." 
-                          : statusFilter === 'active'
-                          ? "Nenhum usuário ativo encontrado."
-                          : "Nenhum usuário encontrado."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <UsersTableContainer
+            filteredUsers={filteredUsers}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            statusCounts={statusCounts}
+            currentUserId={user?.id}
+            isAdmin={isAdmin}
+            editingUser={editingUser}
+            savingUid={savingUid}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
+            deletingUid={deletingUid}
+            onEditClick={handleEditClick}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={() => {
+              setEditingUser(null);
+              setEditForm({});
+            }}
+            onDeleteUser={(id) => {
+              const target = users.find(u => u.id === id);
+              if (target) setUserToDelete(target);
+            }}
+            onInactivateClick={(target) => setInactivatingUser(target)}
+            onReactivateClick={handleReactivateUser}
+            onResetPasswordClick={(target) => setUserToResetPassword(target)}
+          />
         </div>
 
         {/* Modal para Inativar Usuário */}
