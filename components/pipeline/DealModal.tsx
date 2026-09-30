@@ -44,13 +44,17 @@ export function DealModal({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const selectedPropId = (formData.get("propertyId") as string) || undefined;
+    const selectedProp = properties.find((p) => p.id === selectedPropId);
+    const autoCompanyId = selectedProp?.companyId || editingDeal?.companyId || undefined;
+
     const data: Partial<Deal> = {
       title: formData.get("title") as string,
       value: parseCurrencyBRLToNumber(formData.get("value") as string),
       stage: formData.get("stage") as string,
-      companyId: (formData.get("companyId") as string) || undefined,
+      companyId: autoCompanyId,
       contactId: (formData.get("contactId") as string) || undefined,
-      propertyId: (formData.get("propertyId") as string) || undefined,
+      propertyId: selectedPropId,
       ownerId: (formData.get("ownerId") as string) || undefined,
     };
 
@@ -198,50 +202,28 @@ export function DealModal({
                 </select>
               </div>
 
-              {/* Empresa & Corretor (Grid responsivo) */}
-              <div className={`grid grid-cols-1 ${profile?.role === "Admin" ? "sm:grid-cols-2" : ""} gap-2.5 sm:gap-3`}>
+              {/* Corretor Responsável (Disponível para Admin) */}
+              {profile?.role === "Admin" && (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 ml-0.5 block">
-                    Empresa / Construtora
+                    Corretor Responsável
                   </label>
                   <select
-                    name="companyId"
-                    defaultValue={editingDeal?.companyId || ""}
+                    name="ownerId"
+                    defaultValue={editingDeal?.ownerId || ""}
                     className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
                   >
                     <option value="" className="bg-card text-foreground">
-                      Selecione uma empresa (opcional)
+                      Atribuir corretor (opcional)
                     </option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id} className="bg-card text-foreground">
-                        {c.name}
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id} className="bg-card text-foreground">
+                        {u.displayName || (u as any).name || u.email}
                       </option>
                     ))}
                   </select>
                 </div>
-
-                {profile?.role === "Admin" && (
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 ml-0.5 block">
-                      Corretor Responsável
-                    </label>
-                    <select
-                      name="ownerId"
-                      defaultValue={editingDeal?.ownerId || ""}
-                      className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                    >
-                      <option value="" className="bg-card text-foreground">
-                        Atribuir corretor (opcional)
-                      </option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id} className="bg-card text-foreground">
-                          {u.displayName || (u as any).name || u.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-border/60 flex items-center gap-2.5 mt-2 shrink-0">

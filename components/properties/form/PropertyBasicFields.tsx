@@ -1,7 +1,7 @@
 "use client";
 
-import { Sparkles, Loader2 } from "lucide-react";
-import { Property } from "@/lib/db";
+import { Sparkles, Loader2, Building2 } from "lucide-react";
+import { Property, Company } from "@/lib/db";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 
 export interface PropertyBasicFieldsProps {
@@ -10,6 +10,9 @@ export interface PropertyBasicFieldsProps {
   onTitleChange: (value: string) => void;
   buildingName: string;
   onBuildingNameChange: (value: string) => void;
+  companyId?: string;
+  onCompanyIdChange?: (value: string) => void;
+  companies?: Company[];
   displayPrice: string;
   onDisplayPriceChange: (value: string) => void;
   displayCondoFee: string;
@@ -27,6 +30,9 @@ export function PropertyBasicFields({
   onTitleChange,
   buildingName,
   onBuildingNameChange,
+  companyId = "",
+  onCompanyIdChange,
+  companies = [],
   displayPrice,
   onDisplayPriceChange,
   displayCondoFee,
@@ -71,6 +77,32 @@ export function PropertyBasicFields({
           placeholder="Ex: Edifício Solar das Acácias / Cond. Alphaville"
           className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-base font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground placeholder:text-muted-foreground"
         />
+      </div>
+
+      {/* Construtora / Incorporadora Parceira */}
+      <div className="space-y-3">
+        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-primary" />
+            Construtora / Incorporadora Parceira
+          </span>
+          <span className="text-[9px] font-semibold text-muted-foreground lowercase">opcional (lançamentos)</span>
+        </label>
+        <select
+          name="companyId"
+          value={companyId}
+          onChange={(e) => onCompanyIdChange?.(e.target.value)}
+          className="w-full px-6 py-4 bg-muted/40 border border-border rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground cursor-pointer"
+        >
+          <option value="" className="bg-card text-foreground py-2">
+            Nenhuma / Imóvel de Terceiro (Avulso)
+          </option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id} className="bg-card text-foreground py-2">
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Tipo de Unidade */}

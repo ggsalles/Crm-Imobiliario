@@ -5,11 +5,13 @@ import { Loader2, Star } from "lucide-react";
 import { 
   Property, 
   Contact, 
+  Company,
   createProperty, 
   updateProperty, 
   uploadFile, 
   createDeal, 
-  createTimelineEvent 
+  createTimelineEvent,
+  subscribeToCompanies
 } from "@/lib/db";
 import { 
   cn, 
@@ -50,6 +52,8 @@ export function PropertyForm({
   // Form State
   const [title, setTitle] = useState("");
   const [buildingName, setBuildingName] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [displayPrice, setDisplayPrice] = useState("");
   const [displayIptu, setDisplayIptu] = useState("");
   const [displayCondoFee, setDisplayCondoFee] = useState("");
@@ -74,11 +78,20 @@ export function PropertyForm({
   const [isDragging, setIsDragging] = useState(false);
   const [valuationResult, setValuationResult] = useState<ValuationResult | null>(null);
 
+  // Subscribe to companies
+  useEffect(() => {
+    const unsub = subscribeToCompanies((data) => {
+      setCompanies(data);
+    });
+    return () => unsub();
+  }, []);
+
   // Initialize form when editingProperty changes
   useEffect(() => {
     if (editingProperty) {
       setTitle(editingProperty.title || "");
       setBuildingName(editingProperty.buildingName || "");
+      setCompanyId(editingProperty.companyId || "");
       setDisplayPrice(formatCurrencyBRL(editingProperty.price || 0));
       setDisplayIptu(editingProperty.iptu ? formatCurrencyBRL(editingProperty.iptu) : "");
       setDisplayCondoFee(editingProperty.condoFee ? formatCurrencyBRL(editingProperty.condoFee) : "");
@@ -96,6 +109,7 @@ export function PropertyForm({
     } else {
       setTitle("");
       setBuildingName("");
+      setCompanyId("");
       setDisplayPrice("");
       setDisplayIptu("");
       setDisplayCondoFee("");
@@ -374,6 +388,7 @@ export function PropertyForm({
       const data: Partial<Property> = {
         title: String(formData.get("title") || "").substring(0, 200),
         buildingName: String(formData.get("buildingName") || "").trim().substring(0, 200),
+        companyId: companyId || String(formData.get("companyId") || "") || undefined,
         type: (formData.get("type") as any) || "apartamento",
         status: (formData.get("status") as any) || "disponível",
         price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
@@ -516,6 +531,9 @@ export function PropertyForm({
                   onTitleChange={setTitle}
                   buildingName={buildingName}
                   onBuildingNameChange={setBuildingName}
+                  companyId={companyId}
+                  onCompanyIdChange={setCompanyId}
+                  companies={companies}
                   displayPrice={displayPrice}
                   onDisplayPriceChange={setDisplayPrice}
                   displayCondoFee={displayCondoFee}

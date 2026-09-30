@@ -89,6 +89,7 @@ export async function GET(req: NextRequest) {
         iptu: property.iptu !== null && property.iptu !== undefined ? Number(property.iptu) : null,
         condoFee: property.condo_fee !== null && property.condo_fee !== undefined ? Number(property.condo_fee) : null,
         buildingName: property.building_name ? String(property.building_name) : null,
+        companyId: property.company_id ? String(property.company_id) : null,
         notes: property.notes ? String(property.notes) : null,
         description: property.description ? String(property.description) : null,
         tags: singleTags,
@@ -192,6 +193,7 @@ export async function GET(req: NextRequest) {
         iptu: item.iptu !== null && item.iptu !== undefined ? Number(item.iptu) : null,
         condoFee: item.condo_fee !== null && item.condo_fee !== undefined ? Number(item.condo_fee) : null,
         buildingName: item.building_name ? String(item.building_name) : null,
+        companyId: item.company_id ? String(item.company_id) : null,
         notes: item.notes ? String(item.notes) : null,
         description: item.description ? String(item.description) : null,
         tags: Array.isArray(item.tags)
@@ -258,24 +260,31 @@ export async function POST(req: NextRequest) {
       delete sanitized.isFeatured;
     }
 
+    if ('companyId' in sanitized) {
+      sanitized.company_id = sanitized.companyId || null;
+      delete sanitized.companyId;
+    }
+
     console.log("[API/Properties] POST: Inserindo na tabela 'properties'...");
     let { data: result, error } = await supabase
       .from('properties')
       .insert([sanitized])
       .select();
 
-    // Fallback gracioso caso a coluna 'tags', 'is_featured' ou 'suites' ainda não tenha sido criada no Supabase pelo usuário
-    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+    // Fallback gracioso caso a coluna 'tags', 'is_featured', 'suites' ou 'company_id' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.message?.includes('company_id') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
       console.warn("[API/Properties] POST: Coluna ainda não criada no Supabase. Inserindo com campos de fallback:", error.message);
       const fallbackSanitized = { ...sanitized };
       if (error.message?.includes('tags')) delete fallbackSanitized.tags;
       if (error.message?.includes('is_featured')) delete fallbackSanitized.is_featured;
       if (error.message?.includes('suites')) delete fallbackSanitized.suites;
-      // Se genérico 42703, remove ambos preventivamente
+      if (error.message?.includes('company_id')) delete fallbackSanitized.company_id;
+      // Se genérico 42703, remove preventivamente
       if (error.code === '42703') {
         delete fallbackSanitized.tags;
         delete fallbackSanitized.is_featured;
         delete fallbackSanitized.suites;
+        delete fallbackSanitized.company_id;
       }
       const retry = await supabase
         .from('properties')
@@ -363,6 +372,10 @@ export async function PATCH(req: NextRequest) {
       sanitized.is_featured = Boolean(sanitized.isFeatured);
       delete sanitized.isFeatured;
     }
+    if ('companyId' in sanitized) {
+      sanitized.company_id = sanitized.companyId || null;
+      delete sanitized.companyId;
+    }
 
     console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
     let updateQuery = supabase
@@ -376,17 +389,19 @@ export async function PATCH(req: NextRequest) {
 
     let { error } = await updateQuery;
 
-    // Fallback gracioso caso a coluna 'tags', 'is_featured' ou 'suites' ainda não tenha sido criada no Supabase pelo usuário
-    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
+    // Fallback gracioso caso a coluna 'tags', 'is_featured', 'suites' ou 'company_id' ainda não tenha sido criada no Supabase pelo usuário
+    if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.message?.includes('company_id') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
       console.warn(`[API/Properties] PATCH ID ${id}: Coluna ainda não criada no Supabase. Atualizando com fallback:`, error.message);
       const fallbackSanitized = { ...sanitized };
       if (error.message?.includes('tags')) delete fallbackSanitized.tags;
       if (error.message?.includes('is_featured')) delete fallbackSanitized.is_featured;
       if (error.message?.includes('suites')) delete fallbackSanitized.suites;
+      if (error.message?.includes('company_id')) delete fallbackSanitized.company_id;
       if (error.code === '42703') {
         delete fallbackSanitized.tags;
         delete fallbackSanitized.is_featured;
         delete fallbackSanitized.suites;
+        delete fallbackSanitized.company_id;
       }
       let retryQuery = supabase
         .from('properties')

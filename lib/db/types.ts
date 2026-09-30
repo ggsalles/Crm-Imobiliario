@@ -33,6 +33,7 @@ export interface Property {
   iptu?: number;
   condoFee?: number;
   buildingName?: string;
+  companyId?: string;
   notes?: string;
   description?: string;
   tags?: string[];
