@@ -178,18 +178,6 @@ function DashboardContent() {
   }, [user, profile, refreshData, deals.length, contacts.length]);
 
   const generateAIInsights = useCallback(async (bypassCache = false) => {
-    if (!bypassCache) {
-      const cached = safeGetJson<{ text: string; timestamp: number }>("dashboard_ai_insights");
-      if (cached?.text && cached.timestamp) {
-        const age = Date.now() - cached.timestamp;
-        if (age < 3600000) { // 1 hour
-          setAiInsights(cached.text);
-          return;
-        }
-      }
-    }
-
-    setLoadingAI(true);
     const mStr = format(new Date(), "yyyy-MM");
     const cGoal = goals.find(g => g.month === mStr && g.ownerId === user?.id) || 
                   goals.find(g => g.month === mStr);
@@ -198,6 +186,22 @@ function DashboardContent() {
     const totalPipeline = deals
       .filter(d => STAGES.some(s => s.id === d.stage && s.id !== 'closed'))
       .reduce((acc, d) => acc + (d.value || 0), 0);
+    
+    // Fingerprint dinâmico do estado atual dos dados
+    const currentDataFingerprint = `${mStr}_${gRevenue}_${closedTotal}_${totalPipeline}_${deals.map(d => `${d.id}:${d.stage}:${d.value}`).sort().join(';')}`;
+
+    if (!bypassCache) {
+      const cached = safeGetJson<{ text: string; timestamp: number; fingerprint?: string }>("dashboard_ai_insights");
+      if (cached?.text && cached.timestamp && cached.fingerprint === currentDataFingerprint) {
+        const age = Date.now() - cached.timestamp;
+        if (age < 3600000) { // 1 hora com dados idênticos
+          setAiInsights(cached.text);
+          return;
+        }
+      }
+    }
+
+    setLoadingAI(true);
     
     const weightedPipeline = deals
       .filter(d => d.stage !== 'closed')
@@ -209,6 +213,7 @@ function DashboardContent() {
     const fValue = weightedPipeline + closedTotal;
     
     const stageCounts = STAGES.map(stage => ({
+      id: stage.id,
       name: stage.title,
       count: deals.filter(d => d.stage === stage.id).length,
       value: deals.filter(d => d.stage === stage.id).reduce((acc, d) => acc + (d.value || 0), 0),
@@ -234,10 +239,10 @@ function DashboardContent() {
     `;
 
     // Análise estratégica matemática determinística (fallback infalível)
-    const pctGoal = gRevenue > 0 ? Math.round((closedTotal / gRevenue) * 100) : 0;
-    const sortedActiveStages = [...stageCounts].filter(s => s.name !== 'Fechado' && s.name !== 'Perdido').sort((a, b) => b.value - a.value);
-    const bottleneckStage = sortedActiveStages[0] || { name: 'Apresentação', count: 0, value: 0 };
-    const dealsToClose = deals.filter(d => d.stage === 'proposal' || d.stage === 'negotiation');
+    const pctGoal = gRevenue > 0 ? Math.round((closedTotal / gRevenue) * 100) : (closedTotal > 0 ? 100 : 0);
+    const sortedActiveStages = [...stageCounts].filter(s => s.id !== 'closed' && s.id !== 'lost').sort((a, b) => b.value - a.value);
+    const bottleneckStage = sortedActiveStages[0] || { id: 'proposal', name: 'Proposta', count: 0, value: 0 };
+    const dealsToClose = deals.filter(d => d.stage === 'proposal' || d.stage === 'legal' || d.stage === 'negotiation');
     
     const fallbackInsightText = [
       `📊 Diagnóstico do Mês (${mStr}): O time já atingiu ${pctGoal}% da meta de receita (${formatCurrencyBRL(closedTotal, { maximumFractionDigits: 0 })} realizados de ${formatCurrencyBRL(gRevenue, { maximumFractionDigits: 0 })}). O pipeline ativo possui ${formatCurrencyBRL(totalPipeline, { maximumFractionDigits: 0 })} em aberto com previsão ponderada realista de ${formatCurrencyBRL(fValue, { maximumFractionDigits: 0 })}.`,
@@ -253,6 +258,7 @@ function DashboardContent() {
     setAiInsights(textToDisplay);
     safeSetJson("dashboard_ai_insights", {
       text: textToDisplay,
+      fingerprint: currentDataFingerprint,
       timestamp: Date.now()
     });
     setLoadingAI(false);

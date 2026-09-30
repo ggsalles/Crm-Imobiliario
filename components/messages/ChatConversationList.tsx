@@ -106,7 +106,7 @@ export function ChatConversationList({
                   }
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 p-2.5 rounded-2xl transition-all mb-1 text-left group cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                  "w-full flex items-center gap-3 p-2.5 rounded-2xl transition-all mb-1 text-left group cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-primary/20 relative",
                   isActive ? "bg-primary/10" : "hover:bg-muted/50"
                 )}
               >
@@ -128,7 +128,7 @@ export function ChatConversationList({
                   <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background shadow-xs" />
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pr-8">
                   <div className="flex justify-between items-start mb-0.5">
                     <h4
                       className={cn(
@@ -151,28 +151,30 @@ export function ChatConversationList({
                   </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-1 shrink-0 relative min-w-[60px]">
-                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter shrink-0 pt-0.5 transition-all duration-200 group-hover:opacity-0 group-hover:scale-95">
+                <div className="flex flex-col items-end justify-between self-stretch py-0.5 shrink-0">
+                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">
                     {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                   </span>
 
-                  {unread > 0 && (
-                    <span className="w-4 h-4 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 shadow-xs shadow-primary/20 transition-all duration-200 group-hover:opacity-0 group-hover:scale-95">
-                      {unread}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1 mt-auto">
+                    {unread > 0 && (
+                      <span className="w-4 h-4 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 shadow-xs shadow-primary/20">
+                        {unread}
+                      </span>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteConv(conv);
-                    }}
-                    className="absolute top-1/2 -translate-y-1/2 right-0 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center z-10 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer"
-                    title="Excluir conversa"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteConv(conv);
+                      }}
+                      className="p-1 rounded-md transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 hover:opacity-100 cursor-pointer"
+                      title="Excluir conversa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

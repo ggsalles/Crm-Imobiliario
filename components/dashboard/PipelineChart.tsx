@@ -405,7 +405,10 @@ export const PipelineChart = memo(function PipelineChart({
                   {formatCurrencyBRL(funnelData.find(s => s.id === 'closed')?.value || 0, { maximumFractionDigits: 0 })}
                 </p>
                 <span className="text-[10.5px] text-muted-foreground">
-                  {funnelData.find(s => s.id === 'closed')?.count || 0} negócios fechados
+                  {(() => {
+                    const closedCount = funnelData.find(s => s.id === 'closed')?.count || 0;
+                    return `${closedCount} ${closedCount === 1 ? 'negócio fechado' : 'negócios fechados'}`;
+                  })()}
                 </span>
               </div>
             </div>

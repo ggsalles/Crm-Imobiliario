@@ -469,6 +469,7 @@ function MessagesContent() {
                 <ChatHeader
                   partner={currentPartner}
                   onBack={() => setSelectedConv(null)}
+                  onDeleteConversation={() => selectedConv && setConvToDelete(selectedConv)}
                 />
 
                 {/* Feed de Mensagens */}
