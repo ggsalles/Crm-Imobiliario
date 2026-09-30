@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, memo } from "react";
-import { X } from "lucide-react";
+import { X, Sparkles, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
@@ -12,6 +12,7 @@ export interface GoalModalProps {
   currentMonth: string;
   stageGoals: Record<string, number>;
   onSaveGoals: (goals: Record<string, number>) => Promise<void>;
+  onOpenSimulator?: () => void;
 }
 
 export const GoalModal = memo(function GoalModal({
@@ -20,6 +21,7 @@ export const GoalModal = memo(function GoalModal({
   currentMonth,
   stageGoals,
   onSaveGoals,
+  onOpenSimulator,
 }: GoalModalProps) {
   const [displayGoals, setDisplayGoals] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,9 +77,31 @@ export const GoalModal = memo(function GoalModal({
               <X className="w-5 h-5 text-muted-foreground" />
             </button>
             <h2 className="text-2xl font-bold mb-2 text-foreground text-start">Definir Metas</h2>
-            <p className="text-sm text-muted-foreground mb-6 text-start">
+            <p className="text-sm text-muted-foreground mb-4 text-start">
               Defina os valores de venda desejados para cada situação em {currentMonth}.
             </p>
+
+            {onOpenSimulator && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSimulator();
+                }}
+                className="w-full mb-4 p-3 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-between text-start hover:bg-primary/15 transition-all group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-foreground">Simulador Automático</p>
+                    <p className="text-[10px] text-muted-foreground font-semibold">Calcular metas a partir do VGV ou da sua comissão</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </button>
+            )}
             <form
               onSubmit={handleSubmit}
               className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-start font-medium leading-none"

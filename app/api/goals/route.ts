@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       return {
         id: item.id,
         month: cleanMonth,
-        revenue: item.revenue,
+        revenue: Number(item.revenue || item.stage_goals?.closed || 0),
         stageGoals: item.stage_goals,
         ownerId: item.owner_id,
         tenantId: item.tenant_id,
@@ -63,26 +63,67 @@ export async function POST(req: NextRequest) {
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
+    const cleanMonth = String(data.month || "").split('_')[0] || new Date().toISOString().substring(0, 7);
+    const ownerId = data.owner_id || user?.id;
+
+    if (!ownerId) {
+      return NextResponse.json({ error: "Missing owner_id" }, { status: 400 });
+    }
+
+    const payload: any = {
+      owner_id: ownerId,
+      month: cleanMonth,
+      stage_goals: data.stage_goals || {},
+      updated_at: new Date().toISOString()
+    };
+
     if (activeTenantId) {
-      data.tenant_id = activeTenantId;
-      if (data.month && !data.month.includes('_')) {
-        data.month = `${data.month}_${activeTenantId}`;
-      }
+      payload.tenant_id = activeTenantId;
     }
 
-    if (data.id) {
-      delete data.id;
-    }
-    
-    const { data: result, error } = await supabase
+    // Check if goal already exists for this owner and month
+    let checkQuery = supabase
       .from('goals')
-      .upsert(data, { onConflict: 'owner_id,month' })
-      .select();
+      .select('id, month')
+      .eq('owner_id', ownerId);
 
-    if (error) throw error;
-    if (!result || result.length === 0) throw new Error("Failed to set goal");
+    if (activeTenantId) {
+      checkQuery = checkQuery.eq('tenant_id', activeTenantId);
+    }
 
-    return NextResponse.json({ id: result[0].id });
+    const { data: existingList, error: checkErr } = await checkQuery;
+    if (checkErr) {
+      console.warn("[API/Goals] check error:", checkErr);
+    }
+
+    const existingGoal = existingList?.find((g: any) => (g.month || "").startsWith(cleanMonth));
+
+    if (existingGoal?.id) {
+      console.log(`[API/Goals] Atualizando meta existente ID: ${existingGoal.id} para mês ${cleanMonth}`);
+      let { error: updateErr } = await supabase
+        .from('goals')
+        .update(payload)
+        .eq('id', existingGoal.id);
+
+      if (updateErr) {
+        console.error("[API/Goals] update error:", updateErr);
+        throw updateErr;
+      }
+      return NextResponse.json({ id: existingGoal.id, success: true });
+    } else {
+      console.log(`[API/Goals] Inserindo nova meta para mês ${cleanMonth}`);
+      let { data: inserted, error: insertErr } = await supabase
+        .from('goals')
+        .insert([payload])
+        .select();
+
+      if (insertErr) {
+        console.error("[API/Goals] insert error:", insertErr);
+        throw insertErr;
+      }
+
+      return NextResponse.json({ id: inserted?.[0]?.id, success: true });
+    }
   } catch (error: any) {
     console.error("[API/Goals] POST Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

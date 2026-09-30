@@ -8,7 +8,8 @@ import {
   AlertTriangle, 
   AlertOctagon, 
   X,
-  Download 
+  Download,
+  Calculator
 } from "lucide-react";
 import { motion } from "motion/react";
 import { SoundControlButton } from "@/components/NewLeadSoundNotifier";
@@ -31,6 +32,7 @@ export interface PipelineHeaderProps {
   lostDealsCount: number;
   staleDealsValue: number;
   onOpenGoalModal: () => void;
+  onOpenSimulatorModal?: () => void;
   onOpenCreateDealModal: () => void;
   onExportDeals?: () => void;
 }
@@ -50,6 +52,7 @@ export function PipelineHeader({
   lostDealsCount,
   staleDealsValue,
   onOpenGoalModal,
+  onOpenSimulatorModal,
   onOpenCreateDealModal,
   onExportDeals,
 }: PipelineHeaderProps) {
@@ -79,6 +82,18 @@ export function PipelineHeader({
                   <p className="leading-none text-xs font-bold">{formatCurrencyBRL(goalValue)}</p>
                 </div>
               </button>
+
+              {onOpenSimulatorModal && (
+                <button
+                  type="button"
+                  onClick={onOpenSimulatorModal}
+                  className="bg-card border border-border hover:border-primary/40 hover:bg-primary/5 px-3 py-2 rounded-xl font-bold text-foreground transition-all flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer"
+                  title="Simulador de Metas e Engenharia Reversa do Funil"
+                >
+                  <Calculator className="w-3.5 h-3.5 text-primary" />
+                  <span className="hidden sm:inline">Simulador</span>
+                </button>
+              )}
 
               {onExportDeals && (
                 <button

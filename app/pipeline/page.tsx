@@ -15,6 +15,7 @@ import { PipelineHeader, HealthFilterType } from "@/components/pipeline/Pipeline
 import { KanbanColumn } from "@/components/pipeline/KanbanColumn";
 import { DealModal } from "@/components/pipeline/DealModal";
 import { GoalModal } from "@/components/pipeline/GoalModal";
+import { GoalSimulatorModal } from "@/components/pipeline/GoalSimulatorModal";
 import { LostReasonModal } from "@/components/pipeline/LostReasonModal";
 
 import { recordAuditEvent } from "@/lib/audit";
@@ -100,6 +101,7 @@ export default function PipelinePage() {
   // Modal States
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isLostReasonModalOpen, setIsLostReasonModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
@@ -585,7 +587,7 @@ export default function PipelinePage() {
   const handleSaveGoals = async (updatedGoals: Record<string, number>) => {
     try {
       const revenueTotal = updatedGoals["closed"] || 0;
-      await setGoal(user?.id || "", currentMonth, revenueTotal, updatedGoals);
+      await setGoal(currentMonth, updatedGoals, revenueTotal, user?.id);
       setGoals((prev) => {
         const filtered = prev.filter(
           (g) => !(g.month === currentMonth && g.ownerId === user?.id)
@@ -677,6 +679,7 @@ export default function PipelinePage() {
           lostDealsCount={lostDeals.length}
           staleDealsValue={staleDealsValue}
           onOpenGoalModal={() => setIsGoalModalOpen(true)}
+          onOpenSimulatorModal={() => setIsSimulatorOpen(true)}
           onOpenCreateDealModal={() => {
             setEditingDeal(null);
             setIsDealModalOpen(true);
@@ -743,6 +746,16 @@ export default function PipelinePage() {
         currentMonth={currentMonth}
         stageGoals={stageGoals}
         onSaveGoals={handleSaveGoals}
+        onOpenSimulator={() => setIsSimulatorOpen(true)}
+      />
+
+      {/* Modal de Simulador & Calculadora Reversa de Metas */}
+      <GoalSimulatorModal
+        isOpen={isSimulatorOpen}
+        onClose={() => setIsSimulatorOpen(false)}
+        currentMonth={currentMonth}
+        onApplyGoals={handleSaveGoals}
+        initialClosedGoal={goalValue}
       />
 
       {/* Modal de Motivo da Perda */}
