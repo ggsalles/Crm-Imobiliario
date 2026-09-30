@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
+import { DEFAULT_TENANT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +49,11 @@ export async function GET(req: NextRequest) {
     let query = supabase.from('conversations').select('*').order('last_message_at', { ascending: false });
 
     if (activeTenantId) {
-      query = query.eq('tenant_id', activeTenantId);
+      if (activeTenantId === DEFAULT_TENANT_ID) {
+        query = query.or(`tenant_id.eq.${activeTenantId},tenant_id.is.null`);
+      } else {
+        query = query.eq('tenant_id', activeTenantId);
+      }
     }
 
     if (ownerId && ownerId !== 'undefined') {
@@ -187,17 +192,10 @@ export async function DELETE(req: NextRequest) {
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     // Clear messages first due to foreign key constraints if any
-    let deleteMessagesQuery = supabase.from('messages').delete().eq('conversation_id', id);
-    if (activeTenantId) {
-      deleteMessagesQuery = deleteMessagesQuery.eq('tenant_id', activeTenantId);
-    }
-    await deleteMessagesQuery;
+    await supabase.from('messages').delete().eq('conversation_id', id);
 
-    let deleteConvQuery = supabase.from('conversations').delete().eq('id', id);
-    if (activeTenantId) {
-      deleteConvQuery = deleteConvQuery.eq('tenant_id', activeTenantId);
-    }
-    const { error } = await deleteConvQuery;
+    // Delete conversation
+    const { error } = await supabase.from('conversations').delete().eq('id', id);
 
     if (error) throw error;
     return NextResponse.json({ success: true });

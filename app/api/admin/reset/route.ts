@@ -191,9 +191,9 @@ export async function POST(req: NextRequest) {
       try {
         let q = supabase.from('activities').delete();
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
@@ -209,18 +209,18 @@ export async function POST(req: NextRequest) {
       try {
         let qMsg = supabase.from('messages').delete();
         if (isSingleTenant) {
-          qMsg = qMsg.eq('tenant_id', tenantId);
+          qMsg = qMsg.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          qMsg = qMsg.gte('created_at', '1970-01-01');
+          qMsg = qMsg.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { count: msgCount, error: msgErr } = await qMsg.select('id');
         if (msgErr) console.warn('[Reset] Aviso ao deletar messages:', msgErr);
 
         let qConv = supabase.from('conversations').delete();
         if (isSingleTenant) {
-          qConv = qConv.eq('tenant_id', tenantId);
+          qConv = qConv.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          qConv = qConv.gte('created_at', '1970-01-01');
+          qConv = qConv.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { count: convCount, error: convErr } = await qConv.select('id');
         if (convErr) console.warn('[Reset] Aviso ao deletar conversations:', convErr);
@@ -239,9 +239,9 @@ export async function POST(req: NextRequest) {
       try {
         let q = supabase.from('deals').delete();
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
@@ -257,9 +257,9 @@ export async function POST(req: NextRequest) {
       try {
         let q = supabase.from('contacts').delete();
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
@@ -275,15 +275,9 @@ export async function POST(req: NextRequest) {
       try {
         let q = supabase.from('companies').delete();
         if (isSingleTenant) {
-          // Checa se a coluna tenant_id existe
-          const { error: testErr } = await supabase.from('companies').select('tenant_id').limit(1);
-          if (!testErr) {
-            q = q.eq('tenant_id', tenantId);
-          } else {
-            q = q.gte('created_at', '1970-01-01');
-          }
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
@@ -298,7 +292,9 @@ export async function POST(req: NextRequest) {
     if (entities.includes('properties')) {
       try {
         let propQ = supabase.from('properties').select('id');
-        if (isSingleTenant) propQ = propQ.eq('tenant_id', tenantId);
+        if (isSingleTenant) {
+          propQ = propQ.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
+        }
         const { data: propRows } = await propQ;
         const propIds = (propRows || []).map(p => p.id);
 
@@ -314,9 +310,9 @@ export async function POST(req: NextRequest) {
 
         let q = supabase.from('properties').delete();
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
@@ -336,9 +332,9 @@ export async function POST(req: NextRequest) {
       try {
         let q = supabase.from('goals').delete();
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111,tenant_id.is.null`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
         const { error, count } = await q.select('id');
         if (error) throw error;
