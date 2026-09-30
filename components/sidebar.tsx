@@ -39,17 +39,16 @@ import { safeGetItem, safeSetItem } from "@/lib/safe-storage";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { label: "Atividades", icon: Calendar, href: "/activities" },
   { label: "Pipeline", icon: Trello, href: "/pipeline" },
-  { label: "Calendário", icon: Calendar, href: "/calendar" },
-  { label: "Clientes", icon: Users, href: "/contacts?tab=cliente" },
-  { label: "Equipe", icon: ShieldCheck, href: "/contacts?tab=equipe" },
-  { label: "Relatórios", icon: BarChart3, href: "/?tab=Relatórios" },
-  { label: "Mensagens", icon: MessageSquare, href: "/messages" },
   { label: "Imóveis", icon: Home, href: "/properties" },
   { label: "Vitrine", icon: Globe, href: "/vitrine" },
+  { label: "Clientes", icon: Users, href: "/contacts" },
+  { label: "Atividades", icon: Calendar, href: "/activities" },
+  { label: "Calendário", icon: Calendar, href: "/calendar" },
+  { label: "Mensagens", icon: MessageSquare, href: "/messages" },
+  { label: "Equipe", icon: ShieldCheck, href: "/users" },
   { label: "Empresas", icon: Building2, href: "/companies" },
-  { label: "Usuários", icon: UserCircle, href: "/users" },
+  { label: "Relatórios", icon: BarChart3, href: "/?tab=Relatórios" },
 ];
 
 export function Sidebar() {

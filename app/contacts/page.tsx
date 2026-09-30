@@ -497,8 +497,12 @@ function ContactsContent() {
 
               <button 
                 onClick={() => {
-                  setEditingContact(null);
-                  setIsModalOpen(true);
+                  if (activeTab === 'equipe') {
+                    router.push('/users');
+                  } else {
+                    setEditingContact(null);
+                    setIsModalOpen(true);
+                  }
                 }}
                 className={cn(
                   "bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs cursor-pointer",
@@ -506,7 +510,7 @@ function ContactsContent() {
                 )}
               >
                 <Plus className="w-4 h-4" />
-                {activeTab === 'cliente' ? 'Novo Cliente' : 'Novo Membro'}
+                {activeTab === 'cliente' ? 'Novo Cliente' : 'Novo Membro (Usuário)'}
               </button>
             </div>
           </header>

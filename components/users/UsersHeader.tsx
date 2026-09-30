@@ -1,6 +1,6 @@
 "use client";
 
-import { UserCircle, Search, Building2, UserPlus } from "lucide-react";
+import { UserCircle, Search, Building2, UserPlus, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UsersHeaderProps {
@@ -28,11 +28,11 @@ export function UsersHeader({
     <header className="h-auto md:h-16 bg-card/80 backdrop-blur-md border-b border-border pl-14 md:pl-5 px-3 sm:px-4 md:px-5 py-3 md:py-0 flex flex-col md:flex-row md:items-center justify-between sticky top-0 z-10 gap-3">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary shrink-0">
-          <UserCircle className="w-4 h-4" />
+          <ShieldCheck className="w-4 h-4" />
         </div>
         <div>
-          <h2 className="text-base md:text-lg font-bold leading-tight">Gestão de Usuários</h2>
-          <p className="text-[11px] text-muted-foreground font-medium tracking-tight">Controle de acessos e perfis</p>
+          <h2 className="text-base md:text-lg font-bold leading-tight">Gestão da Equipe</h2>
+          <p className="text-[11px] text-muted-foreground font-medium tracking-tight">Membros com acesso ao sistema, corretores e permissões</p>
         </div>
       </div>
 
