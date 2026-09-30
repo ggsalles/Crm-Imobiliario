@@ -17,7 +17,8 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
-import { safeSetJson } from "@/lib/safe-storage";
+import { safeSetJson, saveTenantPipelineProbabilities } from "@/lib/safe-storage";
+import { useAuth } from "@/providers/auth-provider";
 
 export interface GoalSimulatorModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
   },
   onUpdateProbabilities,
 }: GoalSimulatorModalProps) {
+  const { profile } = useAuth();
   const [mode, setMode] = useState<ModeType>("sales_target");
   const [salesTargetInput, setSalesTargetInput] = useState(
     formatCurrencyBRL(initialClosedGoal > 0 ? initialClosedGoal : 1000000)
@@ -209,11 +211,10 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
           closed: 100,
           lost: 0,
         };
-        safeSetJson("pipeline_probabilities", probsToSave);
+        saveTenantPipelineProbabilities(profile?.tenantId, probsToSave);
         if (onUpdateProbabilities) {
           onUpdateProbabilities(probsToSave);
         }
-        window.dispatchEvent(new Event("storage_probabilities_updated"));
       }
 
       onClose();

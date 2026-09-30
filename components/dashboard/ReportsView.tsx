@@ -186,14 +186,68 @@ export const ReportsView = memo(function ReportsView({
   const revenueSparkline = useMemo(() => salesData.map(s => ({ value: s.revenue })), [salesData]);
   const dealsSparkline = useMemo(() => salesData.map(s => ({ value: s.deals })), [salesData]);
 
-  // Radar chart data memoized
-  const radarData = useMemo(() => [
-    { subject: 'Volume', A: winRate },
-    { subject: 'Ticket', A: Math.min((avgTicket / 100000) * 100, 100) },
-    { subject: 'Velocidade', A: 80 },
-    { subject: 'Retenção', A: 70 },
-    { subject: 'Meta', A: progressPercentage },
-  ], [winRate, avgTicket, progressPercentage]);
+  // Radar chart data dinâmico e real - colapsa para 0 quando o tenant não tem dados
+  const radarData = useMemo(() => {
+    const hasDeals = deals.length > 0;
+    const closedDeals = deals.filter(d => d.stage === 'closed');
+    const hasClosedDeals = closedDeals.length > 0;
+    const hasContacts = _contacts.length > 0;
+
+    // Volume: escala proporcional de negócios no funil (0 se não houver negócios)
+    const volumeScore = hasDeals ? Math.min(100, Math.round((deals.length / 5) * 100)) : 0;
+
+    // Ticket: escala do ticket médio realizado (0 se não houver fechamento)
+    const ticketScore = hasClosedDeals && avgTicket > 0 
+      ? Math.min(100, Math.round((avgTicket / 500000) * 100)) 
+      : 0;
+
+    // Velocidade: agilidade do ciclo de fechamento (0 se não houver vendas realizadas)
+    const velocidadeScore = hasClosedDeals ? Math.min(100, Math.max(30, Math.round(winRate * 2.5))) : 0;
+
+    // Retenção: engajamento da carteira de clientes com histórico/atividades (0 se não houver contatos)
+    const retencaoScore = hasContacts 
+      ? Math.min(100, Math.round(((deals.length + (activities?.length || 0)) / (hasContacts ? _contacts.length : 1)) * 50)) 
+      : 0;
+
+    // Meta: percentual real da meta atingida (0 se não houver faturamento/meta)
+    const metaScore = progressPercentage > 0 ? Math.min(100, Math.round(progressPercentage)) : 0;
+
+    return [
+      { subject: 'Volume', A: volumeScore },
+      { subject: 'Ticket', A: ticketScore },
+      { subject: 'Velocidade', A: velocidadeScore },
+      { subject: 'Retenção', A: retencaoScore },
+      { subject: 'Meta', A: metaScore },
+    ];
+  }, [deals, _contacts, activities, winRate, avgTicket, progressPercentage]);
+
+  // Performance Proativa calculada em tempo real com base no CRM do tenant
+  const proactiveMetrics = useMemo(() => {
+    const hasDeals = deals.length > 0;
+    const hasContacts = _contacts.length > 0;
+
+    // 1. Volume de Leads: intensidade da captação de clientes vs meta operacional (base 5)
+    const volumeLeadsPct = hasContacts || hasDeals
+      ? Math.min(100, Math.round((Math.max(_contacts.length, deals.length) / 5) * 100))
+      : 0;
+
+    // 2. Vendas Diretas: taxa de conversão efetiva de negócios
+    const vendasDiretasPct = hasDeals ? Math.min(100, Math.round(winRate)) : 0;
+
+    // 3. Faturamento: atingimento da meta financeira
+    const faturamentoPct = progressPercentage > 0 ? Math.min(100, Math.round(progressPercentage)) : 0;
+
+    // 4. Retorno ROI: eficiência financeira do pipeline (receita realizada / volume total movimentado)
+    const totalMovimentado = totalRevenue + activePipelineValue;
+    const roiPct = totalMovimentado > 0 ? Math.min(100, Math.round((totalRevenue / totalMovimentado) * 100)) : 0;
+
+    return [
+      { name: 'Volume de Leads', value: volumeLeadsPct },
+      { name: 'Vendas Diretas', value: vendasDiretasPct },
+      { name: 'Faturamento', value: faturamentoPct },
+      { name: 'Retorno ROI', value: roiPct },
+    ];
+  }, [deals, _contacts, winRate, progressPercentage, totalRevenue, activePipelineValue]);
 
   // Central de Exportações: CSV Consolidado
   const handleExportConsolidatedCsv = useCallback(() => {
@@ -453,7 +507,7 @@ export const ReportsView = memo(function ReportsView({
           trend="Eficiência do Funil"
           isPositive={winRate > 15}
           description="Porcentagem de leads que chegam ao status final."
-          chartData={STABLE_CONVERSION_SPARKLINE}
+          chartData={deals.length > 0 ? STABLE_CONVERSION_SPARKLINE : [{ value: 0 }, { value: 0 }]}
         />
         <MetricCard 
           title="Pipeline Ativo" 
@@ -462,7 +516,7 @@ export const ReportsView = memo(function ReportsView({
           isPositive={true}
           isNeutral={true}
           description="Valor total estacionado no funil (exceto vendidos)."
-          chartData={STABLE_PIPELINE_SPARKLINE}
+          chartData={activePipelineValue > 0 ? STABLE_PIPELINE_SPARKLINE : [{ value: 0 }, { value: 0 }]}
         />
       </div>
 
@@ -586,13 +640,13 @@ export const ReportsView = memo(function ReportsView({
           </div>
           
           <div className="space-y-5">
-            {['Volume de Leads', 'Vendas Diretas', 'Faturamento', 'Retorno ROI'].map((item, i) => {
-              const val = [85, 40, 65, 30][i];
+            {proactiveMetrics.map((item) => {
+              const val = item.value;
               return (
-                <div key={item} className="space-y-2">
+                <div key={item.name} className="space-y-2">
                   <div className="flex justify-between text-[9.5px] font-bold uppercase tracking-wider">
-                    <span>{item}</span>
-                    <span className={val > 50 ? 'text-emerald-500' : 'text-blue-500'}>{val}%</span>
+                    <span>{item.name}</span>
+                    <span className={val > 50 ? 'text-emerald-500' : val > 0 ? 'text-blue-500' : 'text-muted-foreground'}>{val}%</span>
                   </div>
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                     <motion.div 

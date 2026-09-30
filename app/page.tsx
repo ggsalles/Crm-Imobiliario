@@ -32,7 +32,7 @@ import { TeamView } from "@/components/dashboard/TeamView";
 import { useAuth } from "@/providers/auth-provider";
 import { getDealStaleInfo, getWhatsAppRescueUrl } from "@/lib/lead-health";
 import { STAGES } from "@/lib/constants";
-import { safeGetJson, safeSetJson } from "@/lib/safe-storage";
+import { safeGetJson, safeSetJson, getTenantPipelineProbabilities } from "@/lib/safe-storage";
 import { safeAiCall } from "@/lib/ai";
 import { cn, formatCurrencyBRL } from "@/lib/utils";
 import { 
@@ -109,13 +109,20 @@ function DashboardContent() {
   });
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [customProbabilities, setCustomProbabilities] = useState<Record<string, number>>({});
-  const [aiInsights, setAiInsights] = useState<string | null>(() => {
-    const cached = safeGetJson<{ text: string; timestamp: number }>("dashboard_ai_insights");
+  const aiCacheKey = useMemo(() => {
+    return profile?.tenantId ? `dashboard_ai_insights_${profile.tenantId}` : "dashboard_ai_insights";
+  }, [profile?.tenantId]);
+
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cached = safeGetJson<{ text: string; timestamp: number }>(aiCacheKey);
     if (cached?.text && !cached.text.includes("Ops!") && !cached.text.includes("Limite de cota") && !cached.text.includes("Erro na API")) {
-      return cached.text;
+      setAiInsights(cached.text);
+    } else {
+      setAiInsights(null);
     }
-    return null;
-  });
+  }, [aiCacheKey]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'weekly' | 'monthly'>('monthly');
 
@@ -191,7 +198,7 @@ function DashboardContent() {
     const currentDataFingerprint = `${mStr}_${gRevenue}_${closedTotal}_${totalPipeline}_${deals.map(d => `${d.id}:${d.stage}:${d.value}`).sort().join(';')}`;
 
     if (!bypassCache) {
-      const cached = safeGetJson<{ text: string; timestamp: number; fingerprint?: string }>("dashboard_ai_insights");
+      const cached = safeGetJson<{ text: string; timestamp: number; fingerprint?: string }>(aiCacheKey);
       if (cached?.text && cached.timestamp && cached.fingerprint === currentDataFingerprint) {
         const age = Date.now() - cached.timestamp;
         if (age < 3600000) { // 1 hora com dados idênticos
@@ -256,13 +263,13 @@ function DashboardContent() {
       : result.text;
 
     setAiInsights(textToDisplay);
-    safeSetJson("dashboard_ai_insights", {
+    safeSetJson(aiCacheKey, {
       text: textToDisplay,
       fingerprint: currentDataFingerprint,
       timestamp: Date.now()
     });
     setLoadingAI(false);
-  }, [goals, deals, customProbabilities, user?.id]);
+  }, [goals, deals, customProbabilities, user?.id, aiCacheKey]);
 
   useEffect(() => {
     if (activeTab === 'Previsões' && deals.length > 0 && !aiInsights && !loadingAI) {
@@ -272,7 +279,7 @@ function DashboardContent() {
 
   useEffect(() => {
     const loadProbabilities = () => {
-      const saved = safeGetJson<Record<string, number>>("pipeline_probabilities");
+      const saved = getTenantPipelineProbabilities(profile?.tenantId);
       if (saved && typeof saved === "object" && Object.keys(saved).length > 0) {
         setCustomProbabilities(saved);
       } else {
@@ -289,7 +296,7 @@ function DashboardContent() {
     const handleUpdate = () => loadProbabilities();
     window.addEventListener("storage_probabilities_updated", handleUpdate);
     return () => window.removeEventListener("storage_probabilities_updated", handleUpdate);
-  }, []);
+  }, [profile?.tenantId]);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');

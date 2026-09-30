@@ -5,6 +5,7 @@ import { Sparkles, Brain, Loader2, Info, AlertCircle } from "lucide-react";
 import { Activity, Deal } from "@/lib/db";
 import { safeAiCall } from "@/lib/ai";
 import { safeGetJson, safeSetJson } from "@/lib/safe-storage";
+import { useAuth } from "@/providers/auth-provider";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ const DEFAULT_INSIGHTS = [
 ];
 
 export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
+  const { profile } = useAuth();
+  const cacheKey = profile?.tenantId ? `activities_ai_insights_${profile.tenantId}` : "activities_ai_insights";
   const [insights, setInsights] = useState<string[]>(DEFAULT_INSIGHTS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -31,7 +34,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
     if (loading) return;
 
     if (!manual) {
-      const cached = safeGetJson<{ list: string[]; timestamp: number }>("activities_ai_insights");
+      const cached = safeGetJson<{ list: string[]; timestamp: number }>(cacheKey);
       if (cached) {
         const { list, timestamp } = cached;
         const age = Date.now() - timestamp;
@@ -84,7 +87,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
           setInsights(finalInsights);
           setCurrentIndex(0);
           hasGeneratedRef.current = true;
-          safeSetJson("activities_ai_insights", {
+          safeSetJson(cacheKey, {
             list: finalInsights,
             timestamp: Date.now()
           });
@@ -95,7 +98,7 @@ export function GeminiBanner({ activities, deals }: GeminiBannerProps) {
     } finally {
       setLoading(false);
     }
-  }, [loading, activities, deals]); 
+  }, [loading, activities, deals, cacheKey]); 
 
   useEffect(() => {
     // Only trigger once when data first arrives

@@ -21,7 +21,7 @@ import { LostReasonModal } from "@/components/pipeline/LostReasonModal";
 import { recordAuditEvent } from "@/lib/audit";
 import { getDealStaleInfo, LOST_REASONS } from "@/lib/lead-health";
 import { PIPELINE_STAGES } from "@/lib/constants";
-import { safeGetJson } from "@/lib/safe-storage";
+import { safeGetJson, getTenantPipelineProbabilities } from "@/lib/safe-storage";
 import { exportDealsToCsv } from "@/lib/csv-export";
 import { 
   Deal, 
@@ -129,10 +129,10 @@ export default function PipelinePage() {
 
   const currentMonth = useMemo(() => new Date().toISOString().substring(0, 7), []);
 
-  // Safe load of probabilities
+  // Safe load of probabilities isoladas por Tenant
   useEffect(() => {
     const loadProbabilities = () => {
-      const saved = safeGetJson<Record<string, number>>("pipeline_probabilities");
+      const saved = getTenantPipelineProbabilities(profile?.tenantId);
       if (saved) {
         setProbabilities((prev) => ({ ...prev, ...saved }));
       } else {
@@ -149,7 +149,7 @@ export default function PipelinePage() {
     return () => {
       window.removeEventListener("storage_probabilities_updated", loadProbabilities);
     };
-  }, []);
+  }, [profile?.tenantId]);
 
   // Sincronização e Subscrição em Tempo Real
   useEffect(() => {

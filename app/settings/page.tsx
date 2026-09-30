@@ -28,7 +28,7 @@ import {
   Loader2
 } from "lucide-react";
 import { STAGES, DEFAULT_TENANT_NAME } from "@/lib/constants";
-import { safeGetItem, safeSetItem, safeGetJson, safeSetJson } from "@/lib/safe-storage";
+import { safeGetItem, safeSetItem, safeGetJson, safeSetJson, getTenantPipelineProbabilities, saveTenantPipelineProbabilities } from "@/lib/safe-storage";
 import { isSoundEnabled, setSoundEnabled, playIcqSound, unlockAudio } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -166,8 +166,8 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    // Stage probabilities
-    const saved = safeGetJson<Record<string, number>>("pipeline_probabilities");
+    // Stage probabilities isoladas por Tenant
+    const saved = getTenantPipelineProbabilities(profile?.tenantId);
     if (saved) {
       setProbabilities(saved);
     } else {
@@ -177,7 +177,9 @@ export default function SettingsPage() {
       }, {} as Record<string, number>);
       setProbabilities(defaults);
     }
+  }, [profile?.tenantId]);
 
+  useEffect(() => {
     // Session Timeout
     const timeoutEnabled = safeGetItem("session_timeout_enabled") !== "false";
     const timeoutMinutes = Number(safeGetItem("session_timeout_minutes") || "15");
@@ -206,7 +208,7 @@ export default function SettingsPage() {
   }, []);
 
   const saveProbabilities = useCallback(() => {
-    safeSetJson("pipeline_probabilities", probabilities);
+    saveTenantPipelineProbabilities(profile?.tenantId, probabilities);
     setIsSaved(true);
     recordAuditEvent({
       action: 'UPDATE_SETTINGS',
@@ -215,12 +217,12 @@ export default function SettingsPage() {
       severity: 'low',
       category: 'modification',
       metadata: {
-        probabilities
+        probabilities,
+        tenantId: profile?.tenantId
       }
     });
     setTimeout(() => setIsSaved(false), 2000);
-    window.dispatchEvent(new Event("storage_probabilities_updated"));
-  }, [probabilities]);
+  }, [probabilities, profile?.tenantId]);
 
   const saveSessionSettings = useCallback(() => {
     safeSetItem("session_timeout_enabled", String(sessionEnabled));

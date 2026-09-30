@@ -133,3 +133,49 @@ export function safeSetJson(
     return false;
   }
 }
+
+const DEFAULT_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+
+/**
+ * Recupera as probabilidades do funil isoladas por Inquilino (Tenant).
+ * Evita vazamento de configurações entre imobiliárias distintas.
+ */
+export function getTenantPipelineProbabilities(tenantId?: string | null): Record<string, number> | null {
+  const resolvedTenant = tenantId || DEFAULT_TENANT_ID;
+  const tenantKey = `pipeline_probabilities_${resolvedTenant}`;
+  const tenantData = safeGetJson<Record<string, number>>(tenantKey);
+  
+  if (tenantData && typeof tenantData === 'object' && Object.keys(tenantData).length > 0) {
+    return tenantData;
+  }
+
+  // Migração defensiva: apenas para o tenant padrão inicial
+  if (resolvedTenant === DEFAULT_TENANT_ID) {
+    const legacy = safeGetJson<Record<string, number>>('pipeline_probabilities');
+    if (legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0) {
+      safeSetJson(tenantKey, legacy);
+      return legacy;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Grava as probabilidades do funil isoladas por Inquilino (Tenant).
+ */
+export function saveTenantPipelineProbabilities(
+  tenantId: string | null | undefined,
+  probabilities: Record<string, number>
+): boolean {
+  const resolvedTenant = tenantId || DEFAULT_TENANT_ID;
+  const tenantKey = `pipeline_probabilities_${resolvedTenant}`;
+  const ok = safeSetJson(tenantKey, probabilities);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('storage_probabilities_updated'));
+  }
+
+  return ok;
+}
+
