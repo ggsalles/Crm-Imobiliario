@@ -756,6 +756,8 @@ export default function PipelinePage() {
         currentMonth={currentMonth}
         onApplyGoals={handleSaveGoals}
         initialClosedGoal={goalValue}
+        currentProbabilities={probabilities}
+        onUpdateProbabilities={setProbabilities}
       />
 
       {/* Modal de Motivo da Perda */}

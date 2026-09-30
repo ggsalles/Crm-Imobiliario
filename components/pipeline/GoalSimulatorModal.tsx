@@ -1,22 +1,23 @@
 "use client";
 
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, useEffect, memo } from "react";
 import { 
   X, 
   Sparkles, 
   Calculator, 
   TrendingUp, 
-  Users, 
   CheckCircle2, 
   Calendar, 
-  ArrowRight,
-  HelpCircle,
   Percent,
-  DollarSign
+  DollarSign,
+  Sliders,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { safeSetJson } from "@/lib/safe-storage";
 
 export interface GoalSimulatorModalProps {
   isOpen: boolean;
@@ -24,43 +25,48 @@ export interface GoalSimulatorModalProps {
   currentMonth: string;
   onApplyGoals: (goals: Record<string, number>) => Promise<void>;
   initialClosedGoal?: number;
+  currentProbabilities?: Record<string, number>;
+  onUpdateProbabilities?: (probs: Record<string, number>) => void;
 }
 
 type ModeType = "sales_target" | "commission_target";
-type PresetType = "conservative" | "standard" | "high_performance";
+type PresetType = "current" | "conservative" | "standard" | "high_performance" | "custom";
 
-const PRESETS: Record<PresetType, { label: string; desc: string; rates: Record<string, number> }> = {
-  conservative: {
-    label: "Conservador",
-    desc: "Mais leads e visitas necessárias para garantir a meta com folga",
-    rates: {
-      lead: 10,           // 10% dos leads viram venda
-      qualification: 25,  // 25% das visitas viram venda
-      proposal: 45,       // 45% das propostas viram venda
-      negotiation: 70,    // 70% das análises viram venda
-      closed: 100,
-    },
-  },
+const PRESET_DEFINITIONS: Record<Exclude<PresetType, "current" | "custom">, { label: string; desc: string; rates: Record<string, number> }> = {
   standard: {
     label: "Padrão do Mercado",
     desc: "Média recomendada para o mercado imobiliário",
     rates: {
-      lead: 15,           // 15% dos leads viram venda
-      qualification: 35,  // 35% das visitas viram venda
-      proposal: 60,       // 60% das propostas viram venda
-      negotiation: 85,    // 85% das análises viram venda
+      lead: 15,
+      qualification: 35,
+      proposal: 60,
+      negotiation: 85,
       closed: 100,
+      lost: 0,
+    },
+  },
+  conservative: {
+    label: "Conservador",
+    desc: "Mais leads e visitas necessárias para garantir a meta",
+    rates: {
+      lead: 10,
+      qualification: 25,
+      proposal: 45,
+      negotiation: 70,
+      closed: 100,
+      lost: 0,
     },
   },
   high_performance: {
     label: "Alta Performance",
-    desc: "Leads qualificados e alta taxa de conversão em visitas",
+    desc: "Leads qualificados e alta taxa de conversão",
     rates: {
       lead: 25,
       qualification: 50,
       proposal: 75,
       negotiation: 90,
       closed: 100,
+      lost: 0,
     },
   },
 };
@@ -71,6 +77,15 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
   currentMonth,
   onApplyGoals,
   initialClosedGoal = 1000000,
+  currentProbabilities = {
+    lead: 20,
+    qualification: 40,
+    proposal: 60,
+    negotiation: 80,
+    closed: 100,
+    lost: 0,
+  },
+  onUpdateProbabilities,
 }: GoalSimulatorModalProps) {
   const [mode, setMode] = useState<ModeType>("sales_target");
   const [salesTargetInput, setSalesTargetInput] = useState(
@@ -79,8 +94,19 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
   const [commissionTargetInput, setCommissionTargetInput] = useState("R$ 30.000,00");
   const [commissionPercent, setCommissionPercent] = useState<number>(4);
   const [avgTicketInput, setAvgTicketInput] = useState("R$ 500.000,00");
-  const [selectedPreset, setSelectedPreset] = useState<PresetType>("standard");
+  const [selectedPreset, setSelectedPreset] = useState<PresetType>("current");
+  const [customRates, setCustomRates] = useState<Record<string, number>>({ ...currentProbabilities });
+  const [syncProbabilitiesWithPipeline, setSyncProbabilitiesWithPipeline] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCustomRates({ ...currentProbabilities });
+      if (initialClosedGoal > 0) {
+        setSalesTargetInput(formatCurrencyBRL(initialClosedGoal));
+      }
+    }
+  }, [isOpen, currentProbabilities, initialClosedGoal]);
 
   // Cálculos Básicos
   const avgTicket = useMemo(() => {
@@ -107,19 +133,28 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
     return Math.max(1, Math.round((targetSalesVGV / avgTicket) * 10) / 10);
   }, [targetSalesVGV, avgTicket]);
 
-  const activeRates = PRESETS[selectedPreset].rates;
+  // Determinação das taxas ativas
+  const activeRates = useMemo(() => {
+    if (selectedPreset === "current") {
+      return currentProbabilities;
+    }
+    if (selectedPreset === "custom") {
+      return customRates;
+    }
+    return PRESET_DEFINITIONS[selectedPreset].rates;
+  }, [selectedPreset, currentProbabilities, customRates]);
 
   // Engenharia Reversa por Etapa
   const simulationResults = useMemo(() => {
-    // Calculamos o volume financeiro que o corretor precisa ter no pipeline em cada etapa
-    // para que, aplicando a taxa de conversão final, atinja targetSalesVGV
     const stageValues: Record<string, { value: number; count: number; rate: number }> = {};
 
     PIPELINE_STAGES.forEach((stage) => {
       if (stage.id === "lost") return;
 
-      const rate = activeRates[stage.id] || 100;
-      // Volume financeiro necessário na etapa = Meta de Vendas / Taxa de Conversão
+      const rawRate = activeRates[stage.id] ?? 100;
+      const rate = Math.max(1, Math.min(100, rawRate));
+      
+      // Volume financeiro necessário na etapa = Meta de Vendas / (Taxa / 100)
       const requiredValue = targetSalesVGV / (rate / 100);
       const requiredCount = Math.ceil(requiredValue / avgTicket);
 
@@ -161,7 +196,26 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
         }
       });
 
+      // 1. Salva as metas em R$ no banco de dados
       await onApplyGoals(goalsToSave);
+
+      // 2. Se o usuário marcou para sincronizar as probabilidades no pipeline
+      if (syncProbabilitiesWithPipeline) {
+        const probsToSave: Record<string, number> = {
+          lead: activeRates.lead ?? 20,
+          qualification: activeRates.qualification ?? 40,
+          proposal: activeRates.proposal ?? 60,
+          negotiation: activeRates.negotiation ?? 80,
+          closed: 100,
+          lost: 0,
+        };
+        safeSetJson("pipeline_probabilities", probsToSave);
+        if (onUpdateProbabilities) {
+          onUpdateProbabilities(probsToSave);
+        }
+        window.dispatchEvent(new Event("storage_probabilities_updated"));
+      }
+
       onClose();
     } finally {
       setIsApplying(false);
@@ -292,7 +346,7 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                   </div>
                 </div>
 
-                {/* Parâmetro de Ticket Médio */}
+                {/* Parâmetro de Ticket Médio e Perfil */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/40">
                   <div className="space-y-1">
                     <span className="text-[11px] font-semibold text-muted-foreground">Ticket Médio dos Imóveis</span>
@@ -306,18 +360,51 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Perfil de Conversão</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">Taxas de Probabilidade / Conversão</span>
                     <select
                       value={selectedPreset}
                       onChange={(e) => setSelectedPreset(e.target.value as PresetType)}
                       className="w-full px-3 py-2 bg-card border border-border rounded-xl font-bold text-xs sm:text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer"
                     >
-                      <option value="conservative">Conservador (Mais seguro)</option>
-                      <option value="standard">Padrão Imobiliário (Recomendado)</option>
-                      <option value="high_performance">Alta Performance (Mais agressivo)</option>
+                      <option value="current">Minhas Probabilidades Atuais ({currentProbabilities.lead || 20}%, {currentProbabilities.qualification || 40}%, {currentProbabilities.proposal || 60}%, {currentProbabilities.negotiation || 80}%)</option>
+                      <option value="standard">Padrão Imobiliário (15%, 35%, 60%, 85%)</option>
+                      <option value="conservative">Conservador (10%, 25%, 45%, 70%)</option>
+                      <option value="high_performance">Alta Performance (25%, 50%, 75%, 90%)</option>
+                      <option value="custom">Personalizar Taxas Manualmente...</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Edição Manual se 'custom' estiver selecionado */}
+                {selectedPreset === "custom" && (
+                  <div className="pt-2 border-t border-border/40 space-y-2">
+                    <p className="text-[11px] font-bold text-foreground flex items-center gap-1">
+                      <Sliders className="w-3 h-3 text-primary" />
+                      Ajuste as Probabilidades de Fechamento de cada Etapa (%):
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {PIPELINE_STAGES.filter(s => s.id !== "closed" && s.id !== "lost").map(stage => (
+                        <div key={stage.id} className="bg-card p-2 rounded-xl border border-border">
+                          <label className="text-[9px] font-bold text-muted-foreground block truncate">{stage.title}</label>
+                          <div className="flex items-center gap-1 mt-1">
+                            <input
+                              type="number"
+                              min="1"
+                              max="99"
+                              value={customRates[stage.id] ?? 20}
+                              onChange={(e) => setCustomRates(prev => ({
+                                ...prev,
+                                [stage.id]: Number(e.target.value) || 1
+                              }))}
+                              className="w-full bg-muted/30 px-2 py-1 rounded font-bold text-xs outline-none"
+                            />
+                            <span className="text-xs font-bold text-muted-foreground">%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 2. Cartões de Resumo Executivo */}
@@ -346,9 +433,9 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <TrendingUp className="w-3.5 h-3.5 text-primary" />
-                    Engenharia Reversa das Etapas (O que você precisa ter no funil)
+                    Engenharia Reversa das Etapas (Valores a Aplicar nas Metas)
                   </h3>
-                  <span className="text-[10px] text-muted-foreground font-semibold">Conversão cumulativa</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">Probabilidade usada</span>
                 </div>
 
                 <div className="space-y-2">
@@ -381,7 +468,7 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                           <div>
                             <p className="text-xs font-bold text-foreground leading-tight">{stage.title}</p>
                             <p className="text-[10px] text-muted-foreground font-medium">
-                              Taxa de conversão estimada: <span className="font-bold text-foreground">{res?.rate || 100}%</span>
+                              Probabilidade aplicada: <span className="font-bold text-primary">{res?.rate || 100}%</span>
                             </p>
                           </div>
                         </div>
@@ -397,6 +484,26 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Opção de Sincronizar Probabilidades */}
+              <div 
+                onClick={() => setSyncProbabilitiesWithPipeline(!syncProbabilitiesWithPipeline)}
+                className="flex items-center gap-3 p-3 bg-card border border-primary/30 rounded-2xl cursor-pointer hover:bg-primary/5 transition-all"
+              >
+                {syncProbabilitiesWithPipeline ? (
+                  <CheckSquare className="w-5 h-5 text-primary shrink-0" />
+                ) : (
+                  <Square className="w-5 h-5 text-muted-foreground shrink-0" />
+                )}
+                <div className="text-left">
+                  <p className="text-xs font-bold text-foreground">
+                    Sincronizar e atualizar as probabilidades das colunas do Pipeline ({activeRates.lead || 20}%, {activeRates.qualification || 40}%, {activeRates.proposal || 60}%, {activeRates.negotiation || 80}%)
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Atualiza tanto as metas em R$ quanto as tags de probabilidade exibidas nos cabeçalhos das colunas e nas Configurações.
+                  </p>
                 </div>
               </div>
 
