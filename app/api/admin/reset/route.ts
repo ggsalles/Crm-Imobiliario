@@ -124,19 +124,20 @@ export async function GET(req: NextRequest) {
 
     // 8. Timeline (Audit)
     let timeQ = supabase.from('timeline').select('*', { count: 'exact', head: true });
-    if (isSingleTenant) timeQ = timeQ.eq('tenant_id', tenantId);
+    if (isSingleTenant) {
+      timeQ = timeQ.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
+    }
     const { count: timeCount } = await timeQ;
     counts.timeline = timeCount || 0;
 
-    // 9. Members (Non-admin profiles, excluding ggsalles)
+    // 9. Members (All profiles belonging to tenant or global, excluding platform master)
     let memberQ = supabase
       .from('profiles')
       .select('id, email, role', { count: 'exact' })
-      .neq('email', PLATFORM_ADMIN_EMAIL.toLowerCase())
-      .in('role', ['Membro', 'membro', 'corretor', 'user']);
+      .neq('email', PLATFORM_ADMIN_EMAIL.toLowerCase());
     
     if (isSingleTenant) {
-      memberQ = memberQ.eq('tenant_id', tenantId);
+      memberQ = memberQ.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
     }
     const { count: memberCount } = await memberQ;
     counts.members = memberCount || 0;
@@ -351,15 +352,21 @@ export async function POST(req: NextRequest) {
     // 8. AUDITORIA / TIMELINE (timeline)
     if (entities.includes('timeline')) {
       try {
-        let q = supabase.from('timeline').delete();
+        let q = supabase.from('timeline').delete({ count: 'exact' });
         if (isSingleTenant) {
-          q = q.eq('tenant_id', tenantId);
+          q = q.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
         } else {
-          q = q.gte('created_at', '1970-01-01');
+          q = q.neq('id', '00000000-0000-0000-0000-000000000000');
         }
-        const { error, count } = await q.select('id');
-        if (error) throw error;
-        results.timeline = { success: true, deleted: count || 0 };
+        const { error, count, data } = await q.select('id');
+        if (error) {
+          const { error: errFallback } = await supabase
+            .from('timeline')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000');
+          if (errFallback) throw errFallback;
+        }
+        results.timeline = { success: true, deleted: data?.length ?? count ?? 0 };
       } catch (err: any) {
         console.error('[Reset] Erro ao deletar timeline:', err);
         results.timeline = { success: false, deleted: 0, error: err.message };
@@ -372,11 +379,10 @@ export async function POST(req: NextRequest) {
         let memberQ = supabase
           .from('profiles')
           .select('id, email, role')
-          .neq('email', PLATFORM_ADMIN_EMAIL.toLowerCase())
-          .in('role', ['Membro', 'membro', 'corretor', 'user']);
+          .neq('email', PLATFORM_ADMIN_EMAIL.toLowerCase());
 
         if (isSingleTenant) {
-          memberQ = memberQ.eq('tenant_id', tenantId);
+          memberQ = memberQ.or(`tenant_id.eq.${tenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
         }
 
         const { data: targetMembers, error: fetchErr } = await memberQ;
@@ -420,19 +426,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Registra log final da operação no timeline para histórico transparente
-    try {
-      await supabase.from('timeline').insert({
-        tenant_id: isSingleTenant ? tenantId : null,
-        owner_id: auth.email,
-        title: 'Reset Geral do Sistema Executado',
-        content: `O administrador mestre (${auth.email}) executou a rotina de limpeza do sistema. Escopo: ${scope}. Áreas limpas: ${entities.join(', ')}.`,
-        category: 'audit',
-        type: 'system_reset',
-        severity: 'critical'
-      });
-    } catch (logErr) {
-      console.warn('[Reset] Aviso ao registrar log de auditoria do reset:', logErr);
+    // Registra log final da operação no timeline apenas se a auditoria não foi limpa
+    if (!entities.includes('timeline')) {
+      try {
+        await supabase.from('timeline').insert({
+          tenant_id: isSingleTenant ? tenantId : null,
+          owner_id: auth.email,
+          title: 'Reset Geral do Sistema Executado',
+          content: `O administrador mestre (${auth.email}) executou a rotina de limpeza do sistema. Escopo: ${scope}. Áreas limpas: ${entities.join(', ')}.`,
+          category: 'audit',
+          type: 'system_reset',
+          severity: 'critical'
+        });
+      } catch (logErr) {
+        console.warn('[Reset] Aviso ao registrar log de auditoria do reset:', logErr);
+      }
     }
 
     return NextResponse.json({

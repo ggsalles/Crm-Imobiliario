@@ -2,15 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Users, 
   MessageSquare, 
   History, 
   Plus, 
   Clock, 
   TrendingUp, 
   Send,
-  Loader2,
-  AlertCircle
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -18,6 +16,7 @@ import { TimelineEvent, subscribeToTimeline, createTimelineEvent } from "@/lib/d
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/providers/auth-provider";
+import { toast } from "sonner";
 
 interface TimelineProps {
   category: 'contact' | 'deal' | 'company';
@@ -33,34 +32,63 @@ export function Timeline({ category, relatedId, searchQuery }: TimelineProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!relatedId || !user || !profile) return;
+    if (!relatedId) {
+      setLoading(false);
+      return;
+    }
     
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    setLoading(true);
 
     const unsub = subscribeToTimeline(category, relatedId, (data) => {
-      setEvents(data);
+      setEvents(data || []);
       setLoading(false);
-    }, ownerId);
-    return unsub;
-  }, [category, relatedId, user, profile]);
+    });
+
+    return () => {
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    };
+  }, [category, relatedId]);
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!note.trim() || !profile || isSubmitting) return;
+    if (!note.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
+    const authorName = profile?.displayName || user?.email || "Usuário";
+    const noteContent = note.trim();
+
+    // Optimistic item
+    const optimisticEvent: TimelineEvent = {
+      id: `temp-${Date.now()}`,
+      type: 'note',
+      category,
+      relatedId,
+      content: noteContent,
+      title: 'Nota manual',
+      authorName,
+      ownerId: user?.id || '',
+      createdBy: user?.id || '',
+      createdAt: new Date().toISOString()
+    };
+
+    setEvents(prev => [optimisticEvent, ...prev]);
+    setNote("");
+
     try {
       await createTimelineEvent({
         type: 'note',
         category,
         relatedId,
-        content: note,
+        content: noteContent,
         title: 'Nota manual',
-        author_name: profile.displayName || profile.email
+        authorName
       });
-      setNote("");
+      toast.success("Nota registrada na linha do tempo!");
     } catch (error) {
       console.error("Error adding note:", error);
+      toast.error("Erro ao salvar nota na linha do tempo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -68,62 +96,64 @@ export function Timeline({ category, relatedId, searchQuery }: TimelineProps) {
 
   if (loading) {
     return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <Loader2 className="w-7 h-7 animate-spin text-primary" />
+        <p className="text-xs text-muted-foreground font-medium">Carregando histórico e notas...</p>
       </div>
     );
   }
 
+  const filteredEvents = events.filter(e => 
+    !searchQuery || 
+    (e.content && e.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (e.title && e.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Note Input Area */}
-      <div className="bg-card rounded-[32px] border border-border p-6 shadow-sm">
+      <div className="bg-card rounded-2xl border border-border p-4 shadow-xs">
         <form onSubmit={handleAddNote} className="relative">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Adicione uma nota ou comentário sobre este registro..."
-            className="w-full bg-muted/50 border-none rounded-3xl p-6 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 transition-all resize-none h-32"
+            placeholder="Adicione uma nota, observação ou comentário sobre este registro..."
+            className="w-full bg-muted/40 border border-border/60 rounded-xl p-3.5 pr-14 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none min-h-[90px]"
           />
           <button 
             type="submit"
             disabled={!note.trim() || isSubmitting}
-            className="absolute bottom-4 right-4 p-4 bg-primary text-white rounded-2xl hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
+            className="absolute bottom-3 right-3 p-2.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-40 transition-all shadow-xs flex items-center justify-center cursor-pointer"
+            title="Enviar nota"
           >
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </form>
       </div>
 
       {/* Events List */}
-      <div className="relative space-y-12">
-        {events.length > 0 && (
-          <div className="absolute left-[59px] top-8 bottom-8 w-px bg-border" />
+      <div className="relative space-y-6">
+        {filteredEvents.length > 0 && (
+          <div className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-border/60" />
         )}
 
         <AnimatePresence mode="popLayout">
-          {events.length === 0 ? (
+          {filteredEvents.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center py-20"
+              className="text-center py-12 px-4 border border-dashed border-border rounded-xl"
             >
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                <History className="w-8 h-8 text-muted-foreground" />
+              <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+                <History className="w-6 h-6 text-muted-foreground" />
               </div>
-              <h3 className="font-bold text-foreground">Sem atividades registradas</h3>
-              <p className="text-muted-foreground text-sm mt-1">Interações e notas automáticas aparecerão aqui.</p>
+              <h3 className="font-bold text-sm text-foreground">Sem atividades registradas</h3>
+              <p className="text-muted-foreground text-xs mt-1">Interações, mudanças de etapas e notas aparecerão aqui.</p>
             </motion.div>
           ) : (
-            events
-              .filter(e => 
-                !searchQuery || 
-                e.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (e.title && e.title.toLowerCase().includes(searchQuery.toLowerCase()))
-              )
-              .map((event, index) => (
-                <TimelineItem key={event.id} event={event} index={index} />
-              ))
+            filteredEvents.map((event, index) => (
+              <TimelineItem key={event.id || index} event={event} index={index} />
+            ))
           )}
         </AnimatePresence>
       </div>
@@ -135,57 +165,78 @@ function TimelineItem({ event, index }: { event: TimelineEvent, index: number })
   const isSystem = event.type === 'system';
   
   const getIcon = () => {
-    if (event.metadata?.type === 'stage_change') return <TrendingUp className="w-5 h-5" />;
-    if (event.metadata?.type === 'creation') return <Plus className="w-5 h-5" />;
-    return isSystem ? <History className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />;
+    if (event.metadata?.type === 'stage_change' || event.metadata?.action === 'UPDATE_DEAL_STAGE') {
+      return <TrendingUp className="w-4 h-4" />;
+    }
+    if (event.metadata?.type === 'creation' || event.metadata?.action === 'CREATE_DEAL') {
+      return <Plus className="w-4 h-4" />;
+    }
+    return isSystem ? <History className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />;
   };
 
   const getIconColor = () => {
-    if (event.metadata?.type === 'stage_change') return "bg-green-500/10 text-green-500";
-    if (event.metadata?.type === 'creation') return "bg-primary/10 text-primary";
-    return isSystem ? "bg-muted text-muted-foreground" : "bg-purple-500/10 text-purple-500";
+    if (event.metadata?.type === 'stage_change' || event.metadata?.action === 'UPDATE_DEAL_STAGE') {
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+    }
+    if (event.metadata?.type === 'creation' || event.metadata?.action === 'CREATE_DEAL') {
+      return "bg-primary/10 text-primary border border-primary/20";
+    }
+    return isSystem 
+      ? "bg-muted text-muted-foreground border border-border" 
+      : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20";
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Recentemente';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'Recentemente';
+      return formatDistanceToNow(d, { addSuffix: true, locale: ptBR });
+    } catch {
+      return 'Recentemente';
+    }
   };
 
   return (
     <motion.div 
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-      className="relative z-10 flex gap-6 group"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index * 0.05, 0.3) }}
+      className="relative z-10 flex gap-4 group"
     >
-      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:scale-110", getIconColor())}>
+      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs transition-all", getIconColor())}>
         {getIcon()}
       </div>
       
       <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-start mb-2 pt-1">
+        <div className="flex flex-wrap justify-between items-center gap-1.5 mb-1.5">
           <div>
-            <h4 className="font-bold text-foreground group-hover:text-primary transition-colors">
-              {event.title || (isSystem ? 'Evento de Sistema' : 'Nota')}
+            <h4 className="font-semibold text-xs sm:text-sm text-foreground">
+              {event.title || (isSystem ? 'Evento do Sistema' : 'Nota')}
             </h4>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-              Por <span className="text-foreground">{event.authorName || 'Desconhecido'}</span>
+            <p className="text-[10px] font-medium text-muted-foreground mt-0.5">
+              Por <span className="font-semibold text-foreground/80">{event.authorName || 'Sistema'}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap">
-            <Clock className="w-3 h-3" />
-            {event.createdAt ? formatDistanceToNow(new Date(event.createdAt), { addSuffix: true, locale: ptBR }) : 'Agora'}
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+            <Clock className="w-3 h-3 text-muted-foreground/70" />
+            {formatDate(event.createdAt)}
           </div>
         </div>
 
         <div className={cn(
-          "rounded-3xl p-6 text-sm leading-relaxed border transition-all",
+          "rounded-xl p-3.5 text-xs leading-relaxed border transition-all",
           isSystem 
-            ? "bg-muted/50 text-muted-foreground border-border italic" 
-            : "bg-card text-foreground border-border shadow-sm group-hover:shadow-md group-hover:border-primary/20"
+            ? "bg-muted/30 text-muted-foreground border-border/60" 
+            : "bg-card text-foreground border-border shadow-xs group-hover:border-primary/30"
         )}>
           {event.content}
           
-          {event.metadata?.newStage && (
-            <div className="mt-4 flex items-center gap-2 not-italic">
+          {(event.metadata?.newStage || event.metadata?.stageTitle) && (
+            <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center gap-2">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Novo Estágio:</span>
-              <span className="px-2 py-0.5 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-lg border border-green-500/20 uppercase">
-                {event.metadata.newStage}
+              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/20 uppercase">
+                {event.metadata?.stageTitle || event.metadata?.newStage}
               </span>
             </div>
           )}

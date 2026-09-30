@@ -11,10 +11,15 @@ import {
   POLL_INTERVAL 
 } from './core';
 
-export async function getCompanies(ownerId?: string): Promise<Company[]> {
+export async function getCompanies(ownerId?: string, tenantId?: string): Promise<Company[]> {
   try {
     let url = `/api/companies`;
-    if (ownerId) url += `?ownerId=${ownerId}`;
+    const params = new URLSearchParams();
+    if (ownerId) params.append('ownerId', ownerId);
+    if (tenantId) params.append('tenantId', tenantId);
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+
     const data = await apiFetch(url);
     return data as Company[];
   } catch (err) {
@@ -34,15 +39,15 @@ export async function getCompany(id: string): Promise<Company | null> {
   }
 }
 
-export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string) {
-  const cacheKey = `companies:${ownerId || 'all'}`;
+export function subscribeToCompanies(callback: (companies: Company[]) => void, ownerId?: string, tenantId?: string) {
+  const cacheKey = `companies:${tenantId || 'all'}:${ownerId || 'all'}`;
   if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) {
     callback(dataCache[cacheKey]);
   }
 
   const fetchCompanies = async () => {
     try {
-      const data = await getCompanies(ownerId);
+      const data = await getCompanies(ownerId, tenantId);
       if (data && Array.isArray(data)) {
         dataCache[cacheKey] = data;
         callback(data);
@@ -75,12 +80,15 @@ export async function createCompany(data: any) {
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
 
-  const companyData = {
+  const companyData: any = {
     name: data.name,
     industry: data.industry,
     website: data.website,
     owner_id: user.id
   };
+  if (data.tenantId || data.tenant_id) {
+    companyData.tenant_id = data.tenantId || data.tenant_id;
+  }
 
   try {
     const result = await apiFetch('/api/companies', {

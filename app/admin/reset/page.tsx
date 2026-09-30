@@ -30,7 +30,7 @@ import {
   X
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, getTenants } from "@/lib/db";
+import { apiFetch, getTenants, clearLocalCache, forceDataResync } from "@/lib/db";
 import Link from "next/link";
 import { PLATFORM_ADMIN_EMAIL } from "@/lib/constants";
 import { Sidebar } from "@/components/sidebar";
@@ -103,8 +103,8 @@ const ENTITY_OPTIONS: EntityOption[] = [
   },
   {
     id: "timeline",
-    name: "Auditoria & Logs",
-    description: "Histórico de auditoria, eventos de segurança e alterações do sistema.",
+    name: "Trilha de Auditoria (LGPD) & Logs",
+    description: "Histórico completo de auditoria, eventos de segurança, acessos, logins e rastreabilidade.",
     icon: FileText,
     defaultChecked: true,
     color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/20"
@@ -207,9 +207,11 @@ export default function AdminResetPage() {
     setIsConfirmModalOpen(true);
   };
 
+  const isConfirmationValid = confirmInput.trim().toUpperCase().replace(/\s+/g, " ") === "ZERAR TUDO";
+
   const handleExecuteReset = async () => {
-    if (confirmInput.trim() !== "ZERAR TUDO") {
-      toast.error('Digite exatamente "ZERAR TUDO" para autorizar a limpeza.');
+    if (!isConfirmationValid) {
+      toast.error('Digite "ZERAR TUDO" para autorizar a limpeza.');
       return;
     }
 
@@ -229,6 +231,20 @@ export default function AdminResetPage() {
       if (res.success) {
         setExecutionResult(res);
         toast.success("Limpeza concluída com sucesso!");
+        clearLocalCache();
+        forceDataResync();
+        if (typeof window !== 'undefined') {
+          try {
+            Object.keys(sessionStorage).forEach((k) => {
+              if (k.startsWith('db-cache:')) sessionStorage.removeItem(k);
+            });
+            Object.keys(localStorage).forEach((k) => {
+              if (k.startsWith('db-cache:') || k.startsWith('crm_') || k.includes('insights') || k.startsWith('pipeline_')) {
+                localStorage.removeItem(k);
+              }
+            });
+          } catch {}
+        }
         fetchCounts();
       } else {
         throw new Error(res.error || "Falha ao executar limpeza.");
@@ -570,16 +586,31 @@ export default function AdminResetPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-foreground block">
-                  Para confirmar, digite exatamente <strong className="text-rose-500 select-all font-mono">ZERAR TUDO</strong> no campo abaixo:
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-foreground block">
+                    Para confirmar, digite exatamente <strong className="text-rose-500 select-all font-mono">ZERAR TUDO</strong>:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmInput("ZERAR TUDO")}
+                    className="text-[11px] font-bold text-rose-500 hover:text-rose-400 hover:underline cursor-pointer bg-rose-500/10 px-2 py-0.5 rounded-md"
+                  >
+                    Auto-preencher
+                  </button>
+                </div>
                 <input
                   type="text"
                   autoFocus
                   placeholder="ZERAR TUDO"
                   value={confirmInput}
-                  onChange={(e) => setConfirmInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-mono font-bold text-center uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-rose-500/30 text-rose-500"
+                  onChange={(e) => setConfirmInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && isConfirmationValid && !isExecuting) {
+                      e.preventDefault();
+                      handleExecuteReset();
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-mono font-bold text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-rose-500/30 text-rose-500 placeholder:text-muted-foreground/40"
                 />
               </div>
 
@@ -610,7 +641,7 @@ export default function AdminResetPage() {
                   type="button"
                   onClick={() => {
                     setIsConfirmModalOpen(false);
-                    router.push("/");
+                    window.location.href = "/";
                   }}
                   className="w-full py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all cursor-pointer shadow-md"
                 >
@@ -628,9 +659,9 @@ export default function AdminResetPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={isExecuting || confirmInput.trim() !== "ZERAR TUDO"}
+                    disabled={isExecuting || !isConfirmationValid}
                     onClick={handleExecuteReset}
-                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-600/20"
+                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-rose-600/20"
                   >
                     {isExecuting ? (
                       <>

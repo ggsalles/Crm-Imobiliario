@@ -110,6 +110,7 @@ function ContactsContent() {
     if (!user || !profile) return;
 
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    const currentTenantId = profile?.tenantId || (profile as any)?.tenant_id;
     const existing = getCachedContacts(ownerId);
     if (!existing || existing.length === 0) {
       setLoading(true);
@@ -118,15 +119,15 @@ function ContactsContent() {
     const unsubContacts = subscribeToContacts((data) => {
       setContacts(data);
       setLoading(false);
-    }, ownerId);
+    }, ownerId, currentTenantId);
 
     const unsubUsers = subscribeToUsers((data) => {
       setUsers(data);
-    }, ownerId);
+    }, ownerId, currentTenantId);
 
     const unsubCompanies = subscribeToCompanies((data) => {
       setCompanies(data);
-    }, ownerId);
+    }, ownerId, currentTenantId);
 
     return () => {
       unsubContacts();
@@ -149,18 +150,23 @@ function ContactsContent() {
   // Indexed companies map for O(1) resolution
   const companiesMap = useMemo(() => new Map(companies.map(c => [c.id, c])), [companies]);
 
+  const currentTenantId = profile?.tenantId || (profile as any)?.tenant_id;
+
   // Memoized tab counts
   const clientCount = useMemo(() => contacts.filter(c => c.type === 'cliente').length, [contacts]);
   const teamCount = useMemo(() => {
-    const otherUsers = users.filter(u => 
-      u.id !== user?.id && (!user?.email || u.email?.toLowerCase().trim() !== user?.email?.toLowerCase().trim())
-    );
-    const registeredEmails = new Set(users.map(u => (u.email || '').toLowerCase().trim()));
+    const otherUsers = users.filter(u => {
+      if (currentTenantId && u.tenantId && u.tenantId !== currentTenantId && (!u.tenantIds || !u.tenantIds.includes(currentTenantId))) {
+        return false;
+      }
+      return u.id !== user?.id && (!user?.email || u.email?.toLowerCase().trim() !== user?.email?.toLowerCase().trim());
+    });
+    const registeredEmails = new Set(otherUsers.map(u => (u.email || '').toLowerCase().trim()));
     const manualTeamContacts = contacts.filter(c => 
       c.type === 'equipe' && (!c.email || !registeredEmails.has(c.email.toLowerCase().trim()))
     );
     return otherUsers.length + manualTeamContacts.length;
-  }, [contacts, users, user?.id, user?.email]);
+  }, [contacts, users, user?.id, user?.email, currentTenantId]);
 
   // Memoized temperature distribution counts
   const temperatureCounts = useMemo(() => {
@@ -212,11 +218,14 @@ function ContactsContent() {
     return filteredContacts.slice(0, visibleCount);
   }, [filteredContacts, visibleCount]);
 
-  // Memoized users filter (oculta a conta master/logada)
+  // Memoized users filter (oculta a conta master/logada e garante isolamento do tenant atual)
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return users.filter(u => {
       if (u.id === user?.id || (user?.email && u.email?.toLowerCase().trim() === user?.email?.toLowerCase().trim())) {
+        return false;
+      }
+      if (currentTenantId && u.tenantId && u.tenantId !== currentTenantId && (!u.tenantIds || !u.tenantIds.includes(currentTenantId))) {
         return false;
       }
       if (!q) return true;
@@ -225,7 +234,7 @@ function ContactsContent() {
         (u.email || "").toLowerCase().includes(q)
       );
     });
-  }, [users, user?.id, user?.email, searchQuery]);
+  }, [users, user?.id, user?.email, searchQuery, currentTenantId]);
 
   const handleExportContacts = useCallback(() => {
     if (filteredContacts.length === 0) {

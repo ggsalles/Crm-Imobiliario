@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getBlockedTenantIds, setTenantBlocked, setTenantUnlocked, getSaaSConfig, getTenantBillingStatus, setTenantUserLimit } from '@/lib/billing';
-import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT } from '@/lib/constants';
+import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT, isPlatformAdmin } from '@/lib/constants';
+import { getAuthenticatedUser } from '@/lib/server-auth';
 import { tenantUpdateSchema, validateData } from '@/lib/validations';
 
 export const dynamic = 'force-dynamic';
@@ -130,7 +131,30 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const items = finalTenants.map((item: any) => {
+    const user = getAuthenticatedUser(req);
+    const isMaster = user?.email ? isPlatformAdmin(user.email) : false;
+
+    let filteredTenants = finalTenants;
+    if (user?.id && !isMaster) {
+      const allowed = new Set<string>();
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).maybeSingle();
+      if (prof?.tenant_id) allowed.add(prof.tenant_id);
+
+      const { data: assocs } = await supabase.from('profile_tenants').select('tenant_id').eq('profile_id', user.id);
+      if (assocs) assocs.forEach((a: any) => { if (a.tenant_id) allowed.add(a.tenant_id); });
+
+      if (user.email) {
+        const { data: owned } = await supabase.from('tenants').select('id').eq('contact_email', user.email.toLowerCase());
+        if (owned) owned.forEach((t: any) => { if (t.id) allowed.add(t.id); });
+      }
+
+      filteredTenants = finalTenants.filter((t: any) => allowed.has(t.id));
+      if (filteredTenants.length === 0 && prof?.tenant_id) {
+        filteredTenants = finalTenants.filter((t: any) => t.id === prof.tenant_id);
+      }
+    }
+
+    const items = filteredTenants.map((item: any) => {
       const dueDay = config.dueDays?.[item.id] ?? item.due_day ?? 10;
       const billingResult = getTenantBillingStatus(config, item.id, new Date(), item.created_at, dueDay);
       const isManuallyUnlocked = Boolean(

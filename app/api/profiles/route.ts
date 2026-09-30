@@ -432,10 +432,11 @@ export async function GET(req: NextRequest) {
           item.tenantId === activeTenantId || (item.tenantIds && item.tenantIds.includes(activeTenantId))
         );
       }
-    } else if (requestedTenantId) {
-      // Se for o master e filtrou um inquilino específico:
+    } else if ((requestedTenantId && requestedTenantId !== 'all') || (activeTenantId && activeTenantId !== 'all')) {
+      // Se for o master e houver inquilino ativo ou filtrado:
+      const targetTenant = requestedTenantId || activeTenantId;
       items = items.filter(item =>
-        item.tenantId === requestedTenantId || (item.tenantIds && item.tenantIds.includes(requestedTenantId))
+        item.tenantId === targetTenant || (item.tenantIds && item.tenantIds.includes(targetTenant))
       );
     }
 

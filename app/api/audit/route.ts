@@ -303,12 +303,12 @@ export async function DELETE(req: NextRequest) {
 
     if (isMaster) {
       if (requestedTenantId && requestedTenantId !== 'all') {
-        deleteQuery = deleteQuery.eq('tenant_id', requestedTenantId);
+        deleteQuery = deleteQuery.or(`tenant_id.eq.${requestedTenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
       }
     } else {
       const activeTenantId = userProfile?.tenant_id;
       if (activeTenantId) {
-        deleteQuery = deleteQuery.eq('tenant_id', activeTenantId);
+        deleteQuery = deleteQuery.or(`tenant_id.eq.${activeTenantId},tenant_id.eq.11111111-1111-1111-1111-111111111111`);
       }
     }
 

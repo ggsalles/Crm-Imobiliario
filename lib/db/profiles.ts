@@ -23,13 +23,15 @@ export async function getUserProfile(id: string): Promise<UserProfile | null> {
   }
 }
 
-export function subscribeToUsers(callback: (users: UserProfile[]) => void, ownerId?: string) {
-  const cacheKey = `users:${ownerId || 'all'}`;
+export function subscribeToUsers(callback: (users: UserProfile[]) => void, ownerId?: string, tenantId?: string) {
+  const cacheKey = `users:${tenantId || 'all'}:${ownerId || 'all'}`;
   if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
 
   const fetchUsers = async () => {
     try {
-      const data = await apiFetch('/api/profiles', { bypassCache: true });
+      let url = '/api/profiles';
+      if (tenantId) url += `?tenantId=${tenantId}`;
+      const data = await apiFetch(url, { bypassCache: true });
       if (data && Array.isArray(data)) {
         let filtered = data as UserProfile[];
         if (ownerId) filtered = filtered.filter(u => u.id === ownerId);

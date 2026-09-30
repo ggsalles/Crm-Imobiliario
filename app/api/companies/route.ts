@@ -1,46 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
+import { DEFAULT_TENANT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
-
-function getSupabase(req: NextRequest) {
-  const authHeader = req.headers.get('Authorization');
-
-  if (supabaseServiceKey) {
-    const headers: Record<string, string> = {};
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-    return createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers },
-      auth: { persistSession: false }
-    });
-  }
-
-  if (authHeader) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false }
-    });
-  }
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false }
-  });
-}
 
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const ownerId = searchParams.get('ownerId');
+    const tenantParam = searchParams.get('tenantId');
     const id = searchParams.get('id');
 
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
+    const effectiveTenantId = tenantParam || activeTenantId;
+
     if (id) {
-        const { data, error } = await supabase.from('companies').select('*').eq('id', id).maybeSingle();
+        let singleQuery = supabase.from('companies').select('*').eq('id', id);
+        if (effectiveTenantId) {
+          singleQuery = singleQuery.eq('tenant_id', effectiveTenantId);
+        }
+        const { data, error } = await singleQuery.maybeSingle();
         if (error) throw error;
         if (!data) return NextResponse.json(null);
         return NextResponse.json({
@@ -55,7 +37,9 @@ export async function GET(req: NextRequest) {
     }
 
     let query = supabase.from('companies').select('*').order('name', { ascending: true });
-    if (ownerId && ownerId !== 'undefined') {
+    if (effectiveTenantId && effectiveTenantId !== 'undefined') {
+      query = query.eq('tenant_id', effectiveTenantId);
+    } else if (ownerId && ownerId !== 'undefined') {
       query = query.eq('owner_id', ownerId);
     }
 
@@ -86,9 +70,22 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json();
     
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
+
+    const insertData: any = { ...data };
+    if (data.tenantId && !data.tenant_id) {
+      insertData.tenant_id = data.tenantId;
+      delete insertData.tenantId;
+    }
+
+    if (!insertData.tenant_id && activeTenantId) {
+      insertData.tenant_id = activeTenantId;
+    }
+
     const { data: result, error } = await supabase
       .from('companies')
-      .insert([data])
+      .insert([insertData])
       .select();
 
     if (error) throw error;
@@ -110,12 +107,21 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
     }
 
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
+
     const data = await req.json();
 
-    const { error } = await supabase
+    let query = supabase
       .from('companies')
       .update(data)
       .eq('id', id);
+
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
 
@@ -135,10 +141,19 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const user = getAuthenticatedUser(req);
+    const activeTenantId = await getActiveTenantId(supabase, user, req);
+
+    let query = supabase
       .from('companies')
       .delete()
       .eq('id', id);
+
+    if (activeTenantId) {
+      query = query.eq('tenant_id', activeTenantId);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
 

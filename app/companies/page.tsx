@@ -43,13 +43,14 @@ export default function CompaniesPage() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [isDeletingCompany, setIsDeletingCompany] = useState(false);
+  const tenantId = profile?.tenantId || (profile as any)?.tenant_id;
 
   const fetchData = useCallback(async () => {
     if (!user || !profile) return;
     const ownerId = profile.role === 'Admin' ? undefined : user.id;
-    const data = await getCompanies(ownerId);
+    const data = await getCompanies(ownerId, tenantId);
     setCompanies(data);
-  }, [user, profile]);
+  }, [user, profile, tenantId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -66,10 +67,10 @@ export default function CompaniesPage() {
     const unsub = subscribeToCompanies((data) => {
       setCompanies(data);
       setLoading(false);
-    }, ownerId);
+    }, ownerId, tenantId);
 
     return () => unsub();
-  }, [user, profile]);
+  }, [user, profile, tenantId]);
 
   // Unique industries for fast filtering
   const availableIndustries = useMemo(() => {
@@ -152,6 +153,7 @@ export default function CompaniesPage() {
       name: formData.get('name') as string,
       industry: formData.get('industry') as string,
       website: formData.get('website') as string,
+      tenantId: tenantId
     };
 
     try {
@@ -196,7 +198,7 @@ export default function CompaniesPage() {
     } catch (err) {
       toast.error("Erro ao salvar empresa.");
     }
-  }, [editingCompany, fetchData]);
+  }, [editingCompany, fetchData, tenantId]);
 
   if (authLoading) return null;
 
