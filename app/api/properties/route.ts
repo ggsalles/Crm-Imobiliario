@@ -138,27 +138,93 @@ export async function GET(req: NextRequest) {
       query = query.eq('is_featured', true);
     }
 
-    const limitParam = Number(searchParams.get('limit')) || (isPublic ? 150 : 60);
-    const { data: properties, error } = await query.limit(limitParam);
+    const rawLimit = searchParams.get('limit');
+    let limitParam: number | null = null;
+    if (rawLimit === 'all' || rawLimit === '0' || rawLimit === '-1') {
+      limitParam = null;
+    } else if (rawLimit) {
+      limitParam = Math.max(1, Number(rawLimit) || 10000);
+    } else {
+      // Default to 10,000 for CRM inventory so large imported portfolios (e.g. 2,742 units) are never truncated
+      limitParam = isPublic ? 500 : 10000;
+    }
 
-    if (error) throw error;
+    // PostgREST limits single queries to 1,000 rows.
+    // Batch fetch in ranges of 1,000 to retrieve full portfolios (e.g. 2,742 items).
+    const MAX_POSTGREST_PAGE = 1000;
+    const targetMax = limitParam !== null ? limitParam : 20000;
+    let allProperties: any[] = [];
+    let offset = 0;
+
+    while (allProperties.length < targetMax) {
+      const currentBatchSize = Math.min(MAX_POSTGREST_PAGE, targetMax - allProperties.length);
+      let batchQuery = supabase
+        .from('properties')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
+        batchQuery = batchQuery.eq('tenant_id', effectiveTenantId);
+      }
+
+      if (isPublic) {
+        batchQuery = batchQuery.in('status', ['disponível', 'disponivel', 'available']);
+      }
+
+      if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
+        batchQuery = batchQuery.eq('owner_id', ownerId);
+      }
+
+      if (searchParams.get('featured') === 'true') {
+        batchQuery = batchQuery.eq('is_featured', true);
+      }
+
+      const { data: batch, error: batchError } = await batchQuery.range(offset, offset + currentBatchSize - 1);
+      if (batchError) {
+        console.error("[API/Properties] Batch query error at offset", offset, batchError);
+        throw batchError;
+      }
+
+      if (!batch || batch.length === 0) break;
+      allProperties.push(...batch);
+
+      // If fewer items than requested were returned, we have reached the end of the table
+      if (batch.length < currentBatchSize) break;
+      offset += batch.length;
+    }
+
+    const properties = allProperties;
+
     if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
-    // Fetch images
-    const propertyIds = properties.map((p: any) => p.id);
-    const { data: images, error: imagesError } = await supabase
-      .from('property_images')
-      .select('property_id, url')
-      .in('property_id', propertyIds);
+    // Fetch images safely:
+    // Only query property_images for properties that do not already have item.image_url
+    // and chunk in batches of 100 to prevent 414 URI Too Long errors with thousands of IDs.
+    const imagesByPropertyId: Record<string, string[]> = {};
+    const idsNeedingImages = properties
+      .filter((p: any) => !p.image_url)
+      .map((p: any) => p.id);
 
-    if (imagesError) {
-      console.warn("[API/Properties] Erro ao carregar fotos:", imagesError);
+    if (idsNeedingImages.length > 0) {
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < idsNeedingImages.length; i += CHUNK_SIZE) {
+        const chunk = idsNeedingImages.slice(i, i + CHUNK_SIZE);
+        const { data: imagesChunk, error: imgError } = await supabase
+          .from('property_images')
+          .select('property_id, url')
+          .in('property_id', chunk);
+
+        if (!imgError && imagesChunk) {
+          for (const img of imagesChunk) {
+            if (!imagesByPropertyId[img.property_id]) imagesByPropertyId[img.property_id] = [];
+            imagesByPropertyId[img.property_id].push(String(img.url));
+          }
+        }
+      }
     }
 
     let items = properties.map((item: any) => {
-      let urls: string[] = (images || [])
-        .filter((img: any) => img.property_id === item.id)
-        .map((img: any) => String(img.url));
+      let urls: string[] = imagesByPropertyId[item.id] || [];
       
       if (urls.length === 0 && item.image_url) {
         try {

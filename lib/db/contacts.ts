@@ -146,6 +146,15 @@ export async function updateContact(id: string, data: any) {
   }
 }
 
+export function clearContactsCache() {
+  invalidateApiCache('/api/contacts');
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('contacts:')) {
+      delete dataCache[k];
+    }
+  }
+}
+
 export async function deleteContact(id: string) {
   try {
     const result = await apiFetch(`/api/contacts?id=${id}`, {

@@ -50,6 +50,7 @@ export function PropertyDetailModal({
   onToggleFeatured,
 }: PropertyDetailModalProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
 
   if (!isOpen || !property) return null;
 
@@ -58,10 +59,12 @@ export function PropertyDetailModal({
     : ["https://picsum.photos/seed/realestate/1200/800"];
 
   const nextImage = () => {
+    setImgError(false);
     setActiveImageIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = () => {
+    setImgError(false);
     setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
@@ -136,11 +139,12 @@ export function PropertyDetailModal({
                   className="absolute inset-0"
                 >
                   <Image
-                    src={images[activeImageIndex]}
+                    src={imgError ? "https://picsum.photos/seed/realestate/1200/800" : (images[activeImageIndex] || "https://picsum.photos/seed/realestate/1200/800")}
                     alt={property.title}
                     fill
                     className="object-cover"
                     referrerPolicy="no-referrer"
+                    onError={() => setImgError(true)}
                   />
                 </motion.div>
               </AnimatePresence>

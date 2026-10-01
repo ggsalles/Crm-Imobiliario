@@ -2,11 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Plus, 
   ChevronLeft, 
+  ChevronRight,
   Globe, 
   RotateCcw, 
   Home, 
@@ -27,12 +28,13 @@ import {
   getCachedProperties,
   getCachedContacts
 } from "@/lib/db";
-import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Modular Components
 import { PropertyCard } from "@/components/properties/PropertyCard";
 import { PropertyFilterBar } from "@/components/properties/PropertyFilterBar";
+import { PropertyPagination } from "@/components/properties/PropertyPagination";
 import { PropertyForm } from "@/components/properties/PropertyForm";
 import { PropertyMapModal } from "@/components/properties/PropertyMapModal";
 import { PropertyShareModal } from "@/components/properties/PropertyShareModal";
@@ -82,6 +84,26 @@ export default function PropertiesPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
   const [onlyFeaturedFilter, setOnlyFeaturedFilter] = useState(false);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(24);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setCurrentPage(newPage);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const handlePageSizeChange = useCallback((newSize: number | 'all') => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   // WhatsApp Message Generator
   const generateWhatsappMessage = useCallback((property: Property) => {
@@ -274,6 +296,34 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     selectedFilterTags,
     onlyFeaturedFilter
   ]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    searchStreet,
+    filterType,
+    statusFilter,
+    selectedNeighborhood,
+    displayMinPrice,
+    displayMaxPrice,
+    bedroomsFilter,
+    parkingFilter,
+    selectedFilterTags,
+    onlyFeaturedFilter
+  ]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredProperties.length / pageSize));
+  }, [filteredProperties.length, pageSize]);
+
+  const paginatedProperties = useMemo(() => {
+    if (pageSize === 'all') return filteredProperties;
+    const start = (currentPage - 1) * pageSize;
+    return filteredProperties.slice(start, start + pageSize);
+  }, [filteredProperties, currentPage, pageSize]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -483,7 +533,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5">
           {view === 'list' ? (
             <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
               {/* Universal Filter and Search Bar Component */}
@@ -519,41 +569,31 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                 setPricePreset={setPricePreset}
               />
 
-              {/* Counter and Results Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold text-muted-foreground px-1">
-                <div className="flex items-center gap-2">
-                  <span>
-                    Exibindo <strong className="text-foreground">{filteredProperties.length}</strong> de <strong className="text-foreground">{properties.length}</strong> {properties.length === 1 ? 'imóvel' : 'imóveis'}
-                  </span>
-                  {activeFiltersCount > 0 && (
-                    <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full font-bold">
-                      (Filtro ativado)
-                    </span>
-                  )}
-                </div>
-                {filteredProperties.length < properties.length && activeFiltersCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Ver todos os {properties.length} imóveis</span>
-                  </button>
-                )}
-              </div>
+              {/* Top Navigation & Status Bar */}
+              <PropertyPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalFiltered={filteredProperties.length}
+                totalCatalog={properties.length}
+                activeFiltersCount={activeFiltersCount}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onClearFilters={clearAllFilters}
+                variant="top"
+              />
 
               {loading && (
                 <div className="flex items-center gap-1.5 text-primary font-bold uppercase text-[9px] tracking-wider">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Sincronizando...
+                  Sincronizando inventário completo...
                 </div>
               )}
 
               {/* Properties Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
                 <AnimatePresence>
-                  {filteredProperties.map((property) => (
+                  {paginatedProperties.map((property) => (
                     <PropertyCard 
                       key={property.id} 
                       property={property} 
@@ -568,6 +608,22 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   ))}
                 </AnimatePresence>
               </div>
+
+              {/* Bottom Complete Pagination Suite */}
+              {filteredProperties.length > 0 && (
+                <PropertyPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalFiltered={filteredProperties.length}
+                  totalCatalog={properties.length}
+                  activeFiltersCount={activeFiltersCount}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                  onClearFilters={clearAllFilters}
+                  variant="bottom"
+                />
+              )}
 
               {filteredProperties.length === 0 && loading && (
                 <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40">

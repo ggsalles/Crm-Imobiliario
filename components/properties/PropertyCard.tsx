@@ -43,6 +43,7 @@ export function PropertyCard({
   onViewDetails
 }: PropertyCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
 
   const images = property.imageUrls && property.imageUrls.length > 0 
     ? property.imageUrls 
@@ -50,11 +51,13 @@ export function PropertyCard({
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setImgError(false);
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setImgError(false);
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
@@ -80,11 +83,12 @@ export function PropertyCard({
             className="absolute inset-0"
           >
             <Image 
-              src={images[currentImageIndex]} 
+              src={imgError ? "https://picsum.photos/seed/realestate/800/600" : (images[currentImageIndex] || "https://picsum.photos/seed/realestate/800/600")} 
               alt={property.title} 
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-700"
               referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
             />
           </motion.div>
         </AnimatePresence>

@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { recordAuditEvent } from "@/lib/audit";
 import { supabase } from "@/lib/supabase";
 import { updateUserProfile } from "@/lib/db";
+import { DataImportSection } from "@/components/settings/DataImportSection";
 import Image from "next/image";
 
 interface ColorOption {
@@ -770,6 +771,9 @@ export default function SettingsPage() {
                 </button>
               </form>
             </section>
+
+            {/* SEÇÃO 8: IMPORTAÇÃO DE DADOS EM LOTE (EXCLUSIVO GGSALLES) */}
+            <DataImportSection />
           </div>
         </div>
       </main>

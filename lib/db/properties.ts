@@ -34,21 +34,21 @@ export function getCachedProperties(ownerId?: string): Property[] | null {
   return null;
 }
 
-export async function getProperties(ownerId?: string): Promise<Property[]> {
+export async function getProperties(ownerId?: string, limit?: number): Promise<Property[]> {
   const startTime = Date.now();
   const cacheKey = `properties:${ownerId || 'all'}`;
   console.log("[lib/db/properties] getProperties: Buscando imóveis via API Proxy...");
   
   try {
-    let url = `/api/properties`;
-    if (ownerId) url += `?ownerId=${ownerId}`;
+    let url = `/api/properties?limit=${limit || 10000}`;
+    if (ownerId) url += `&ownerId=${ownerId}`;
     
     const data = await apiFetch(url);
     if (Array.isArray(data)) {
       dataCache[cacheKey] = data;
       safePersistSnapshot(cacheKey, data);
     }
-    console.log(`[lib/db/properties] getProperties concluído em ${Date.now() - startTime}ms`);
+    console.log(`[lib/db/properties] getProperties concluído em ${Date.now() - startTime}ms (${data?.length || 0} imóveis carregados)`);
     return (data || []) as Property[];
   } catch (err: any) {
     console.warn("[lib/db/properties] getProperties aviso ao buscar imóveis:", err?.message || err);
@@ -78,6 +78,17 @@ export function clearPropertiesCache() {
       delete dataCache[k];
     }
   }
+  if (typeof window !== 'undefined') {
+    try {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && (key.includes('properties') || key.includes('showcase'))) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    } catch {}
+    forceDataResync();
+  }
 }
 
 export function subscribeToShowcaseProperties(
@@ -92,7 +103,7 @@ export function subscribeToShowcaseProperties(
 
   const fetchShowcase = async () => {
     try {
-      let url = `/api/properties?public=true&limit=150&_t=${Date.now()}`;
+      let url = `/api/properties?public=true&limit=500&_t=${Date.now()}`;
       if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
       if (ownerId) url += `&ownerId=${encodeURIComponent(ownerId)}`;
 
@@ -126,7 +137,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 
   const fetchProperties = async () => {
     try {
-      const data = await getProperties(ownerId);
+      const data = await getProperties(ownerId, 10000);
       if (data && Array.isArray(data)) {
         dataCache[cacheKey] = data;
         safePersistSnapshot(cacheKey, data);
