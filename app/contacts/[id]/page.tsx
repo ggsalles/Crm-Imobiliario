@@ -32,7 +32,9 @@ import {
   createTimelineEvent, 
   getProperties, 
   createDeal, 
-  updateContact 
+  updateContact,
+  getCachedContacts,
+  getCachedProperties 
 } from "@/lib/db";
 import { Timeline } from "@/components/Timeline";
 import Link from "next/link";
@@ -97,12 +99,27 @@ export default function ContactDetail360Page() {
   useEffect(() => {
     async function loadData() {
       if (!id) return;
-      setLoading(true);
+
+      // 1. Instant hydration from client-side cache (0ms response)
+      const cachedList = getCachedContacts();
+      const cachedContact = cachedList?.find(c => c.id === id);
+      if (cachedContact) {
+        setContact(cachedContact);
+        setLoading(false);
+      }
+
+      // Check if properties are already cached in client memory
+      const cachedProps = getCachedProperties();
+      if (cachedProps && cachedProps.length > 0) {
+        setProperties(cachedProps);
+      }
+
       try {
         const contactData = await getContact(id);
-        setContact(contactData);
-        
         if (contactData) {
+          setContact(contactData);
+          setLoading(false);
+          
           recordAuditEvent({
             action: 'VIEW_CONTACT_DETAILS',
             title: 'Consulta a Visão 360 do Contato',
@@ -116,22 +133,39 @@ export default function ContactDetail360Page() {
               contactName: contactData.name,
               contactEmail: contactData.email
             }
-          });
+          }).catch(() => {});
 
           if (contactData.companyId) {
-            const companyData = await getCompany(contactData.companyId);
-            setCompany(companyData);
+            getCompany(contactData.companyId)
+              .then(c => { if (c) setCompany(c); })
+              .catch(() => {});
           }
           
-          const [dealsData, activitiesData, propertiesData] = await Promise.all([
-            getDealsByContact(id),
-            getActivitiesByContact(id),
-            getProperties()
+          // Load deals and activities concurrently without blocking the UI
+          const [dealsData, activitiesData] = await Promise.all([
+            getDealsByContact(id).catch(err => {
+              console.warn("[ContactDetail360] getDealsByContact:", err);
+              return [];
+            }),
+            getActivitiesByContact(id).catch(err => {
+              console.warn("[ContactDetail360] getActivitiesByContact:", err);
+              return [];
+            })
           ]);
           
-          setDeals(dealsData);
-          setActivities(activitiesData);
-          setProperties(propertiesData);
+          setDeals(dealsData || []);
+          setActivities(activitiesData || []);
+
+          // Load properties in background for matchmaking if not already cached
+          if (!cachedProps || cachedProps.length === 0) {
+            getProperties(profile?.tenantId || undefined)
+              .then(props => {
+                if (Array.isArray(props) && props.length > 0) {
+                  setProperties(props);
+                }
+              })
+              .catch(err => console.warn("[ContactDetail360] Background properties fetch:", err));
+          }
         }
       } catch (err) {
         console.error("Error loading contact detail data:", err);
@@ -140,7 +174,7 @@ export default function ContactDetail360Page() {
       }
     }
     loadData();
-  }, [id]);
+  }, [id, profile?.tenantId]);
 
   const interestProfile = useMemo(() => {
     return parseInterestProfile(contact?.department);
@@ -472,18 +506,57 @@ export default function ContactDetail360Page() {
     setIsProfileModalOpen(true);
   }, [interestProfile, contact]);
 
-  if (authLoading || (loading && !user)) {
+  if (authLoading || (loading && !contact)) {
     return (
       <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <header className="h-20 bg-card border-b border-border px-8 flex items-center shrink-0">
+            <Link href="/contacts" className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground mr-4">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="h-5 w-40 bg-muted/60 rounded animate-pulse" />
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground animate-pulse">Carregando detalhes do cliente...</p>
+          </div>
         </main>
       </div>
     );
   }
 
-  if (!contact) return null;
+  if (!contact) {
+    return (
+      <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
+        <Sidebar />
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <header className="h-20 bg-card border-b border-border px-8 flex items-center shrink-0">
+            <Link href="/contacts" className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground mr-4">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <span className="font-semibold text-foreground">Visão 360 do Cliente</span>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border mb-4 text-muted-foreground">
+              <Users className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-1">Contato não encontrado</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Este contato pode ter sido removido ou não está vinculado à sua conta/imobiliária.
+            </p>
+            <Link
+              href="/contacts"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-sm text-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para Clientes</span>
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background font-sans selection:bg-primary/10 text-foreground transition-colors duration-500">

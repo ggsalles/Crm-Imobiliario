@@ -411,7 +411,10 @@ async function apiFetchImpl(url: string, options: any = {}) {
         }
 
         if (typeof window !== 'undefined') {
-          const isPaused = response.status === 503 || /paused|inactive|database error or timeout/i.test(errMessage);
+          // Strictly detect real Supabase paused project state (HTTP 503 with pause/inactive message, or explicit project paused message)
+          // Do NOT trigger on generic network timeouts or high-traffic latency
+          const isPaused = (response.status === 503 && /paused|inactivity|hibernat/i.test(errMessage)) || 
+                           /project is paused|database is paused|project paused|supabase project is in pause/i.test(errMessage);
           if (isPaused) {
             window.dispatchEvent(new CustomEvent('supabase-status-change', {
               detail: { isPaused: true, message: errMessage }
