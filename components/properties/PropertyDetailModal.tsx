@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { 
   X, 
@@ -38,6 +38,8 @@ interface PropertyDetailModalProps {
   onToggleFeatured?: () => void;
 }
 
+const FALLBACK_IMAGE = "https://picsum.photos/seed/realestate/1200/800";
+
 export function PropertyDetailModal({
   property,
   isOpen,
@@ -52,11 +54,52 @@ export function PropertyDetailModal({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
 
-  if (!isOpen || !property) return null;
+  // Safely extract and normalize images array from any input format
+  const images = useMemo(() => {
+    if (!property) return [FALLBACK_IMAGE];
+    let rawList: any[] = [];
+    if (Array.isArray(property.imageUrls)) {
+      rawList = property.imageUrls;
+    } else if (typeof property.imageUrls === 'string') {
+      try {
+        const parsed = JSON.parse(property.imageUrls);
+        rawList = Array.isArray(parsed) ? parsed : [property.imageUrls];
+      } catch {
+        rawList = [property.imageUrls];
+      }
+    } else if (property.image_url) {
+      try {
+        const parsed = typeof property.image_url === 'string' && property.image_url.startsWith('[')
+          ? JSON.parse(property.image_url)
+          : [property.image_url];
+        rawList = Array.isArray(parsed) ? parsed : [property.image_url];
+      } catch {
+        rawList = [property.image_url];
+      }
+    }
 
-  const images = property.imageUrls && property.imageUrls.length > 0 
-    ? property.imageUrls 
-    : ["https://picsum.photos/seed/realestate/1200/800"];
+    const cleaned = rawList
+      .filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && !u.startsWith('[') && !u.endsWith(']'))
+      .map(u => u.trim());
+
+    return cleaned.length > 0 ? cleaned : [FALLBACK_IMAGE];
+  }, [property]);
+
+  // Safely extract tags array
+  const safeTags = useMemo(() => {
+    if (!property) return [];
+    if (Array.isArray(property.tags)) return property.tags;
+    if (typeof property.tags === 'string') {
+      try {
+        const parsed = JSON.parse(property.tags);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+      return property.tags.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+  }, [property]);
+
+  if (!isOpen || !property) return null;
 
   const nextImage = () => {
     setImgError(false);
@@ -75,6 +118,10 @@ export function PropertyDetailModal({
     property.city ? `${property.city}${property.state ? ` - ${property.state}` : ''}` : '',
     property.cep ? `CEP: ${property.cep}` : ''
   ].filter(Boolean).join(" • ");
+
+  const numPrice = Number(property.price) || 0;
+  const numArea = Number(property.area) || 0;
+  const pricePerM2 = (numPrice > 0 && numArea > 0) ? Math.round(numPrice / numArea) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -139,11 +186,12 @@ export function PropertyDetailModal({
                   className="absolute inset-0"
                 >
                   <Image
-                    src={imgError ? "https://picsum.photos/seed/realestate/1200/800" : (images[activeImageIndex] || "https://picsum.photos/seed/realestate/1200/800")}
-                    alt={property.title}
+                    src={imgError ? FALLBACK_IMAGE : (images[activeImageIndex] || FALLBACK_IMAGE)}
+                    alt={property.title || "Imóvel"}
                     fill
                     className="object-cover"
                     referrerPolicy="no-referrer"
+                    unoptimized
                     onError={() => setImgError(true)}
                   />
                 </motion.div>
@@ -211,7 +259,10 @@ export function PropertyDetailModal({
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setActiveImageIndex(idx)}
+                    onClick={() => {
+                      setImgError(false);
+                      setActiveImageIndex(idx);
+                    }}
                     className={cn(
                       "w-16 h-12 sm:w-20 sm:h-14 rounded-xl overflow-hidden relative shrink-0 border-2 transition-all cursor-pointer",
                       idx === activeImageIndex 
@@ -225,6 +276,7 @@ export function PropertyDetailModal({
                       fill
                       className="object-cover"
                       referrerPolicy="no-referrer"
+                      unoptimized
                     />
                   </button>
                 ))}
@@ -246,7 +298,7 @@ export function PropertyDetailModal({
               )}
               <div className="flex items-center gap-1 text-muted-foreground text-xs mt-1">
                 <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>{property.location}</span>
+                <span>{property.location || "Endereço sob consulta"}</span>
               </div>
             </div>
 
@@ -255,11 +307,11 @@ export function PropertyDetailModal({
                 Valor de Venda
               </span>
               <div className="text-2xl sm:text-3xl font-black text-foreground tracking-tight text-primary">
-                {formatCurrencyBRL(property.price)}
+                {formatCurrencyBRL(numPrice)}
               </div>
-              {property.area > 0 && property.price > 0 && (
+              {pricePerM2 !== null && (
                 <span className="text-xs font-semibold text-muted-foreground">
-                  Média: {formatCurrencyBRL(Math.round(property.price / property.area))}/m²
+                  Média: {formatCurrencyBRL(pricePerM2)}/m²
                 </span>
               )}
             </div>
@@ -276,7 +328,7 @@ export function PropertyDetailModal({
               <div className="p-3.5 bg-card border border-border rounded-xl shadow-xs text-center">
                 <Square className="w-5 h-5 mx-auto text-primary mb-1" />
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block">Área Útil</span>
-                <span className="text-sm font-black text-foreground">{property.area || 0} m²</span>
+                <span className="text-sm font-black text-foreground">{numArea || 0} m²</span>
               </div>
 
               {/* Dormitórios */}
@@ -324,13 +376,13 @@ export function PropertyDetailModal({
           </div>
 
           {/* 4. Amenities / Tags */}
-          {property.tags && property.tags.length > 0 && (
+          {safeTags.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
                 Diferenciais & Comodidades
               </h3>
               <div className="flex flex-wrap gap-2">
-                {property.tags.map((tag, idx) => (
+                {safeTags.map((tag, idx) => (
                   <span
                     key={idx}
                     className="px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-xl text-xs font-bold"

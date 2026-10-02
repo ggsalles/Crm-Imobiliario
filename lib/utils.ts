@@ -18,22 +18,32 @@ export function formatCurrencyBRL(
     return options?.maximumFractionDigits === 0 ? "R$ 0" : "R$ 0,00";
   }
   
-  let amount: number;
-  if (typeof value === "string") {
-    // Para inputs de digitação, pegamos apenas os dígitos
-    const numeric = value.replace(/\D/g, "");
-    amount = numeric ? parseInt(numeric, 10) / 100 : 0;
-  } else {
-    // Para valores numéricos diretos
-    amount = Number(value) || 0;
+  let amount: number = 0;
+  if (typeof value === "number") {
+    amount = isNaN(value) ? 0 : value;
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    const num = Number(trimmed);
+    if (!isNaN(num)) {
+      amount = num;
+    } else {
+      // Formato pt-BR com vírgula ou separadores (ex: "1.500,50" ou "R$ 1.500")
+      const cleaned = trimmed.replace(/[^\d,-]/g, "").replace(",", ".");
+      const parsed = parseFloat(cleaned);
+      amount = isNaN(parsed) ? 0 : parsed;
+    }
   }
   
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: options?.minimumFractionDigits,
-    maximumFractionDigits: options?.maximumFractionDigits,
-  }).format(amount);
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: options?.minimumFractionDigits ?? (options?.maximumFractionDigits === 0 ? 0 : 2),
+      maximumFractionDigits: options?.maximumFractionDigits ?? 2,
+    }).format(amount);
+  } catch {
+    return `R$ ${amount.toFixed(2)}`;
+  }
 }
 
 export function parseCurrencyBRLToNumber(formattedValue: string | number | null | undefined) {

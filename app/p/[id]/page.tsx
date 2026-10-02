@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
@@ -71,6 +71,12 @@ interface Broker {
   photoUrl?: string;
 }
 
+const FALLBACK_IMAGES = [
+  "https://picsum.photos/seed/imovel1/1200/800",
+  "https://picsum.photos/seed/imovel2/1200/800",
+  "https://picsum.photos/seed/imovel3/1200/800"
+];
+
 export default function PublicPropertyCapturePage() {
   const params = useParams();
   const id = params.id as string;
@@ -89,12 +95,22 @@ export default function PublicPropertyCapturePage() {
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
 
-  // Loaded default fallbacks
-  const fallbackImages = [
-    "https://picsum.photos/seed/imovel1/1200/800",
-    "https://picsum.photos/seed/imovel2/1200/800",
-    "https://picsum.photos/seed/imovel3/1200/800"
-  ];
+  const images = useMemo(() => {
+    if (!property) return FALLBACK_IMAGES;
+    let rawList: any[] = [];
+    if (Array.isArray(property.imageUrls)) {
+      rawList = property.imageUrls;
+    } else if (typeof property.imageUrls === 'string') {
+      try {
+        const parsed = JSON.parse(property.imageUrls);
+        rawList = Array.isArray(parsed) ? parsed : [property.imageUrls];
+      } catch {
+        rawList = [property.imageUrls];
+      }
+    }
+    const cleanList = rawList.filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && !u.startsWith('[') && !u.endsWith(']'));
+    return cleanList.length > 0 ? cleanList : FALLBACK_IMAGES;
+  }, [property]);
 
   useEffect(() => {
     if (!id) return;
@@ -102,8 +118,8 @@ export default function PublicPropertyCapturePage() {
     async function loadData() {
       try {
         setLoading(true);
-        // 1. Fetch single property with no-store
-        const propData = await apiClient.get<Property>(`/api/properties?id=${id}&_t=${Date.now()}`, { 
+        // 1. Fetch single property with no-store and public=true
+        const propData = await apiClient.get<Property>(`/api/properties?id=${id}&public=true&_t=${Date.now()}`, { 
           cache: 'no-store',
           skipAuth: true 
         });
@@ -232,8 +248,6 @@ export default function PublicPropertyCapturePage() {
     );
   }
 
-  const images = property.imageUrls && property.imageUrls.length > 0 ? property.imageUrls : fallbackImages;
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-16 overflow-x-hidden selection:bg-blue-600/30 selection:text-blue-200">
       {/* Elegante Header Dark */}
@@ -282,6 +296,7 @@ export default function PublicPropertyCapturePage() {
                 fill 
                 className="object-cover object-center transition-all duration-500 group-hover:scale-102"
                 referrerPolicy="no-referrer"
+                unoptimized
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
 
@@ -380,6 +395,7 @@ export default function PublicPropertyCapturePage() {
                       fill 
                       className="object-cover" 
                       referrerPolicy="no-referrer"
+                      unoptimized
                     />
                   </button>
                 ))}

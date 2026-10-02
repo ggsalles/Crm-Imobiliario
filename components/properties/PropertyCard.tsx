@@ -88,6 +88,7 @@ export function PropertyCard({
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-700"
               referrerPolicy="no-referrer"
+              unoptimized
               onError={() => setImgError(true)}
             />
           </motion.div>
