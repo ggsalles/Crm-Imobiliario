@@ -50,6 +50,7 @@ interface PropertyFilterBarProps {
   activeFiltersCount: number;
   clearAllFilters: () => void;
   setPricePreset: (min: number | null, max: number | null) => void;
+  loading?: boolean;
 }
 
 export function PropertyFilterBar({
@@ -81,7 +82,8 @@ export function PropertyFilterBar({
   properties,
   activeFiltersCount,
   clearAllFilters,
-  setPricePreset
+  setPricePreset,
+  loading = false
 }: PropertyFilterBarProps) {
   return (
     <div className="space-y-3">
@@ -597,10 +599,10 @@ export function PropertyFilterBar({
               <Icon className="w-3.5 h-3.5" />
               <span>{type.label}</span>
               <span className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-black",
+                "px-1.5 py-0.2 rounded-full text-[10px] font-black min-w-4 text-center",
                 isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
               )}>
-                {count}
+                {loading && properties.length === 0 ? "..." : count}
               </span>
             </button>
           );

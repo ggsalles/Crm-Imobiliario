@@ -10,6 +10,17 @@ const NO_CACHE_HEADERS = {
   'Expires': '0',
 };
 
+interface CacheEntry {
+  data: any[];
+  timestamp: number;
+}
+const serverPropertiesCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 25000; // 25 seconds TTL
+
+export function invalidateServerPropertiesCache() {
+  serverPropertiesCache.clear();
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
@@ -114,6 +125,13 @@ export async function GET(req: NextRequest) {
       ? (tenantParam || activeTenantId || DEFAULT_TENANT_ID)
       : (activeTenantId || tenantParam || DEFAULT_TENANT_ID);
 
+    const cacheKey = `${effectiveTenantId || 'all'}:${ownerId || 'all'}:${isPublic}:${searchParams.get('featured') || 'all'}:${searchParams.get('limit') || 'all'}`;
+    const cached = serverPropertiesCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
+      return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
+    }
+
     let query = supabase
       .from('properties')
       .select('*')
@@ -198,28 +216,27 @@ export async function GET(req: NextRequest) {
     if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
     // Fetch images safely:
-    // Only query property_images for properties that do not already have item.image_url
-    // and chunk in batches of 100 to prevent 414 URI Too Long errors with thousands of IDs.
+    // Query property_images in a single high-performance query (very small table) instead of sequential chunks.
     const imagesByPropertyId: Record<string, string[]> = {};
     const idsNeedingImages = properties
       .filter((p: any) => !p.image_url)
       .map((p: any) => p.id);
 
     if (idsNeedingImages.length > 0) {
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < idsNeedingImages.length; i += CHUNK_SIZE) {
-        const chunk = idsNeedingImages.slice(i, i + CHUNK_SIZE);
+      try {
         const { data: imagesChunk, error: imgError } = await supabase
           .from('property_images')
           .select('property_id, url')
-          .in('property_id', chunk);
+          .limit(5000);
 
-        if (!imgError && imagesChunk) {
+        if (!imgError && Array.isArray(imagesChunk)) {
           for (const img of imagesChunk) {
             if (!imagesByPropertyId[img.property_id]) imagesByPropertyId[img.property_id] = [];
             imagesByPropertyId[img.property_id].push(String(img.url));
           }
         }
+      } catch (imgErr) {
+        console.warn("[API/Properties] Erro ao carregar property_images:", imgErr);
       }
     }
 
@@ -281,6 +298,8 @@ export async function GET(req: NextRequest) {
         return s === 'disponível' || s === 'disponivel' || s === 'available';
       });
     }
+
+    serverPropertiesCache.set(cacheKey, { data: items, timestamp: Date.now() });
 
     return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
@@ -389,6 +408,8 @@ export async function POST(req: NextRequest) {
         console.log(`[API/Properties] POST: ${imageInserts.length} imagens sincronizadas com sucesso.`);
       }
     }
+
+    serverPropertiesCache.clear();
 
     return NextResponse.json({ id: propertyId });
   } catch (error: any) {
@@ -504,6 +525,8 @@ export async function PATCH(req: NextRequest) {
       console.log(`[API/Properties] PATCH ID ${id}: Imagens sincronizadas.`);
     }
 
+    serverPropertiesCache.clear();
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error(`[API/Properties] PATCH FATAL ERROR:`, error);
@@ -552,6 +575,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     console.log(`[API/Properties] DELETE ID ${id}: Sucesso.`);
+    serverPropertiesCache.clear();
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("[API/Properties] DELETE Error:", error);

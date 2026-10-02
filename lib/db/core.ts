@@ -338,7 +338,7 @@ async function apiFetchImpl(url: string, options: any = {}) {
       }
  
       const controller = new AbortController();
-      const timeoutValue = options.timeout || 10000;
+      const timeoutValue = options.timeout || 35000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
  
       const response = await fetch(fullUrl, {
