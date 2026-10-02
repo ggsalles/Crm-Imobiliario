@@ -42,6 +42,8 @@ interface BrokerInfo {
   displayName: string;
   email?: string;
   photoUrl?: string;
+  phone?: string;
+  tenantId?: string;
 }
 
 const PROPERTY_TYPES = [
@@ -137,7 +139,7 @@ function VitrineContent() {
     const targetTenant = tenantParam || profile?.tenantId || '';
     let propUrl = `/api/properties?public=true&limit=10000&_t=${Date.now()}`;
     if (targetTenant) propUrl += `&tenantId=${encodeURIComponent(targetTenant)}`;
-    if (brokerParam) propUrl += `&ownerId=${encodeURIComponent(brokerParam)}`;
+    if (brokerParam) propUrl += `&brokerId=${encodeURIComponent(brokerParam)}`;
 
     try {
       const propData = await apiClient.get<Property[]>(propUrl, { skipAuth: true });
@@ -206,12 +208,33 @@ function VitrineContent() {
       apiClient.get<any>(`/api/profiles?id=${encodeURIComponent(brokerParam)}`, { skipAuth: true })
         .then(bData => {
           if (bData) {
+            const brokerTenantId = bData.tenantId || bData.tenant_id;
             setBroker({
               id: bData.id,
               displayName: bData.displayName || bData.display_name || 'Consultor de Imóveis',
               email: bData.email,
               photoUrl: bData.photoUrl || bData.photo_url,
+              phone: bData.phone,
+              tenantId: brokerTenantId,
             });
+
+            // Se targetTenant não veio na URL, resolve a imobiliária pelo cadastro do corretor!
+            if (!targetTenant && brokerTenantId) {
+              apiClient.get<any>(`/api/tenants?id=${encodeURIComponent(brokerTenantId)}`, { skipAuth: true })
+                .then(tData => {
+                  if (tData) {
+                    setTenant({
+                      id: tData.id,
+                      name: tData.name || 'Imobiliária',
+                      slug: tData.slug,
+                      phone: tData.phone,
+                      city: tData.city,
+                      state: tData.state,
+                    });
+                  }
+                })
+                .catch(() => {});
+            }
           }
         })
         .catch(err => console.warn('Erro ao carregar broker na vitrine:', err));
@@ -386,12 +409,17 @@ function VitrineContent() {
 
   // Compose general WhatsApp message
   const handleGeneralWhatsapp = () => {
+    const rawPhone = broker?.phone || tenant?.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
     const agencyName = tenant?.name || 'Imobiliária';
     const brokerName = broker?.displayName ? ` com o consultor ${broker.displayName}` : '';
     const text = encodeURIComponent(
       `Olá! Estou visitando a vitrine virtual da *${agencyName}*${brokerName} e gostaria de informações sobre os imóveis disponíveis.`
     );
-    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+    const waUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${text}`
+      : `https://api.whatsapp.com/send?text=${text}`;
+    window.open(waUrl, '_blank');
   };
 
   // Open property details
@@ -402,11 +430,16 @@ function VitrineContent() {
   // Send WhatsApp inquiry for a specific property
   const handlePropertyWhatsapp = (e: React.MouseEvent, prop: Property) => {
     e.stopPropagation();
+    const rawPhone = broker?.phone || tenant?.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
     const agencyName = tenant?.name || 'Imobiliária';
     const text = encodeURIComponent(
       `Olá! Vi o imóvel *${prop.title}* (${formatPrice(prop.price)}) na vitrine da *${agencyName}* e gostaria de agendar uma visita e tirar dúvidas.`
     );
-    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+    const waUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${text}`
+      : `https://api.whatsapp.com/send?text=${text}`;
+    window.open(waUrl, '_blank');
   };
 
   // Top Header Component

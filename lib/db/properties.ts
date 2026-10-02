@@ -105,7 +105,7 @@ export function subscribeToShowcaseProperties(
     try {
       let url = `/api/properties?public=true&limit=10000&_t=${Date.now()}`;
       if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
-      if (ownerId) url += `&ownerId=${encodeURIComponent(ownerId)}`;
+      if (ownerId) url += `&brokerId=${encodeURIComponent(ownerId)}`;
 
       const data = await apiFetch(url, { bypassCache: true, noCache: true });
       if (Array.isArray(data)) {

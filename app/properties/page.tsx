@@ -168,13 +168,14 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
 
     if (!user || !profile) return;
     
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    // Todos os corretores da imobiliária acessam o inventário unificado da empresa
     const unsubscribe = subscribeToProperties((data) => {
       setProperties(data);
       setLoading(false);
-    }, ownerId);
+    });
 
-    getContacts(ownerId).then(data => {
+    const contactOwnerId = profile.role === 'Admin' ? undefined : user.id;
+    getContacts(contactOwnerId).then(data => {
       if (Array.isArray(data)) {
         setContacts(data);
       }
@@ -208,8 +209,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setLoading(true);
     setFetchTimeoutReached(false);
     clearPropertiesCache();
-    const ownerId = profile?.role === 'Admin' ? undefined : user?.id;
-    getProperties(ownerId, 10000).then(data => {
+    getProperties(undefined, 10000).then(data => {
       if (Array.isArray(data)) {
         setProperties(data);
       }

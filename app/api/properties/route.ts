@@ -118,14 +118,44 @@ export async function GET(req: NextRequest) {
 
     const isPublic = searchParams.get('public') === 'true';
     const tenantParam = searchParams.get('tenantId') || searchParams.get('tenant');
+    const brokerParam = searchParams.get('brokerId') || searchParams.get('broker');
     
     // Strict tenant isolation: force active company tenant for CRM / authenticated requests.
-    // For public showcase queries, allow target showcase tenantParam or activeTenantId, with fallback to DEFAULT_TENANT_ID.
-    const effectiveTenantId = isPublic
-      ? (tenantParam || activeTenantId || DEFAULT_TENANT_ID)
-      : (activeTenantId || tenantParam || DEFAULT_TENANT_ID);
+    // For public showcase queries, allow target showcase tenantParam or activeTenantId.
+    let effectiveTenantId = isPublic
+      ? (tenantParam || activeTenantId)
+      : (activeTenantId || tenantParam);
 
-    const cacheKey = `${effectiveTenantId || 'all'}:${ownerId || 'all'}:${isPublic}:${searchParams.get('featured') || 'all'}:${searchParams.get('limit') || 'all'}`;
+    // If tenantParam was omitted in a public link, but a broker or owner is specified:
+    // Automatically resolve the broker's company tenant_id so the agency's catalog is loaded!
+    if (isPublic && !effectiveTenantId && (brokerParam || ownerId)) {
+      const targetUser = brokerParam || ownerId;
+      if (targetUser && targetUser !== 'undefined' && targetUser !== 'all') {
+        try {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', targetUser)
+            .single();
+          if (prof?.tenant_id) {
+            effectiveTenantId = prof.tenant_id;
+          }
+        } catch {}
+      }
+    }
+
+    if (!effectiveTenantId) {
+      effectiveTenantId = DEFAULT_TENANT_ID;
+    }
+
+    // Vitrine pública compartilhada por corretor (ex: link de Vivi da Nando Imobiliária):
+    // A vitrine exibe todo o portfólio da imobiliária com o atendimento e atribuição desse corretor.
+    // Só filtra estritamente por owner_id se 'exclusiveOnly=true' for explicitamente passado.
+    const shouldFilterByOwner = isPublic
+      ? (searchParams.get('exclusiveOnly') === 'true' && ownerId && ownerId !== 'undefined' && ownerId !== 'all')
+      : (ownerId && ownerId !== 'undefined' && ownerId !== 'all');
+
+    const cacheKey = `${effectiveTenantId || 'all'}:${shouldFilterByOwner ? ownerId : 'all'}:${isPublic}:${searchParams.get('featured') || 'all'}:${searchParams.get('limit') || 'all'}`;
     const cached = serverPropertiesCache.get(cacheKey);
     const now = Date.now();
     if (cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
@@ -148,7 +178,7 @@ export async function GET(req: NextRequest) {
       query = query.in('status', ['disponível', 'disponivel', 'available']);
     }
 
-    if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
+    if (shouldFilterByOwner) {
       query = query.eq('owner_id', ownerId);
     }
 
@@ -189,7 +219,7 @@ export async function GET(req: NextRequest) {
         batchQuery = batchQuery.in('status', ['disponível', 'disponivel', 'available']);
       }
 
-      if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
+      if (shouldFilterByOwner) {
         batchQuery = batchQuery.eq('owner_id', ownerId);
       }
 
