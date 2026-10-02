@@ -133,7 +133,10 @@ export function subscribeToShowcaseProperties(
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
   const cacheKey = `properties:${ownerId || 'all'}`;
-  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
+  const initialData = getCachedProperties(ownerId);
+  if (initialData && initialData.length > 0) {
+    callback(initialData);
+  }
 
   const fetchProperties = async () => {
     try {

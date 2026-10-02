@@ -70,7 +70,36 @@ export function safePersistSnapshot(key: string, data: any) {
   if (typeof window === 'undefined') return;
   try {
     if (Array.isArray(data) && data.length > 0) {
-      sessionStorage.setItem(`db-cache:${key}`, JSON.stringify(data.slice(0, 100)));
+      try {
+        sessionStorage.setItem(`db-cache:${key}`, JSON.stringify(data));
+        return;
+      } catch {
+        // Fallback to compact representation if sessionStorage quota is tight
+        const light = data.map(item => ({
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          type: item.type,
+          status: item.status,
+          location: item.location,
+          neighborhood: item.neighborhood,
+          city: item.city,
+          state: item.state,
+          area: item.area,
+          bedrooms: item.bedrooms,
+          bathrooms: item.bathrooms,
+          parkingSpots: item.parkingSpots,
+          isFeatured: item.isFeatured,
+          buildingName: item.buildingName,
+          imageUrls: Array.isArray(item.imageUrls) ? item.imageUrls.slice(0, 3) : [],
+          tags: item.tags,
+          tenantId: item.tenantId,
+          ownerId: item.ownerId,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        }));
+        sessionStorage.setItem(`db-cache:${key}`, JSON.stringify(light));
+      }
     }
   } catch {}
 }
