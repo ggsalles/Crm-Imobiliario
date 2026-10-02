@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
   Users, 
@@ -12,6 +12,7 @@ import {
   Upload
 } from "lucide-react";
 import { ImportContactsModal } from "@/components/contacts/ImportContactsModal";
+import { UniversalPagination } from "@/components/properties/PropertyPagination";
 import { recordAuditEvent } from "@/lib/audit";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -82,13 +83,30 @@ function ContactsContent() {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
   const [displayPhone, setDisplayPhone] = useState("");
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(24);
   const [selectedTemperature, setSelectedTemperature] = useState<'all' | 'quente' | 'morno' | 'frio'>('all');
   const [selectedSource, setSelectedSource] = useState<string>('all');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setCurrentPage(newPage);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const handlePageSizeChange = useCallback((newSize: number | 'all') => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   // Reset pagination on search or filter change
   useEffect(() => {
-    setVisibleCount(12);
+    setCurrentPage(1);
   }, [searchQuery, activeTab, selectedTemperature, selectedSource]);
 
   useEffect(() => {
@@ -213,11 +231,6 @@ function ContactsContent() {
     });
   }, [contacts, activeTab, selectedTemperature, selectedSource, searchQuery, users]);
 
-  // Paginated contacts for optimal rendering
-  const displayedContacts = useMemo(() => {
-    return filteredContacts.slice(0, visibleCount);
-  }, [filteredContacts, visibleCount]);
-
   // Memoized users filter (oculta a conta master/logada e garante isolamento do tenant atual)
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -235,6 +248,48 @@ function ContactsContent() {
       );
     });
   }, [users, user?.id, user?.email, searchQuery, currentTenantId]);
+
+  // Unified items list per active tab for precise pagination
+  type TabItem = 
+    | { kind: 'contact'; data: Contact }
+    | { kind: 'user'; data: UserProfile };
+
+  const currentTabItems = useMemo<TabItem[]>(() => {
+    if (activeTab === 'cliente') {
+      return filteredContacts.map(c => ({ kind: 'contact' as const, data: c }));
+    }
+    const manualItems = filteredContacts.map(c => ({ kind: 'contact' as const, data: c }));
+    const userItems = filteredUsers.map(u => ({ kind: 'user' as const, data: u }));
+    return [...manualItems, ...userItems];
+  }, [activeTab, filteredContacts, filteredUsers]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    const size = typeof pageSize === 'number' ? pageSize : 24;
+    return Math.max(1, Math.ceil(currentTabItems.length / size));
+  }, [currentTabItems.length, pageSize]);
+
+  const paginatedItems = useMemo<TabItem[]>(() => {
+    if (pageSize === 'all') return currentTabItems;
+    const size = typeof pageSize === 'number' ? pageSize : 24;
+    const start = (currentPage - 1) * size;
+    return currentTabItems.slice(start, start + size);
+  }, [currentTabItems, currentPage, pageSize]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery.trim()) count++;
+    if (selectedTemperature !== 'all') count++;
+    if (selectedSource !== 'all') count++;
+    return count;
+  }, [searchQuery, selectedTemperature, selectedSource]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedTemperature('all');
+    setSelectedSource('all');
+    setCurrentPage(1);
+  }, []);
 
   const handleExportContacts = useCallback(() => {
     if (filteredContacts.length === 0) {
@@ -463,7 +518,7 @@ function ContactsContent() {
   return (
     <div className="flex min-h-screen bg-background text-foreground transition-colors duration-500">
       <Sidebar />
-      <main className="flex-1 p-3 sm:p-4 md:p-5 pt-16 md:pt-6 overflow-y-auto overflow-x-hidden">
+      <main ref={scrollContainerRef} className="flex-1 p-3 sm:p-4 md:p-5 pt-16 md:pt-6 overflow-y-auto overflow-x-hidden">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
           <header className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
             <div>
@@ -531,6 +586,21 @@ function ContactsContent() {
             availableSources={availableSources}
           />
 
+          {/* Top Pagination Bar */}
+          <UniversalPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalFiltered={currentTabItems.length}
+            totalCatalog={activeTab === 'cliente' ? clientCount : teamCount}
+            activeFiltersCount={activeFiltersCount}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            onClearFilters={clearAllFilters}
+            itemLabel={activeTab === 'cliente' ? 'clientes' : 'membros'}
+            variant="top"
+          />
+
           {/* Grid Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {loading ? (
@@ -539,32 +609,30 @@ function ContactsContent() {
               </div>
             ) : (
               <>
-                {/* Regular Contacts (Clients or Team) */}
-                {displayedContacts.map((contact) => (
-                  <ContactCard 
-                    key={contact.id} 
-                    contact={contact} 
-                    companyName={companiesMap.get(contact.companyId || '')?.name}
-                    onEdit={handleEditContact}
-                    onDelete={handleDeletePrompt}
-                    isActiveTabEquipe={activeTab === 'equipe'}
-                    onMessage={handleMessage}
-                    isMessaging={isMessaging === contact.id}
-                  />
+                {paginatedItems.map((item) => (
+                  item.kind === 'contact' ? (
+                    <ContactCard 
+                      key={item.data.id} 
+                      contact={item.data} 
+                      companyName={companiesMap.get(item.data.companyId || '')?.name}
+                      onEdit={handleEditContact}
+                      onDelete={handleDeletePrompt}
+                      isActiveTabEquipe={activeTab === 'equipe'}
+                      onMessage={handleMessage}
+                      isMessaging={isMessaging === item.data.id}
+                    />
+                  ) : (
+                    <UserMemberCard 
+                      key={item.data.id} 
+                      user={item.data} 
+                      isCurrentUser={item.data.id === user?.id}
+                      onMessage={handleMessage}
+                      isMessaging={isMessaging === item.data.id}
+                    />
+                  )
                 ))}
 
-                {/* Team Members (Registered Users) */}
-                {activeTab === 'equipe' && filteredUsers.map((userProfile) => (
-                  <UserMemberCard 
-                    key={userProfile.id} 
-                    user={userProfile} 
-                    isCurrentUser={userProfile.id === user?.id}
-                    onMessage={handleMessage}
-                    isMessaging={isMessaging === userProfile.id}
-                  />
-                ))}
-
-                {displayedContacts.length === 0 && (activeTab === 'cliente' || filteredUsers.length === 0) && (
+                {paginatedItems.length === 0 && (
                   <div className="col-span-full py-20 text-center bg-card rounded-3xl border border-dashed border-border flex flex-col items-center">
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
                       <Users className="w-8 h-8 text-muted-foreground" />
@@ -577,16 +645,21 @@ function ContactsContent() {
             )}
           </div>
 
-          {/* Pagination Controls */}
-          {filteredContacts.length > displayedContacts.length && (
-            <div className="flex justify-center pt-2 pb-6">
-              <button
-                onClick={() => setVisibleCount(prev => prev + 12)}
-                className="px-5 py-2.5 rounded-xl bg-card border border-border hover:bg-muted font-bold text-xs text-foreground transition-all shadow-xs flex items-center gap-2 cursor-pointer"
-              >
-                Carregar mais contatos ({filteredContacts.length - displayedContacts.length} restantes)
-              </button>
-            </div>
+          {/* Bottom Full Pagination Suite */}
+          {currentTabItems.length > 0 && (
+            <UniversalPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalFiltered={currentTabItems.length}
+              totalCatalog={activeTab === 'cliente' ? clientCount : teamCount}
+              activeFiltersCount={activeFiltersCount}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              onClearFilters={clearAllFilters}
+              itemLabel={activeTab === 'cliente' ? 'clientes' : 'membros'}
+              variant="bottom"
+            />
           )}
         </div>
       </main>

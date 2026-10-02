@@ -142,11 +142,11 @@ export async function GET(req: NextRequest) {
     let limitParam: number | null = null;
     if (rawLimit === 'all' || rawLimit === '0' || rawLimit === '-1') {
       limitParam = null;
-    } else if (rawLimit) {
+    } else if (rawLimit && rawLimit !== '500' && rawLimit !== '150') {
       limitParam = Math.max(1, Number(rawLimit) || 10000);
     } else {
-      // Default to 10,000 for CRM inventory so large imported portfolios (e.g. 2,742 units) are never truncated
-      limitParam = isPublic ? 500 : 10000;
+      // Default to 10,000 for both CRM inventory and Public Vitrine so large imported portfolios (e.g. 2,742 units) are never truncated
+      limitParam = 10000;
     }
 
     // PostgREST limits single queries to 1,000 rows.

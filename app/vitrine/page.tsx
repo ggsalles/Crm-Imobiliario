@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Building2, 
@@ -25,6 +25,7 @@ import { safeJsonParse } from '@/lib/safe-storage';
 import { apiClient } from '@/lib/api-client';
 import { ShowcasePropertyCard, VitrineProperty as Property } from '@/components/vitrine/PropertyCard';
 import { ShowcaseFilters } from '@/components/vitrine/ShowcaseFilters';
+import { UniversalPagination } from '@/components/properties/PropertyPagination';
 import { CreateDealFromPropertyModal } from '@/components/properties/CreateDealFromPropertyModal';
 
 interface TenantInfo {
@@ -88,6 +89,32 @@ function VitrineContent() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [propertyForDeal, setPropertyForDeal] = useState<any | null>(null);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(24);
+  const crmScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    setCurrentPage(newPage);
+    if (crmScrollContainerRef.current) {
+      crmScrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const handlePageSizeChange = useCallback((newSize: number | 'all') => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    if (crmScrollContainerRef.current) {
+      crmScrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
   useEffect(() => {
     // Ensure dark theme is applied on vitrine for all visitors (public link and CRM)
     document.documentElement.classList.add('dark');
@@ -108,7 +135,7 @@ function VitrineContent() {
     setIsRefreshing(true);
     clearPropertiesCache();
     const targetTenant = tenantParam || profile?.tenantId || '';
-    let propUrl = `/api/properties?public=true&limit=150&_t=${Date.now()}`;
+    let propUrl = `/api/properties?public=true&limit=10000&_t=${Date.now()}`;
     if (targetTenant) propUrl += `&tenantId=${encodeURIComponent(targetTenant)}`;
     if (brokerParam) propUrl += `&ownerId=${encodeURIComponent(brokerParam)}`;
 
@@ -310,7 +337,25 @@ function VitrineContent() {
     setSelectedTags([]);
     setOnlyFeatured(false);
     setSortBy('relevance');
+    setCurrentPage(1);
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedType, selectedStatus, minBedrooms, minSuites, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    const size = typeof pageSize === 'number' ? pageSize : 24;
+    return Math.max(1, Math.ceil(filteredProperties.length / size));
+  }, [filteredProperties.length, pageSize]);
+
+  const paginatedProperties = useMemo(() => {
+    if (pageSize === 'all') return filteredProperties;
+    const size = typeof pageSize === 'number' ? pageSize : 24;
+    const start = (currentPage - 1) * size;
+    return filteredProperties.slice(start, start + size);
+  }, [filteredProperties, currentPage, pageSize]);
 
   const activeFiltersCount = [
     selectedType !== 'all',
@@ -571,6 +616,24 @@ function VitrineContent() {
         showSidebar={showSidebar}
       />
 
+      {/* Top Pagination Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
+        <UniversalPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalFiltered={filteredProperties.length}
+          totalCatalog={properties.length}
+          activeFiltersCount={activeFiltersCount}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          onClearFilters={resetFilters}
+          itemLabel="imóveis"
+          variant="top"
+          theme="dark"
+        />
+      </div>
+
       {/* Main Grid Section */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {loading ? (
@@ -605,20 +668,41 @@ function VitrineContent() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProperties.map((prop) => (
-              <ShowcasePropertyCard
-                key={prop.id}
-                property={prop}
-                onOpen={handleOpenProperty}
-                onWhatsapp={handlePropertyWhatsapp}
-                onCreateDeal={showSidebar ? (e, p) => {
-                  e.stopPropagation();
-                  setPropertyForDeal(p as any);
-                } : undefined}
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedProperties.map((prop) => (
+                <ShowcasePropertyCard
+                  key={prop.id}
+                  property={prop}
+                  onOpen={handleOpenProperty}
+                  onWhatsapp={handlePropertyWhatsapp}
+                  onCreateDeal={showSidebar ? (e, p) => {
+                    e.stopPropagation();
+                    setPropertyForDeal(p as any);
+                  } : undefined}
+                />
+              ))}
+            </div>
+
+            {/* Bottom Full Pagination Suite */}
+            {filteredProperties.length > 0 && (
+              <UniversalPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalFiltered={filteredProperties.length}
+                totalCatalog={properties.length}
+                activeFiltersCount={activeFiltersCount}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                onClearFilters={resetFilters}
+                itemLabel="imóveis"
+                variant="bottom"
+                theme="dark"
+                className="mt-8"
               />
-            ))}
-          </div>
+            )}
+          </>
         )}
       </main>
 
@@ -652,7 +736,7 @@ function VitrineContent() {
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {headerContent}
-          <div className="flex-1 overflow-y-auto relative selection:bg-blue-600/30 selection:text-blue-200">
+          <div ref={crmScrollContainerRef} className="flex-1 overflow-y-auto relative selection:bg-blue-600/30 selection:text-blue-200">
             {vitrineScrollableContent}
           </div>
         </div>

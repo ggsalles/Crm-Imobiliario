@@ -103,35 +103,76 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    let query = supabase.from('contacts').select('*').order('name', { ascending: true });
-    
-    if (activeTenantId) {
-      query = query.eq('tenant_id', activeTenantId);
+    // PostgREST limits single queries to 1,000 rows.
+    // Batch fetch in ranges of 1,000 to retrieve full contact lists (e.g. 2,000 to 20,000+ items).
+    const MAX_POSTGREST_PAGE = 1000;
+    const targetMax = 20000;
+    let allContacts: any[] = [];
+    let offset = 0;
+
+    while (allContacts.length < targetMax) {
+      const currentBatchSize = Math.min(MAX_POSTGREST_PAGE, targetMax - allContacts.length);
+      let batchQuery = supabase
+        .from('contacts')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (activeTenantId) {
+        batchQuery = batchQuery.eq('tenant_id', activeTenantId);
+      }
+
+      if (ownerId && ownerId !== 'undefined' && ownerId !== 'all') {
+        batchQuery = batchQuery.eq('owner_id', ownerId);
+      }
+
+      const { data: batch, error: batchError } = await batchQuery.range(offset, offset + currentBatchSize - 1);
+      if (batchError) {
+        console.error("[API/Contacts] Batch query error at offset", offset, batchError);
+        throw batchError;
+      }
+
+      if (!batch || batch.length === 0) break;
+      allContacts.push(...batch);
+
+      // If fewer items than requested were returned, we have reached the end
+      if (batch.length < currentBatchSize) break;
+      offset += batch.length;
     }
 
-    if (ownerId && ownerId !== 'undefined') {
-      query = query.eq('owner_id', ownerId);
+    const contacts = allContacts;
+    console.log(`[API/Contacts] GET: query returned ${contacts.length} contacts for tenant ${activeTenantId}`);
+
+    if (contacts.length === 0) return NextResponse.json([]);
+
+    // Fetch active deals in safe batches for calculating Smart Temperature
+    let allDeals: any[] = [];
+    let dealsOffset = 0;
+    while (allDeals.length < 20000) {
+      let dealsBatchQuery = supabase
+        .from('deals')
+        .select('id, contact_id, stage, created_at, updated_at');
+      if (activeTenantId) {
+        dealsBatchQuery = dealsBatchQuery.eq('tenant_id', activeTenantId);
+      }
+      const { data: dBatch, error: dError } = await dealsBatchQuery.range(dealsOffset, dealsOffset + 999);
+      if (dError || !dBatch || dBatch.length === 0) break;
+      allDeals.push(...dBatch);
+      if (dBatch.length < 1000) break;
+      dealsOffset += dBatch.length;
     }
 
-    const { data: contacts, error } = await query;
-    console.log(`[API/Contacts] GET: query returned ${contacts?.length || 0} contacts for tenant ${activeTenantId}`);
-
-    if (error) {
-      console.error("[API/Contacts] query error:", error);
-      throw error;
+    // Index deals by contact_id for O(1) lookup
+    const dealsByContactId = new Map<string, any[]>();
+    for (const d of allDeals) {
+      if (d.contact_id) {
+        const arr = dealsByContactId.get(d.contact_id) || [];
+        arr.push(d);
+        dealsByContactId.set(d.contact_id, arr);
+      }
     }
-    if (!contacts) return NextResponse.json([]);
-
-    // Fetch active deals for calculating Smart Temperature
-    let dealsQuery = supabase.from('deals').select('id, contact_id, stage, created_at, updated_at');
-    if (activeTenantId) {
-      dealsQuery = dealsQuery.eq('tenant_id', activeTenantId);
-    }
-    const { data: dealsData } = await dealsQuery;
-    const allDeals = dealsData || [];
 
     const items = contacts.map((item: any) => {
-      const contactDeals = allDeals.filter((d: any) => d.contact_id === item.id);
+      const contactDeals = dealsByContactId.get(item.id) || [];
       const smartTemp = computeSmartTemperature(item, contactDeals);
 
       return {

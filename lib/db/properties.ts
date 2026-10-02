@@ -103,7 +103,7 @@ export function subscribeToShowcaseProperties(
 
   const fetchShowcase = async () => {
     try {
-      let url = `/api/properties?public=true&limit=500&_t=${Date.now()}`;
+      let url = `/api/properties?public=true&limit=10000&_t=${Date.now()}`;
       if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
       if (ownerId) url += `&ownerId=${encodeURIComponent(ownerId)}`;
 
