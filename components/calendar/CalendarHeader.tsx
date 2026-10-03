@@ -212,3 +212,5 @@ export const CalendarHeader = memo(function CalendarHeader({
     </header>
   );
 });
+
+export default CalendarHeader;

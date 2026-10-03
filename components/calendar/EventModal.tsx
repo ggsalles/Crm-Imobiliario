@@ -267,3 +267,5 @@ export const EventModal = memo(function EventModal({
     </AnimatePresence>
   );
 });
+
+export default EventModal;

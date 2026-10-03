@@ -162,3 +162,5 @@ export const MonthGrid = memo(function MonthGrid({
     </div>
   );
 });
+
+export default MonthGrid;

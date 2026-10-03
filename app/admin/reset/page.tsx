@@ -13,7 +13,7 @@ import {
   CheckCircle2, 
   RotateCcw, 
   Calendar, 
-  Trello, 
+  Kanban, 
   Users, 
   Home, 
   MessageSquare, 
@@ -57,7 +57,7 @@ const ENTITY_OPTIONS: EntityOption[] = [
     id: "deals",
     name: "Pipeline (Negócios)",
     description: "Cards de negociação e oportunidades em todos os estágios do funil.",
-    icon: Trello,
+    icon: Kanban,
     defaultChecked: true,
     color: "text-blue-500 bg-blue-500/10 border-blue-500/20"
   },

@@ -16,7 +16,6 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
-  Github,
   X,
   Check,
   KeyRound

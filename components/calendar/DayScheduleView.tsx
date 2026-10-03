@@ -128,3 +128,5 @@ export const DayScheduleView = memo(function DayScheduleView({
     </div>
   );
 });
+
+export default DayScheduleView;

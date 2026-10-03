@@ -10,7 +10,7 @@ import {
   LogOut,
   Building2,
   Users,
-  Trello,
+  Kanban,
   UserCircle,
   BarChart3,
   Plus,
@@ -39,7 +39,7 @@ import { safeGetItem, safeSetItem } from "@/lib/safe-storage";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { label: "Pipeline", icon: Trello, href: "/pipeline" },
+  { label: "Pipeline", icon: Kanban, href: "/pipeline" },
   { label: "Imóveis", icon: Home, href: "/properties" },
   { label: "Vitrine", icon: Globe, href: "/vitrine" },
   { label: "Clientes", icon: Users, href: "/contacts" },

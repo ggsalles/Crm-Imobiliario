@@ -339,3 +339,5 @@ export const WeeklyReportModal = memo(function WeeklyReportModal({
     </AnimatePresence>
   );
 });
+
+export default WeeklyReportModal;
