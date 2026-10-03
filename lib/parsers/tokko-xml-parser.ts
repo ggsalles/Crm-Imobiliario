@@ -335,18 +335,18 @@ export function parseTokkoXml(xmlContent: string): TokkoParseResult {
                     `${normalizedType.toUpperCase()} em ${neighborhood || city} - Ref ${refCode}`;
 
       // Intelligent Status detection from Tokko XML fields & tags
+      // ATENÇÃO: Em espanhol (Tokko), 'Alquiler' = Locação (tipo de operação), e NÃO 'Alugado' (status).
       const rawStatus = (
         getDirectChildText(node, 'status') ||
         getDirectChildText(node, 'status_id') ||
         getDirectChildText(node, 'publication_status') ||
-        node.querySelector('operations > operation > status')?.textContent?.trim() ||
         ''
       ).toLowerCase();
 
       let normalizedStatus: ParsedTokkoProperty['status'] = 'disponível';
-      const isSold = getDirectChildText(node, 'is_sold') === 'true' || getDirectChildText(node, 'is_sold') === '1' || rawStatus.includes('sold') || rawStatus.includes('vendid') || rawStatus === '3';
-      const isReserved = getDirectChildText(node, 'is_reserved') === 'true' || getDirectChildText(node, 'is_reserved') === '1' || rawStatus.includes('reserv') || rawStatus.includes('negocia') || rawStatus === '2';
-      const isRented = getDirectChildText(node, 'is_rented') === 'true' || getDirectChildText(node, 'is_rented') === '1' || rawStatus.includes('rented') || rawStatus.includes('alugad') || rawStatus.includes('alquil') || rawStatus === '4';
+      const isSold = getDirectChildText(node, 'is_sold') === 'true' || getDirectChildText(node, 'is_sold') === '1' || rawStatus === 'vendido' || rawStatus === 'vendida' || rawStatus === 'sold';
+      const isReserved = getDirectChildText(node, 'is_reserved') === 'true' || getDirectChildText(node, 'is_reserved') === '1' || rawStatus === 'reservado' || rawStatus === 'reservada' || rawStatus === 'reserved';
+      const isRented = getDirectChildText(node, 'is_rented') === 'true' || getDirectChildText(node, 'is_rented') === '1' || rawStatus === 'alugado' || rawStatus === 'alugada' || rawStatus === 'alquilado' || rawStatus === 'alquilada' || rawStatus === 'rented' || rawStatus === 'locado';
 
       if (isSold) {
         normalizedStatus = 'vendido';
@@ -357,13 +357,13 @@ export function parseTokkoXml(xmlContent: string): TokkoParseResult {
       } else {
         for (const tag of tags) {
           const lowerTag = tag.toLowerCase();
-          if (lowerTag.includes('reservad') || lowerTag.includes('em negociação') || lowerTag.includes('proposta aceita')) {
+          if (lowerTag === 'reservado' || lowerTag === 'reservada') {
             normalizedStatus = 'reservado';
             break;
-          } else if (lowerTag.includes('vendid') || lowerTag.includes('vendida') || lowerTag.includes('escriturado')) {
+          } else if (lowerTag === 'vendido' || lowerTag === 'vendida' || lowerTag === 'escriturado') {
             normalizedStatus = 'vendido';
             break;
-          } else if (lowerTag.includes('alugad') || lowerTag.includes('alugada') || lowerTag.includes('locado') || lowerTag.includes('contrato assinado')) {
+          } else if (lowerTag === 'alugado' || lowerTag === 'alugada' || lowerTag === 'locado') {
             normalizedStatus = 'alugado';
             break;
           }
