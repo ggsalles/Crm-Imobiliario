@@ -22,9 +22,11 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { PropertyValuationCard, ValuationResult } from "@/components/PropertyValuationCard";
 import { toast } from "sonner";
+import { applyWatermarkToImage } from "@/lib/watermark";
 
 import { PropertyBasicFields } from "./form/PropertyBasicFields";
 import { PropertyLocationFields, AddressData } from "./form/PropertyLocationFields";
+import { PropertyFinancialFields } from "./form/PropertyFinancialFields";
 import { PropertyMediaUploader } from "./form/PropertyMediaUploader";
 import { PropertyFeaturesPicker } from "./form/PropertyFeaturesPicker";
 import { PropertyReverseMatchSidebar } from "./form/PropertyReverseMatchSidebar";
@@ -115,6 +117,11 @@ export function PropertyForm({
     });
     return () => unsub();
   }, []);
+
+  // Marca d'água automática para fotos
+  const [applyWatermark, setApplyWatermark] = useState(true);
+  const [watermarkCompany, setWatermarkCompany] = useState("Chiarelli");
+  const [watermarkPosition, setWatermarkPosition] = useState<'center' | 'bottom-right' | 'bottom-left' | 'top-right'>('center');
 
   // Initialize form when editingProperty changes
   useEffect(() => {
@@ -306,7 +313,21 @@ export function PropertyForm({
               setTimeout(() => reject(new Error("Timeout de 60s excedido")), 60000)
             );
 
-            const uploadOp = uploadFile(file, "property-images", user?.id);
+            let fileToUpload = file;
+            if (applyWatermark) {
+              try {
+                fileToUpload = await applyWatermarkToImage(file, {
+                  companyName: watermarkCompany || "Chiarelli",
+                  subtitle: "IMÓVEIS",
+                  position: watermarkPosition,
+                  opacity: 0.92,
+                });
+              } catch (wmErr) {
+                console.warn("[PropertyForm] Falha ao aplicar marca d'água:", wmErr);
+              }
+            }
+
+            const uploadOp = uploadFile(fileToUpload, "property-images", user?.id);
             const result = (await Promise.race([uploadOp, uploadTimeout])) as { url: string };
 
             if (result && result.url) {
@@ -559,7 +580,7 @@ export function PropertyForm({
           >
             <div className="p-10 space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* 1. Campos Básicos e Preços */}
+                {/* 1. Campos Básicos de Identificação */}
                 <PropertyBasicFields
                   editingProperty={editingProperty}
                   title={title}
@@ -575,15 +596,6 @@ export function PropertyForm({
                   onTypeChange={handleTypeChange}
                   isGeneratingRef={isGeneratingRef}
                   onAutoGenerateRef={() => fetchNextRef(selectedType)}
-                  displayPrice={displayPrice}
-                  onDisplayPriceChange={setDisplayPrice}
-                  displayCondoFee={displayCondoFee}
-                  onDisplayCondoFeeChange={setDisplayCondoFee}
-                  displayIptu={displayIptu}
-                  onDisplayIptuChange={setDisplayIptu}
-                  areaInput={areaInput}
-                  isEstimatingPrice={isEstimatingPrice}
-                  onSuggestPrice={handleSuggestPrice}
                 />
 
                 {/* 2. Endereço e Localização */}
@@ -597,24 +609,11 @@ export function PropertyForm({
                   onAddressDataChange={setAddressData}
                 />
 
-                {/* Card de Avaliação Inteligente por IA */}
-                {valuationResult && (
-                  <div className="md:col-span-2">
-                    <PropertyValuationCard
-                      valuation={valuationResult}
-                      currentPrice={parseCurrencyBRLToNumber(displayPrice)}
-                      onApplyPrice={handleApplyValuationPrice}
-                      onClose={() => setValuationResult(null)}
-                      propertyTitle={title || "Novo Imóvel"}
-                    />
-                  </div>
-                )}
-
                 {/* 3. Metragem e Cômodos */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 md:col-span-2 gap-4">
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-                      Área (m²)
+                      Área (m²) *
                     </label>
                     <input
                       name="area"
@@ -672,6 +671,32 @@ export function PropertyForm({
                     />
                   </div>
                 </div>
+
+                {/* 4. Valores & Encargos Financeiros (com Sugestão por IA baseada nos dados acima) */}
+                <PropertyFinancialFields
+                  displayPrice={displayPrice}
+                  onDisplayPriceChange={setDisplayPrice}
+                  displayCondoFee={displayCondoFee}
+                  onDisplayCondoFeeChange={setDisplayCondoFee}
+                  displayIptu={displayIptu}
+                  onDisplayIptuChange={setDisplayIptu}
+                  areaInput={areaInput}
+                  isEstimatingPrice={isEstimatingPrice}
+                  onSuggestPrice={handleSuggestPrice}
+                />
+
+                {/* Card de Avaliação Inteligente por IA */}
+                {valuationResult && (
+                  <div className="md:col-span-2">
+                    <PropertyValuationCard
+                      valuation={valuationResult}
+                      currentPrice={parseCurrencyBRLToNumber(displayPrice)}
+                      onApplyPrice={handleApplyValuationPrice}
+                      onClose={() => setValuationResult(null)}
+                      propertyTitle={title || "Novo Imóvel"}
+                    />
+                  </div>
+                )}
 
                 {/* 4. Checkboxes: Financiamento e Destaque */}
                 <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -772,7 +797,7 @@ export function PropertyForm({
                   onCustomTagInputChange={setCustomTagInput}
                 />
 
-                {/* 7. Galeria de Imagens com Drag & Drop */}
+                {/* 7. Galeria de Imagens com Drag & Drop e Marca d'Água */}
                 <PropertyMediaUploader
                   imageUrls={imageUrls}
                   onRemoveImage={(idx) =>
@@ -784,6 +809,12 @@ export function PropertyForm({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onImageUpload={handleImageUpload}
+                  applyWatermark={applyWatermark}
+                  setApplyWatermark={setApplyWatermark}
+                  watermarkCompany={watermarkCompany}
+                  setWatermarkCompany={setWatermarkCompany}
+                  watermarkPosition={watermarkPosition}
+                  setWatermarkPosition={setWatermarkPosition}
                 />
               </div>
             </div>

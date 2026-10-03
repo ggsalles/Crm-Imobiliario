@@ -20,7 +20,7 @@ import {
   Plus 
 } from "lucide-react";
 import { Property } from "@/lib/db";
-import { cn, formatCurrencyBRL } from "@/lib/utils";
+import { cn, formatCurrencyBRL, formatCurrencyInput } from "@/lib/utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { POPULAR_PROPERTY_TAGS } from "@/lib/property-tags";
 
@@ -371,20 +371,14 @@ export function PropertyFilterBar({
                       type="text"
                       placeholder="Valor mínimo (R$)"
                       value={displayMinPrice}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, "");
-                        setDisplayMinPrice(raw ? formatCurrencyBRL(raw) : "");
-                      }}
+                      onChange={(e) => setDisplayMinPrice(formatCurrencyInput(e.target.value))}
                       className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                     />
                     <input
                       type="text"
                       placeholder="Valor máximo (R$)"
                       value={displayMaxPrice}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, "");
-                        setDisplayMaxPrice(raw ? formatCurrencyBRL(raw) : "");
-                      }}
+                      onChange={(e) => setDisplayMaxPrice(formatCurrencyInput(e.target.value))}
                       className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                     />
                   </div>
