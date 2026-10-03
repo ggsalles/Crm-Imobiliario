@@ -94,12 +94,21 @@ export function ContactInterestModal({
                   className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold font-sans"
                 >
                   <option value="todos">Todos os Tipos</option>
-                  <option value="casa">Casa</option>
                   <option value="apartamento">Apartamento</option>
-                  <option value="terreno">Terreno</option>
-                  <option value="comercial">Comercial</option>
+                  <option value="casa">Casa</option>
+                  <option value="condomínio">Condomínio</option>
                   <option value="sobrado">Sobrado</option>
                   <option value="cobertura">Cobertura</option>
+                  <option value="studio">Studio / Kitnet</option>
+                  <option value="sala">Sala Comercial</option>
+                  <option value="comercial">Comercial</option>
+                  <option value="galpão">Galpão / Depósito</option>
+                  <option value="prédio">Prédio Inteiro</option>
+                  <option value="terreno">Terreno / Lote</option>
+                  <option value="chácara">Chácara</option>
+                  <option value="sítio">Sítio</option>
+                  <option value="fazenda">Fazenda</option>
+                  <option value="outros">Outros</option>
                 </select>
               </div>
 

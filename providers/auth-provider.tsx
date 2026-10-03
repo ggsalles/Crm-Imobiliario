@@ -628,22 +628,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (chosenTenantId) {
               apiProfile.tenantId = chosenTenantId;
             } else {
-              // Se o usuário não for platform admin e tiver tenants associados específicos, garanta que seu tenant seja um dos seus associados
-              if (!isPlatformAdmin(user.email) && apiProfile.tenantIds && apiProfile.tenantIds.length > 0) {
-                if (!apiProfile.tenantId || !apiProfile.tenantIds.includes(apiProfile.tenantId) || apiProfile.tenantId === DEFAULT_TENANT_ID) {
-                  const nonDefault = apiProfile.tenantIds.filter((id: string) => id !== DEFAULT_TENANT_ID);
-                  if (nonDefault.length > 0) {
-                    apiProfile.tenantId = nonDefault[0];
-                  }
+              // Garantir que se o usuário já estava usando um tenant nesta sessão, mantenha-o com prioridade
+              const storedActiveTenant = typeof window !== 'undefined' ? sessionStorage.getItem(`active-tenant-id:${user.id}`) : null;
+              if (storedActiveTenant && (isPlatformAdmin(user.email) || !apiProfile.tenantIds?.length || apiProfile.tenantIds.includes(storedActiveTenant))) {
+                console.log(`AuthProvider: Mantendo tenantId ativo da sessão: ${storedActiveTenant}`);
+                apiProfile.tenantId = storedActiveTenant;
+              } else if (!isPlatformAdmin(user.email) && apiProfile.tenantIds && apiProfile.tenantIds.length > 0) {
+                // Se o tenant atual não estiver na lista de permitidos do usuário
+                if (!apiProfile.tenantId || !apiProfile.tenantIds.includes(apiProfile.tenantId)) {
+                  apiProfile.tenantId = apiProfile.tenantIds[0];
                 }
-              }
-
-              // Garantir que se tivermos um tenant ID mais recente que o usuário ativamente trocou (e salvou no cache de sessão), use-o
-              const localCachedProfile = safeGetItem(`local-profile:${user.id}`, 'sessionStorage');
-              const parsed = safeJsonParse<UserProfile>(localCachedProfile);
-              if (parsed && parsed.id === user.id && parsed.tenantId && apiProfile.tenantIds?.includes(parsed.tenantId)) {
-                console.log(`AuthProvider: PRIORIZANDO tenantId ${parsed.tenantId} do cache de sessão em vez de ${apiProfile.tenantId}`);
-                apiProfile.tenantId = parsed.tenantId;
               }
             }
 

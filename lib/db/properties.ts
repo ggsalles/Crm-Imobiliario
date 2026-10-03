@@ -192,6 +192,7 @@ export function sanitizePropertyData(data: any, userId: string) {
     iptu: data.iptu !== undefined && data.iptu !== null ? Number(data.iptu) : null,
     condo_fee: data.condoFee !== undefined && data.condoFee !== null ? Number(data.condoFee) : null,
     building_name: data.buildingName ? String(data.buildingName).substring(0, 500) : null,
+    reference_code: (data.referenceCode || data.reference_code) ? String(data.referenceCode || data.reference_code).trim().toUpperCase().substring(0, 50) : null,
     notes: data.notes ? String(data.notes).substring(0, 5000) : null,
     description: data.description ? String(data.description).substring(0, 5000) : null,
     tags: Array.isArray(data.tags) ? data.tags.map((t: any) => String(t).trim()).filter(Boolean) : [],

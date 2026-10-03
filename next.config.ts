@@ -7,8 +7,7 @@ const nextConfig: NextConfig = {
       'lucide-react',
       'date-fns',
       'recharts',
-      'motion',
-      '@supabase/supabase-js'
+      'motion'
     ],
   },
   eslint: {

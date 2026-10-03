@@ -78,6 +78,36 @@ export function PropertyForm({
   const [isDragging, setIsDragging] = useState(false);
   const [valuationResult, setValuationResult] = useState<ValuationResult | null>(null);
 
+  // Código de Referência e Tipo de Imóvel
+  const [referenceCode, setReferenceCode] = useState("");
+  const [selectedType, setSelectedType] = useState("apartamento");
+  const [isGeneratingRef, setIsGeneratingRef] = useState(false);
+
+  // Busca automática do próximo código sequencial para o tipo selecionado
+  const fetchNextRef = useCallback(async (typeToUse: string) => {
+    setIsGeneratingRef(true);
+    try {
+      const res = await fetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.nextCode) {
+          setReferenceCode(data.nextCode);
+        }
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar próxima referência:", err);
+    } finally {
+      setIsGeneratingRef(false);
+    }
+  }, []);
+
+  const handleTypeChange = (newType: string) => {
+    setSelectedType(newType);
+    if (!editingProperty) {
+      fetchNextRef(newType);
+    }
+  };
+
   // Subscribe to companies
   useEffect(() => {
     const unsub = subscribeToCompanies((data) => {
@@ -92,6 +122,8 @@ export function PropertyForm({
       setTitle(editingProperty.title || "");
       setBuildingName(editingProperty.buildingName || "");
       setCompanyId(editingProperty.companyId || "");
+      setSelectedType(editingProperty.type || "apartamento");
+      setReferenceCode(editingProperty.referenceCode || (editingProperty as any).reference_code || "");
       setDisplayPrice(formatCurrencyBRL(editingProperty.price || 0));
       setDisplayIptu(editingProperty.iptu ? formatCurrencyBRL(editingProperty.iptu) : "");
       setDisplayCondoFee(editingProperty.condoFee ? formatCurrencyBRL(editingProperty.condoFee) : "");
@@ -110,6 +142,8 @@ export function PropertyForm({
       setTitle("");
       setBuildingName("");
       setCompanyId("");
+      setSelectedType("apartamento");
+      fetchNextRef("apartamento");
       setDisplayPrice("");
       setDisplayIptu("");
       setDisplayCondoFee("");
@@ -122,7 +156,7 @@ export function PropertyForm({
     }
     setCustomTagInput("");
     setValuationResult(null);
-  }, [editingProperty]);
+  }, [editingProperty, fetchNextRef]);
 
   // Consulta automática de CEP
   const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -389,7 +423,8 @@ export function PropertyForm({
         title: String(formData.get("title") || "").substring(0, 200),
         buildingName: String(formData.get("buildingName") || "").trim().substring(0, 200),
         companyId: companyId || String(formData.get("companyId") || "") || undefined,
-        type: (formData.get("type") as any) || "apartamento",
+        referenceCode: (String(formData.get("referenceCode") || referenceCode || "")).trim().toUpperCase() || undefined,
+        type: (selectedType || formData.get("type") || "apartamento") as any,
         status: (formData.get("status") as any) || "disponível",
         price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
         iptu: Number(parseCurrencyBRLToNumber(String(formData.get("iptu") || "0"))),
@@ -534,6 +569,12 @@ export function PropertyForm({
                   companyId={companyId}
                   onCompanyIdChange={setCompanyId}
                   companies={companies}
+                  referenceCode={referenceCode}
+                  onReferenceCodeChange={setReferenceCode}
+                  selectedType={selectedType}
+                  onTypeChange={handleTypeChange}
+                  isGeneratingRef={isGeneratingRef}
+                  onAutoGenerateRef={() => fetchNextRef(selectedType)}
                   displayPrice={displayPrice}
                   onDisplayPriceChange={setDisplayPrice}
                   displayCondoFee={displayCondoFee}
@@ -684,17 +725,42 @@ export function PropertyForm({
                   </div>
                 </div>
 
-                {/* 5. Descritivo Comercial */}
+                {/* 5. Descritivo Comercial (Público) */}
                 <div className="md:col-span-2 space-y-3">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-                    Descritivo Comercial
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+                      Descritivo Comercial (Público) *
+                    </label>
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      Visível na Vitrine Pública e para Clientes
+                    </span>
+                  </div>
                   <textarea
                     name="description"
                     required
                     defaultValue={editingProperty?.description}
                     rows={4}
-                    className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none outline-none text-foreground"
+                    placeholder="Descreva os pontos fortes do imóvel, vista, acabamento, etc."
+                    className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none outline-none text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                {/* 5.1 Descrição Interna (Exclusiva da Equipe / Privada) */}
+                <div className="md:col-span-2 space-y-3 p-5 bg-amber-500/5 border border-amber-500/25 rounded-3xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest pl-1 flex items-center gap-1.5">
+                      <span>🔒</span> Descrição Interna (Uso Restrito da Equipe)
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-500/90 bg-background/90 px-2.5 py-0.5 rounded-lg border border-amber-500/30 w-fit">
+                      Privado • Não aparece na Vitrine Pública
+                    </span>
+                  </div>
+                  <textarea
+                    name="notes"
+                    defaultValue={editingProperty?.notes || editingProperty?.internalNotes || ""}
+                    rows={3}
+                    placeholder="Anotações confidenciais da equipe, comissão combinada com o proprietário, contato direto, código da chave na portaria, restrições de horários de visitas, etc."
+                    className="w-full px-5 py-3.5 bg-background/90 border border-amber-500/30 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all resize-none outline-none text-foreground placeholder:text-muted-foreground/60"
                   />
                 </div>
 

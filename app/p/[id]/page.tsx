@@ -33,6 +33,8 @@ import { apiClient } from '@/lib/api-client';
 
 interface Property {
   id: string;
+  referenceCode?: string;
+  reference_code?: string;
   title: string;
   type: string;
   status: string;
@@ -367,7 +369,9 @@ export default function PublicPropertyCapturePage() {
               {/* Title & Price Bottom Overlay */}
               <div className="absolute bottom-6 left-6 right-6 text-white text-left">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-black tracking-widest text-blue-400 leading-none mb-1">CÓD: {property.id.slice(0, 8).toUpperCase()}</span>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 font-mono leading-none mb-1">
+                    CÓD: #{property.referenceCode || property.reference_code || property.id.slice(0, 8).toUpperCase()}
+                  </span>
                   <h2 className="text-xl md:text-3xl font-black tracking-tight drop-shadow-sm leading-tight inline-flex items-center gap-1.5">{property.title}</h2>
                   {property.buildingName && (
                     <p className="text-xs md:text-sm font-semibold text-slate-300 mt-0.5 flex items-center gap-1.5">

@@ -127,8 +127,10 @@ export default function PropertiesPage() {
       ? `${window.location.origin}/p/${property.id}`
       : `https://sales-score-crm.com/p/${property.id}`;
 
+    const refCode = property.referenceCode || (property as any).reference_code;
+
     return `✨ *OPORTUNIDADE IMOBILIÁRIA* ✨
-🏡 *${property.title}*
+${refCode ? `🏷️ *Código de Referência:* #${refCode}\n` : ''}🏡 *${property.title}*
 ${property.buildingName ? `🏢 *Edifício/Condomínio:* ${property.buildingName}\n` : ''}
 📍 *Localização:* ${property.location}
 💰 *Valor:* ${priceFormatted}
@@ -245,6 +247,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       if (onlyFeaturedFilter && !p.isFeatured) return false;
 
       if (query) {
+        const matchesRef = ((p.referenceCode || (p as any).reference_code || "").toLowerCase().includes(query));
         const matchesTitle = (p.title || "").toLowerCase().includes(query);
         const matchesBuilding = (p.buildingName || "").toLowerCase().includes(query);
         const matchesNeighborhood = (p.neighborhood || "").toLowerCase().includes(query);
@@ -254,7 +257,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         const matchesId = (p.id || "").toLowerCase().includes(query);
         const matchesTags = (p.tags || []).some(t => t.toLowerCase().includes(query));
 
-        if (!matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId && !matchesTags) {
+        if (!matchesRef && !matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId && !matchesTags) {
           return false;
         }
       }
@@ -277,7 +280,11 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         }
       }
 
-      if (filterType !== "all" && p.type !== filterType) return false;
+      if (filterType !== "all") {
+        const normPType = (p.type || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normFilter = filterType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normPType !== normFilter) return false;
+      }
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
 
       if (selectedNeighborhood !== "all") {

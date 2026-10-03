@@ -8,6 +8,7 @@ import { DatabaseStatusBanner } from "@/components/DatabaseStatusBanner";
 import { BillingAlertBanner } from "@/components/BillingAlertBanner";
 import { NewLeadSoundNotifier } from "@/components/NewLeadSoundNotifier";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { ModuleAccessTracker } from "@/components/audit/ModuleAccessTracker";
 import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -29,6 +30,7 @@ export default function RootLayout({
           <AuthProvider>
             <Suspense fallback={null}>
               <NavigationProgress />
+              <ModuleAccessTracker />
             </Suspense>
             <DatabaseStatusBanner />
             <BillingAlertBanner />

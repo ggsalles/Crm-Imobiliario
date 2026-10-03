@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
             condo_fee: prop.condoFee ? Number(prop.condoFee) : null,
             building_name: prop.buildingName || null,
             description: prop.description || null,
+            reference_code: prop.referenceCode ? String(prop.referenceCode).trim().toUpperCase() : null,
             notes: prop.ownerName ? `Proprietário: ${prop.ownerName} (${prop.ownerPhone || 'Sem telefone'})` : (prop.referenceCode ? `Ref: ${prop.referenceCode}` : null),
             tags: Array.isArray(prop.tags) ? prop.tags : [],
             image_url: Array.isArray(prop.imageUrls) && prop.imageUrls.length > 0 ? JSON.stringify(prop.imageUrls) : null,
@@ -82,10 +83,11 @@ export async function POST(req: NextRequest) {
             .select();
 
           // Fallback if certain optional columns are not yet in the table schema
-          if (insertError && (insertError.message?.includes('tags') || insertError.message?.includes('suites') || insertError.code === '42703')) {
+          if (insertError && (insertError.message?.includes('tags') || insertError.message?.includes('suites') || insertError.message?.includes('reference_code') || insertError.code === '42703')) {
             const fallbackData = { ...propertyData };
             delete fallbackData.tags;
             delete fallbackData.suites;
+            delete fallbackData.reference_code;
             const retry = await supabase.from('properties').insert([fallbackData]).select();
             inserted = retry.data;
             insertError = retry.error;

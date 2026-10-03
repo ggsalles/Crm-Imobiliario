@@ -151,9 +151,10 @@ export function PropertyShareModal({
       <body>
         <div class="header">
           <div class="logo">SalesScore CRM</div>
-          <span class="badge">Ficha Oficial do Imóvel</span>
+          <span class="badge">${property.referenceCode || (property as any).reference_code ? `Ref: ${property.referenceCode || (property as any).reference_code} • ` : ''}${property.type}</span>
         </div>
         <div class="title-area">
+          ${property.referenceCode || (property as any).reference_code ? `<div style="font-size: 12px; font-weight: 800; color: #2563eb; font-family: monospace; text-transform: uppercase; margin-bottom: 2px;">CÓDIGO DE REFERÊNCIA: ${property.referenceCode || (property as any).reference_code}</div>` : ''}
           <h1 class="title">${property.title}</h1>
           <p class="location">📍 ${property.location || "Localização sob consulta"}</p>
         </div>

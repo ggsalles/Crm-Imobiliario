@@ -18,6 +18,8 @@ import {
 
 export interface VitrineProperty {
   id: string;
+  referenceCode?: string;
+  reference_code?: string;
   title: string;
   type: string;
   status: string;
@@ -97,6 +99,11 @@ export function ShowcasePropertyCard({
         {/* Top Badges */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
+            {(property.referenceCode || property.reference_code) && (
+              <span className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-amber-300 text-[10px] font-mono font-black uppercase tracking-wider shadow-xs border border-amber-500/40">
+                #{property.referenceCode || property.reference_code}
+              </span>
+            )}
             <span className="px-2.5 py-1 rounded-lg bg-slate-950/70 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider shadow-xs border border-white/10">
               {property.type || 'Imóvel'}
             </span>

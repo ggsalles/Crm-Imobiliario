@@ -84,10 +84,12 @@ export function AuditFilterToolbar({
             className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground font-medium"
           >
             <option value="all">Todas as Categorias</option>
+            <option value="navigation">Navegação & Módulos</option>
+            <option value="modification">Criações & Edições</option>
             <option value="export">Exportações (CSV)</option>
             <option value="deletion">Exclusões</option>
             <option value="sensitive_view">Dados Sensíveis</option>
-            <option value="auth">Acessos & Logins</option>
+            <option value="auth">Logins & Autenticação</option>
           </select>
         </div>
 

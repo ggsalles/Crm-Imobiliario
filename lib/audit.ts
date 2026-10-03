@@ -32,7 +32,10 @@ export type AuditAction =
   | 'UPDATE_ACTIVITY'
   | 'DELETE_ACTIVITY'
   | 'UPDATE_GOALS'
-  | 'UPDATE_SETTINGS';
+  | 'UPDATE_SETTINGS'
+  | 'MODULE_ACCESS'
+  | 'PAGE_VIEW'
+  | 'VITRINE_VIEW';
 
 export type AuditSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -41,7 +44,7 @@ export interface AuditEventPayload {
   title: string;
   content: string;
   severity?: AuditSeverity;
-  category?: 'export' | 'deletion' | 'sensitive_view' | 'auth' | 'modification' | 'system';
+  category?: 'export' | 'deletion' | 'sensitive_view' | 'auth' | 'modification' | 'system' | 'navigation';
   relatedId?: string;
   entityType?: 'contact' | 'property' | 'deal' | 'user' | 'tenant' | 'company' | 'activity' | 'auth' | 'system';
   metadata?: Record<string, any>;
@@ -183,6 +186,12 @@ export function getActionMeta(action: string): { label: string; severity: AuditS
       return { label: 'Atualização de Metas do Funil', severity: 'medium', color: 'text-purple-500', bg: 'bg-purple-500/10 border-purple-500/20' };
     case 'UPDATE_SETTINGS':
       return { label: 'Alteração de Configurações', severity: 'medium', color: 'text-indigo-500', bg: 'bg-indigo-500/10 border-indigo-500/20' };
+    case 'MODULE_ACCESS':
+      return { label: 'Navegação / Acesso a Módulo', severity: 'info', color: 'text-sky-500', bg: 'bg-sky-500/10 border-sky-500/20' };
+    case 'PAGE_VIEW':
+      return { label: 'Visualização de Tela', severity: 'info', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' };
+    case 'VITRINE_VIEW':
+      return { label: 'Acesso à Vitrine Pública', severity: 'info', color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' };
     default:
       return { label: action, severity: 'info', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' };
   }

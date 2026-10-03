@@ -1,3 +1,5 @@
+import { PropertyType } from '../db/types';
+
 /**
  * Parser especializado para exportações XML do Tokko Broker.
  * Suporta XML de Imóveis (<properties>) e XML de Contatos/Leads (<contacts>).
@@ -24,7 +26,7 @@ export interface ParsedTokkoProperty {
   externalId: string;
   referenceCode: string;
   title: string;
-  type: 'casa' | 'apartamento' | 'terreno' | 'comercial' | 'sítio' | 'chácara' | 'fazenda' | 'sobrado' | 'cobertura' | 'outros';
+  type: PropertyType;
   status: 'disponível' | 'reservado' | 'vendido' | 'alugado';
   operationType: 'venda' | 'locacao' | 'ambos';
   price: number;
@@ -112,23 +114,47 @@ function parseNumber(val: string): number {
 
 function normalizePropertyType(rawType: string): ParsedTokkoProperty['type'] {
   const lower = rawType.toLowerCase();
-  if (lower.includes('apartamento') || lower.includes('departamento') || lower.includes('flat') || lower.includes('ap')) {
+  if (lower.includes('condom') || lower.includes('condominio') || lower.includes('condomínio')) {
+    return 'condomínio';
+  }
+  if (lower.includes('studio') || lower.includes('kitnet') || lower.includes('kit') || lower.includes('loft') || lower.includes('flat')) {
+    return 'studio';
+  }
+  if (lower.includes('apartamento') || lower.includes('departamento') || lower.includes('ap')) {
     return 'apartamento';
   }
-  if (lower.includes('casa') || lower.includes('sobrado') || lower.includes('residencia')) {
-    return lower.includes('sobrado') ? 'sobrado' : 'casa';
+  if (lower.includes('cobertura')) {
+    return 'cobertura';
+  }
+  if (lower.includes('sobrado')) {
+    return 'sobrado';
+  }
+  if (lower.includes('casa') || lower.includes('residencia')) {
+    return 'casa';
   }
   if (lower.includes('terreno') || lower.includes('lote')) {
     return 'terreno';
   }
-  if (lower.includes('comercial') || lower.includes('sala') || lower.includes('loja') || lower.includes('galpao') || lower.includes('galpão')) {
+  if (lower.includes('galpao') || lower.includes('galpão') || lower.includes('deposito') || lower.includes('depósito') || lower.includes('barracao') || lower.includes('barracão')) {
+    return 'galpão';
+  }
+  if (lower.includes('predio') || lower.includes('prédio') || lower.includes('edificio') || lower.includes('edifício')) {
+    return 'prédio';
+  }
+  if (lower.includes('sala') || lower.includes('consultorio') || lower.includes('consultório')) {
+    return 'sala';
+  }
+  if (lower.includes('comercial') || lower.includes('loja') || lower.includes('ponto')) {
     return 'comercial';
   }
-  if (lower.includes('sitio') || lower.includes('sítio') || lower.includes('chacara') || lower.includes('chácara') || lower.includes('fazenda')) {
+  if (lower.includes('sitio') || lower.includes('sítio')) {
+    return 'sítio';
+  }
+  if (lower.includes('chacara') || lower.includes('chácara')) {
     return 'chácara';
   }
-  if (lower.includes('cobertura')) {
-    return 'cobertura';
+  if (lower.includes('fazenda') || lower.includes('haras')) {
+    return 'fazenda';
   }
   return 'outros';
 }
@@ -297,7 +323,6 @@ export function parseTokkoXml(xmlContent: string): TokkoParseResult {
       // Tags
       const tagNodes = node.querySelectorAll('tags > tag > name');
       const tags: string[] = [];
-      if (refCode) tags.push(`Ref: ${refCode}`);
       if (operationType === 'venda') tags.push('Venda');
       else tags.push('Locação');
       
@@ -309,12 +334,48 @@ export function parseTokkoXml(xmlContent: string): TokkoParseResult {
       const title = getDirectChildText(node, 'publication_title') || 
                     `${normalizedType.toUpperCase()} em ${neighborhood || city} - Ref ${refCode}`;
 
+      // Intelligent Status detection from Tokko XML fields & tags
+      const rawStatus = (
+        getDirectChildText(node, 'status') ||
+        getDirectChildText(node, 'status_id') ||
+        getDirectChildText(node, 'publication_status') ||
+        node.querySelector('operations > operation > status')?.textContent?.trim() ||
+        ''
+      ).toLowerCase();
+
+      let normalizedStatus: ParsedTokkoProperty['status'] = 'disponível';
+      const isSold = getDirectChildText(node, 'is_sold') === 'true' || getDirectChildText(node, 'is_sold') === '1' || rawStatus.includes('sold') || rawStatus.includes('vendid') || rawStatus === '3';
+      const isReserved = getDirectChildText(node, 'is_reserved') === 'true' || getDirectChildText(node, 'is_reserved') === '1' || rawStatus.includes('reserv') || rawStatus.includes('negocia') || rawStatus === '2';
+      const isRented = getDirectChildText(node, 'is_rented') === 'true' || getDirectChildText(node, 'is_rented') === '1' || rawStatus.includes('rented') || rawStatus.includes('alugad') || rawStatus.includes('alquil') || rawStatus === '4';
+
+      if (isSold) {
+        normalizedStatus = 'vendido';
+      } else if (isReserved) {
+        normalizedStatus = 'reservado';
+      } else if (isRented) {
+        normalizedStatus = 'alugado';
+      } else {
+        for (const tag of tags) {
+          const lowerTag = tag.toLowerCase();
+          if (lowerTag.includes('reservad') || lowerTag.includes('em negociação') || lowerTag.includes('proposta aceita')) {
+            normalizedStatus = 'reservado';
+            break;
+          } else if (lowerTag.includes('vendid') || lowerTag.includes('vendida') || lowerTag.includes('escriturado')) {
+            normalizedStatus = 'vendido';
+            break;
+          } else if (lowerTag.includes('alugad') || lowerTag.includes('alugada') || lowerTag.includes('locado') || lowerTag.includes('contrato assinado')) {
+            normalizedStatus = 'alugado';
+            break;
+          }
+        }
+      }
+
       properties.push({
         externalId: getDirectChildText(node, 'id'),
         referenceCode: refCode,
         title,
         type: normalizedType,
-        status: 'disponível',
+        status: normalizedStatus,
         operationType,
         price,
         condoFee,

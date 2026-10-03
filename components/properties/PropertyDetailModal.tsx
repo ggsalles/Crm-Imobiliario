@@ -88,15 +88,18 @@ export function PropertyDetailModal({
   // Safely extract tags array
   const safeTags = useMemo(() => {
     if (!property) return [];
-    if (Array.isArray(property.tags)) return property.tags;
-    if (typeof property.tags === 'string') {
+    let list: string[] = [];
+    if (Array.isArray(property.tags)) list = property.tags;
+    else if (typeof property.tags === 'string') {
       try {
         const parsed = JSON.parse(property.tags);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) list = parsed;
       } catch {}
-      return property.tags.split(',').map(t => t.trim()).filter(Boolean);
+      if (list.length === 0) list = property.tags.split(',').map(t => t.trim()).filter(Boolean);
     }
-    return [];
+    return list.filter(
+      (tag) => !tag.toLowerCase().startsWith('ref:') && !tag.toLowerCase().startsWith('ref ') && !tag.toLowerCase().startsWith('cód:') && !tag.toLowerCase().startsWith('cod:')
+    );
   }, [property]);
 
   if (!isOpen || !property) return null;
@@ -199,6 +202,11 @@ export function PropertyDetailModal({
 
               {/* Status and Type Pills Overlay */}
               <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
+                {(property.referenceCode || (property as any).reference_code) && (
+                  <span className="px-2.5 py-1 bg-black/80 backdrop-blur-md text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider shadow-sm">
+                    Ref: #{property.referenceCode || (property as any).reference_code}
+                  </span>
+                )}
                 <span className={cn(
                   "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md border",
                   property.status === 'disponível' ? "bg-emerald-500/90 text-white border-emerald-400" :
@@ -394,14 +402,42 @@ export function PropertyDetailModal({
             </div>
           )}
 
-          {/* 5. Full Description */}
+          {/* 5. Full Description (Comercial / Pública) */}
           <div className="space-y-2">
             <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-              Descrição Detalhada do Imóvel
+              Descrição Comercial do Imóvel
             </h3>
             <div className="p-4 bg-muted/20 border border-border rounded-2xl text-xs sm:text-sm text-foreground/90 whitespace-pre-line leading-relaxed font-normal">
-              {property.description || "Nenhuma descrição detalhada cadastrada para este imóvel."}
+              {property.description || "Nenhuma descrição comercial cadastrada para este imóvel."}
             </div>
+          </div>
+
+          {/* 5.1 Descrição Interna / Anotações Exclusivas da Equipe */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                <span>🔒</span> Descrição Interna (Exclusiva da Equipe)
+              </h3>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500/90 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                Confidencial • Não visível na Vitrine
+              </span>
+            </div>
+            {(property.notes || property.internalNotes) ? (
+              <div className="p-4 bg-amber-500/5 border border-amber-500/30 rounded-2xl text-xs sm:text-sm text-foreground whitespace-pre-line leading-relaxed font-normal">
+                {property.notes || property.internalNotes}
+              </div>
+            ) : (
+              <div className="p-3.5 bg-muted/10 border border-dashed border-border rounded-2xl text-xs text-muted-foreground italic flex items-center justify-between">
+                <span>Nenhuma anotação interna registrada para este imóvel.</span>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="text-primary hover:underline font-bold text-xs not-italic cursor-pointer"
+                >
+                  + Adicionar
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 6. Address & Location Details */}

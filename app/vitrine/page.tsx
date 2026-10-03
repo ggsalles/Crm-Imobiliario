@@ -50,9 +50,19 @@ const PROPERTY_TYPES = [
   { label: 'Todos os Tipos', value: 'all' },
   { label: 'Apartamento', value: 'apartamento' },
   { label: 'Casa', value: 'casa' },
+  { label: 'Condomínio', value: 'condomínio' },
+  { label: 'Sobrado', value: 'sobrado' },
   { label: 'Cobertura', value: 'cobertura' },
+  { label: 'Studio / Kitnet', value: 'studio' },
+  { label: 'Sala Comercial', value: 'sala' },
   { label: 'Comercial', value: 'comercial' },
-  { label: 'Terreno', value: 'terreno' },
+  { label: 'Galpão / Depósito', value: 'galpão' },
+  { label: 'Prédio Inteiro', value: 'prédio' },
+  { label: 'Terreno / Lote', value: 'terreno' },
+  { label: 'Chácara', value: 'chácara' },
+  { label: 'Sítio', value: 'sítio' },
+  { label: 'Fazenda', value: 'fazenda' },
+  { label: 'Outros', value: 'outros' },
 ];
 
 function VitrineContent() {
@@ -260,6 +270,7 @@ function VitrineContent() {
       // Search term
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
+        const matchRef = (p.referenceCode || (p as any).reference_code || '').toLowerCase().includes(q);
         const matchTitle = p.title?.toLowerCase().includes(q);
         const matchLoc = p.location?.toLowerCase().includes(q);
         const matchNeigh = p.neighborhood?.toLowerCase().includes(q);
@@ -267,7 +278,7 @@ function VitrineContent() {
         const matchBuilding = p.buildingName?.toLowerCase().includes(q);
         const matchDesc = p.description?.toLowerCase().includes(q);
         const matchTags = (p.tags || []).some(t => t.toLowerCase().includes(q));
-        if (!matchTitle && !matchLoc && !matchNeigh && !matchCity && !matchBuilding && !matchDesc && !matchTags) {
+        if (!matchRef && !matchTitle && !matchLoc && !matchNeigh && !matchCity && !matchBuilding && !matchDesc && !matchTags) {
           return false;
         }
       }
@@ -285,8 +296,9 @@ function VitrineContent() {
 
       // Type
       if (selectedType !== 'all') {
-        const pType = (p.type || '').toLowerCase();
-        if (!pType.includes(selectedType)) return false;
+        const normPType = (p.type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normSelected = selectedType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (!normPType.includes(normSelected) && normPType !== normSelected) return false;
       }
 
       // Status Comercial: A vitrine pública exibe ESTRITAMENTE imóveis disponíveis.

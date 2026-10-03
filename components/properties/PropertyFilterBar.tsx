@@ -11,8 +11,12 @@ import {
   Check, 
   Home, 
   Building, 
+  Building2,
   Briefcase, 
   TreePine, 
+  ShieldCheck,
+  Layers,
+  Warehouse,
   Plus 
 } from "lucide-react";
 import { Property } from "@/lib/db";
@@ -567,20 +571,29 @@ export function PropertyFilterBar({
       <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pb-1">
         {[
           { id: "all", label: "Todos", icon: Home },
-          { id: "casa", label: "Casas", icon: Home },
           { id: "apartamento", label: "Apartamentos", icon: Building },
+          { id: "casa", label: "Casas", icon: Home },
+          { id: "condomínio", label: "Condomínio", icon: ShieldCheck },
           { id: "sobrado", label: "Sobrados", icon: Home },
           { id: "cobertura", label: "Coberturas", icon: Building },
+          { id: "studio", label: "Studios / Kitnets", icon: Layers },
+          { id: "sala", label: "Salas Comerciais", icon: Briefcase },
           { id: "comercial", label: "Comercial", icon: Briefcase },
+          { id: "galpão", label: "Galpões", icon: Warehouse },
+          { id: "prédio", label: "Prédios", icon: Building2 },
           { id: "terreno", label: "Terrenos", icon: TreePine },
-          { id: "sítio", label: "Sítios", icon: TreePine },
           { id: "chácara", label: "Chácaras", icon: TreePine },
+          { id: "sítio", label: "Sítios", icon: TreePine },
           { id: "fazenda", label: "Fazendas", icon: TreePine },
           { id: "outros", label: "Outros", icon: Plus },
         ].map(type => {
           const count = type.id === "all" 
             ? properties.length 
-            : properties.filter(p => p.type === type.id).length;
+            : properties.filter(p => {
+                const normP = (p.type || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const normType = type.id.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return normP === normType;
+              }).length;
           const isActive = filterType === type.id;
           const Icon = type.icon;
 

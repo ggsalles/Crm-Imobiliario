@@ -148,6 +148,11 @@ export function PropertyCard({
         </button>
 
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none">
+          {(property.referenceCode || property.reference_code) && (
+            <span className="px-2 py-0.5 bg-black/80 backdrop-blur-md text-amber-300 border border-amber-500/40 rounded-lg text-[9px] font-mono font-black uppercase tracking-wider shadow-sm">
+              #{property.referenceCode || property.reference_code}
+            </span>
+          )}
           {property.isFeatured && (
             <span className="px-2 py-0.5 bg-amber-500 text-white border border-amber-300/40 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-500/30">
               <Sparkles className="w-2.5 h-2.5 fill-white" /> Destaque
@@ -211,23 +216,29 @@ export function PropertyCard({
         </div>
 
         {/* Tags / Diferenciais do Imóvel */}
-        {property.tags && property.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2.5">
-            {property.tags.slice(0, 3).map((tag, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 rounded-md text-[9px] font-semibold bg-primary/10 text-primary border border-primary/15 truncate max-w-[120px]"
-              >
-                {tag}
-              </span>
-            ))}
-            {property.tags.length > 3 && (
-              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-muted text-muted-foreground">
-                +{property.tags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
+        {(() => {
+          const visibleTags = (property.tags || []).filter(
+            (tag) => !tag.toLowerCase().startsWith('ref:') && !tag.toLowerCase().startsWith('ref ') && !tag.toLowerCase().startsWith('cód:') && !tag.toLowerCase().startsWith('cod:')
+          );
+          if (visibleTags.length === 0) return null;
+          return (
+            <div className="flex flex-wrap gap-1 mb-2.5">
+              {visibleTags.slice(0, 3).map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-semibold bg-primary/10 text-primary border border-primary/15 truncate max-w-[120px]"
+                >
+                  {tag}
+                </span>
+              ))}
+              {visibleTags.length > 3 && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-muted text-muted-foreground">
+                  +{visibleTags.length - 3}
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="mt-auto pt-2.5 border-t border-border flex flex-col gap-2">
           <div className="flex items-baseline justify-between">

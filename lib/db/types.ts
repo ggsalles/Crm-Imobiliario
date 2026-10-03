@@ -10,10 +10,30 @@ export interface Company {
   updatedAt?: string;
 }
 
+export type PropertyType = 
+  | 'casa' 
+  | 'apartamento' 
+  | 'condomínio'
+  | 'sobrado' 
+  | 'cobertura' 
+  | 'studio'
+  | 'sala'
+  | 'comercial' 
+  | 'galpão'
+  | 'prédio'
+  | 'terreno' 
+  | 'sítio' 
+  | 'chácara' 
+  | 'fazenda' 
+  | 'outros'
+  | (string & {});
+
 export interface Property {
   id: string;
+  referenceCode?: string;
+  reference_code?: string;
   title: string;
-  type: 'casa' | 'apartamento' | 'terreno' | 'comercial' | 'sítio' | 'chácara' | 'fazenda' | 'sobrado' | 'cobertura' | 'outros';
+  type: PropertyType;
   status: 'disponível' | 'reservado' | 'vendido' | 'alugado';
   price: number;
   location: string;
@@ -35,6 +55,7 @@ export interface Property {
   buildingName?: string;
   companyId?: string;
   notes?: string;
+  internalNotes?: string;
   description?: string;
   tags?: string[];
   imageUrls?: string[];

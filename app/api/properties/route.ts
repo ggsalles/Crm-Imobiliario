@@ -78,6 +78,8 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         id: property.id,
+        referenceCode: property.reference_code || (property as any).referenceCode || null,
+        reference_code: property.reference_code || null,
         title: String(property.title || "Sem título"),
         type: property.type,
         status: property.status,
@@ -101,7 +103,8 @@ export async function GET(req: NextRequest) {
         condoFee: property.condo_fee !== null && property.condo_fee !== undefined ? Number(property.condo_fee) : null,
         buildingName: property.building_name ? String(property.building_name) : null,
         companyId: property.company_id ? String(property.company_id) : null,
-        notes: property.notes ? String(property.notes) : null,
+        notes: isPublic ? null : (property.notes ? String(property.notes) : null),
+        internalNotes: isPublic ? null : (property.notes ? String(property.notes) : null),
         description: property.description ? String(property.description) : null,
         tags: singleTags,
         imageUrls: urls,
@@ -284,6 +287,8 @@ export async function GET(req: NextRequest) {
 
       return {
         id: item.id,
+        referenceCode: item.reference_code || item.referenceCode || null,
+        reference_code: item.reference_code || null,
         title: String(item.title || "Sem título"),
         type: item.type,
         status: item.status,
@@ -307,7 +312,8 @@ export async function GET(req: NextRequest) {
         condoFee: item.condo_fee !== null && item.condo_fee !== undefined ? Number(item.condo_fee) : null,
         buildingName: item.building_name ? String(item.building_name) : null,
         companyId: item.company_id ? String(item.company_id) : null,
-        notes: item.notes ? String(item.notes) : null,
+        notes: isPublic ? null : (item.notes ? String(item.notes) : null),
+        internalNotes: isPublic ? null : (item.notes ? String(item.notes) : null),
         description: item.description ? String(item.description) : null,
         tags: Array.isArray(item.tags)
           ? item.tags
