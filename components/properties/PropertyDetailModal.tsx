@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import { 
   X, 
@@ -54,6 +54,12 @@ export function PropertyDetailModal({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
 
+  // Sempre reseta para a primeira foto (índice 0) ao abrir a ficha técnica ou trocar de imóvel
+  useEffect(() => {
+    setActiveImageIndex(0);
+    setImgError(false);
+  }, [property?.id, isOpen]);
+
   // Safely extract and normalize images array from any input format
   const images = useMemo(() => {
     if (!property) return [FALLBACK_IMAGE];
@@ -103,6 +109,8 @@ export function PropertyDetailModal({
   }, [property]);
 
   if (!isOpen || !property) return null;
+
+  const currentImageIdx = Math.min(activeImageIndex, Math.max(0, images.length - 1));
 
   const nextImage = () => {
     setImgError(false);
@@ -181,7 +189,7 @@ export function PropertyDetailModal({
             <div className="relative h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-black/40 border border-border group">
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={activeImageIndex}
+                  key={currentImageIdx}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -189,7 +197,7 @@ export function PropertyDetailModal({
                   className="absolute inset-0"
                 >
                   <Image
-                    src={imgError ? FALLBACK_IMAGE : (images[activeImageIndex] || FALLBACK_IMAGE)}
+                    src={imgError ? FALLBACK_IMAGE : (images[currentImageIdx] || FALLBACK_IMAGE)}
                     alt={property.title || "Imóvel"}
                     fill
                     className="object-cover"
@@ -254,7 +262,7 @@ export function PropertyDetailModal({
 
                   {/* Photo Counter */}
                   <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[11px] font-bold">
-                    {activeImageIndex + 1} / {images.length}
+                    {currentImageIdx + 1} / {images.length}
                   </div>
                 </>
               )}
@@ -273,7 +281,7 @@ export function PropertyDetailModal({
                     }}
                     className={cn(
                       "w-16 h-12 sm:w-20 sm:h-14 rounded-xl overflow-hidden relative shrink-0 border-2 transition-all cursor-pointer",
-                      idx === activeImageIndex 
+                      idx === currentImageIdx 
                         ? "border-primary ring-2 ring-primary/20 scale-105" 
                         : "border-border opacity-60 hover:opacity-100"
                     )}
