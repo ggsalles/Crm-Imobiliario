@@ -127,7 +127,8 @@ function ContactsContent() {
   useEffect(() => {
     if (!user || !profile) return;
 
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    // Todos os membros da imobiliária acessam a carteira unificada de contatos do tenant
+    const ownerId = undefined;
     const currentTenantId = profile?.tenantId || (profile as any)?.tenant_id;
     const existing = getCachedContacts(ownerId);
     if (!existing || existing.length === 0) {

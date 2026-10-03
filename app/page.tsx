@@ -154,8 +154,8 @@ function DashboardContent() {
       
       const results = await Promise.allSettled([
         getDeals(ownerId),
-        getContacts(ownerId),
-        getProperties(ownerId),
+        getContacts(),
+        getProperties(),
         getGoals(ownerId)
       ]);
       
@@ -339,8 +339,8 @@ function DashboardContent() {
       clearTimeout(safetyTimer);
     }, ownerId);
     
-    const unsubContacts = subscribeToContacts(setContacts, ownerId);
-    const unsubProperties = subscribeToProperties(setProperties, ownerId);
+    const unsubContacts = subscribeToContacts(setContacts);
+    const unsubProperties = subscribeToProperties(setProperties);
     const unsubGoals = subscribeToGoals(setGoals, ownerId);
     const unsubActivities = subscribeToActivities(setActivities, ownerId);
 

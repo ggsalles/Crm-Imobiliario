@@ -47,7 +47,7 @@ export default function CompaniesPage() {
 
   const fetchData = useCallback(async () => {
     if (!user || !profile) return;
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    const ownerId = undefined;
     const data = await getCompanies(ownerId, tenantId);
     setCompanies(data);
   }, [user, profile, tenantId]);
@@ -62,7 +62,7 @@ export default function CompaniesPage() {
     if (!user || !profile) return;
 
     setLoading(true);
-    const ownerId = profile.role === 'Admin' ? undefined : user.id;
+    const ownerId = undefined;
 
     const unsub = subscribeToCompanies((data) => {
       setCompanies(data);

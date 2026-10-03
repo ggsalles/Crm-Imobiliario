@@ -287,14 +287,14 @@ export function PropertyFilterBar({
                 {/* 3. Bedrooms */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-                    Quartos (Mínimo)
+                    Número de Quartos
                   </label>
                   <div className="grid grid-cols-5 gap-1">
                     {[
                       { id: "all", label: "Todos" },
-                      { id: "1", label: "1+" },
-                      { id: "2", label: "2+" },
-                      { id: "3", label: "3+" },
+                      { id: "1", label: "1" },
+                      { id: "2", label: "2" },
+                      { id: "3", label: "3" },
                       { id: "4+", label: "4+" },
                     ].map((item) => (
                       <button
@@ -310,6 +310,7 @@ export function PropertyFilterBar({
                             ? "bg-primary text-primary-foreground border-primary"
                             : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
                         )}
+                        title={item.id === "all" ? "Todos os quartos" : item.id === "4+" ? "4 ou mais quartos" : `${item.id} ${item.id === "1" ? "quarto" : "quartos"}`}
                       >
                         {item.label}
                       </button>
@@ -325,7 +326,7 @@ export function PropertyFilterBar({
                   <div className="grid grid-cols-3 gap-1">
                     {[
                       { id: "all", label: "Todas" },
-                      { id: "1", label: "1+" },
+                      { id: "1", label: "1" },
                       { id: "2+", label: "2+" },
                     ].map((item) => (
                       <button
@@ -341,6 +342,7 @@ export function PropertyFilterBar({
                             ? "bg-primary text-primary-foreground border-primary"
                             : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
                         )}
+                        title={item.id === "all" ? "Todas as vagas" : item.id === "2+" ? "2 ou mais vagas" : "1 vaga"}
                       >
                         {item.label}
                       </button>
@@ -535,13 +537,13 @@ export function PropertyFilterBar({
             )}
             {bedroomsFilter !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
-                <span>{bedroomsFilter === "4+" ? "4+ Quartos" : `${bedroomsFilter}+ Quartos`}</span>
+                <span>{bedroomsFilter === "4+" ? "4+ Quartos" : `${bedroomsFilter} ${bedroomsFilter === "1" ? "Quarto" : "Quartos"}`}</span>
                 <button type="button" onClick={() => setBedroomsFilter("all")} className="hover:opacity-70 cursor-pointer"><X className="w-2.5 h-2.5" /></button>
               </span>
             )}
             {parkingFilter !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
-                <span>{parkingFilter === "2+" ? "2+ Vagas" : `${parkingFilter}+ Vagas`}</span>
+                <span>{parkingFilter === "2+" ? "2+ Vagas" : `${parkingFilter} ${parkingFilter === "1" ? "Vaga" : "Vagas"}`}</span>
                 <button type="button" onClick={() => setParkingFilter("all")} className="hover:opacity-70 cursor-pointer"><X className="w-2.5 h-2.5" /></button>
               </span>
             )}

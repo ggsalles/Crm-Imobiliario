@@ -176,8 +176,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       setLoading(false);
     });
 
-    const contactOwnerId = profile.role === 'Admin' ? undefined : user.id;
-    getContacts(contactOwnerId).then(data => {
+    getContacts().then(data => {
       if (Array.isArray(data)) {
         setContacts(data);
       }
@@ -302,7 +301,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           if (pBeds < 4) return false;
         } else {
           const reqBeds = Number(bedroomsFilter);
-          if (pBeds < reqBeds) return false;
+          if (pBeds !== reqBeds) return false;
         }
       }
 
@@ -312,7 +311,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           if (pSpots < 2) return false;
         } else {
           const reqSpots = Number(parkingFilter);
-          if (pSpots < reqSpots) return false;
+          if (pSpots !== reqSpots) return false;
         }
       }
 
