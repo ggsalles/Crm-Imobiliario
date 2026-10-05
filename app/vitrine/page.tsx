@@ -46,23 +46,11 @@ interface BrokerInfo {
   tenantId?: string;
 }
 
+import { PROPERTY_TYPES_LIST, matchPropertyType } from '@/lib/property-types';
+
 const PROPERTY_TYPES = [
   { label: 'Todos os Tipos', value: 'all' },
-  { label: 'Apartamento', value: 'apartamento' },
-  { label: 'Casa', value: 'casa' },
-  { label: 'Condomínio', value: 'condomínio' },
-  { label: 'Sobrado', value: 'sobrado' },
-  { label: 'Cobertura', value: 'cobertura' },
-  { label: 'Studio / Kitnet', value: 'studio' },
-  { label: 'Sala Comercial', value: 'sala' },
-  { label: 'Comercial', value: 'comercial' },
-  { label: 'Galpão / Depósito', value: 'galpão' },
-  { label: 'Prédio Inteiro', value: 'prédio' },
-  { label: 'Terreno / Lote', value: 'terreno' },
-  { label: 'Chácara', value: 'chácara' },
-  { label: 'Sítio', value: 'sítio' },
-  { label: 'Fazenda', value: 'fazenda' },
-  { label: 'Outros', value: 'outros' },
+  ...PROPERTY_TYPES_LIST.map((t) => ({ label: t.label, value: t.id })),
 ];
 
 function VitrineContent() {
@@ -296,9 +284,7 @@ function VitrineContent() {
 
       // Type
       if (selectedType !== 'all') {
-        const normPType = (p.type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const normSelected = selectedType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (!normPType.includes(normSelected) && normPType !== normSelected) return false;
+        if (!matchPropertyType(p.type, selectedType)) return false;
       }
 
       // Status Comercial: A vitrine pública exibe ESTRITAMENTE imóveis disponíveis.

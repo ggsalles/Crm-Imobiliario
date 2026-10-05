@@ -2,6 +2,7 @@
 
 import { Building2, Hash } from "lucide-react";
 import { Property, Company } from "@/lib/db";
+import { PROPERTY_TYPES_LIST } from "@/lib/property-types";
 
 export interface PropertyBasicFieldsProps {
   editingProperty: Property | null;
@@ -105,22 +106,13 @@ export function PropertyBasicFields({
             name="type"
             value={selectedType}
             onChange={(e) => onTypeChange?.(e.target.value)}
-            className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-semibold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground cursor-pointer capitalize"
+            className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-semibold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground cursor-pointer"
           >
-            <option value="apartamento" className="bg-card text-foreground py-2">Apartamento</option>
-            <option value="casa" className="bg-card text-foreground py-2">Casa</option>
-            <option value="condomínio" className="bg-card text-foreground py-2">Casa em Condomínio</option>
-            <option value="cobertura" className="bg-card text-foreground py-2">Cobertura</option>
-            <option value="sobrado" className="bg-card text-foreground py-2">Sobrado</option>
-            <option value="studio" className="bg-card text-foreground py-2">Studio / Loft / Flat</option>
-            <option value="sala" className="bg-card text-foreground py-2">Sala Comercial</option>
-            <option value="comercial" className="bg-card text-foreground py-2">Prédio / Ponto Comercial</option>
-            <option value="galpão" className="bg-card text-foreground py-2">Galpão / Depósito</option>
-            <option value="terreno" className="bg-card text-foreground py-2">Terreno / Lote</option>
-            <option value="chácara" className="bg-card text-foreground py-2">Chácara</option>
-            <option value="sítio" className="bg-card text-foreground py-2">Sítio</option>
-            <option value="fazenda" className="bg-card text-foreground py-2">Fazenda</option>
-            <option value="outros" className="bg-card text-foreground py-2">Outro Tipo</option>
+            {PROPERTY_TYPES_LIST.map((t) => (
+              <option key={t.id} value={t.id} className="bg-card text-foreground py-2">
+                {t.label}
+              </option>
+            ))}
           </select>
         </div>
 

@@ -114,23 +114,26 @@ function parseNumber(val: string): number {
 
 function normalizePropertyType(rawType: string): ParsedTokkoProperty['type'] {
   const lower = rawType.toLowerCase();
-  if (lower.includes('condom') || lower.includes('condominio') || lower.includes('condomínio')) {
-    return 'condomínio';
-  }
-  if (lower.includes('studio') || lower.includes('kitnet') || lower.includes('kit') || lower.includes('loft') || lower.includes('flat')) {
-    return 'studio';
-  }
-  if (lower.includes('apartamento') || lower.includes('departamento') || lower.includes('ap')) {
-    return 'apartamento';
-  }
   if (lower.includes('cobertura')) {
     return 'cobertura';
   }
   if (lower.includes('sobrado')) {
     return 'sobrado';
   }
+  if (lower.includes('casa em condominio') || lower.includes('casa em condomínio') || lower.includes('condominio fechado') || lower.includes('condomínio fechado')) {
+    return 'condomínio';
+  }
+  if (lower.includes('studio') || lower.includes('kitnet') || lower.includes('loft') || lower.includes('flat')) {
+    return 'studio';
+  }
+  if (lower.includes('apartamento') || lower.includes('departamento') || lower.includes('apto')) {
+    return 'apartamento';
+  }
   if (lower.includes('casa') || lower.includes('residencia')) {
     return 'casa';
+  }
+  if (lower.includes('condom') || lower.includes('condominio') || lower.includes('condomínio')) {
+    return 'condomínio';
   }
   if (lower.includes('terreno') || lower.includes('lote')) {
     return 'terreno';
@@ -138,13 +141,10 @@ function normalizePropertyType(rawType: string): ParsedTokkoProperty['type'] {
   if (lower.includes('galpao') || lower.includes('galpão') || lower.includes('deposito') || lower.includes('depósito') || lower.includes('barracao') || lower.includes('barracão')) {
     return 'galpão';
   }
-  if (lower.includes('predio') || lower.includes('prédio') || lower.includes('edificio') || lower.includes('edifício')) {
-    return 'prédio';
-  }
   if (lower.includes('sala') || lower.includes('consultorio') || lower.includes('consultório')) {
     return 'sala';
   }
-  if (lower.includes('comercial') || lower.includes('loja') || lower.includes('ponto')) {
+  if (lower.includes('predio') || lower.includes('prédio') || lower.includes('edificio') || lower.includes('edifício') || lower.includes('comercial') || lower.includes('loja') || lower.includes('ponto')) {
     return 'comercial';
   }
   if (lower.includes('sitio') || lower.includes('sítio')) {
@@ -155,6 +155,9 @@ function normalizePropertyType(rawType: string): ParsedTokkoProperty['type'] {
   }
   if (lower.includes('fazenda') || lower.includes('haras')) {
     return 'fazenda';
+  }
+  if (lower.includes('ap')) {
+    return 'apartamento';
   }
   return 'outros';
 }

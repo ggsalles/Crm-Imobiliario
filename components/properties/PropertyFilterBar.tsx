@@ -23,6 +23,25 @@ import { Property } from "@/lib/db";
 import { cn, formatCurrencyBRL, formatCurrencyInput } from "@/lib/utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { POPULAR_PROPERTY_TAGS } from "@/lib/property-tags";
+import { PROPERTY_TYPES_LIST, matchPropertyType, getPropertyTypeLabel } from "@/lib/property-types";
+
+const TYPE_ICONS: Record<string, any> = {
+  all: Home,
+  apartamento: Building,
+  casa: Home,
+  condomínio: ShieldCheck,
+  cobertura: Building,
+  sobrado: Home,
+  studio: Layers,
+  sala: Briefcase,
+  comercial: Building2,
+  galpão: Warehouse,
+  terreno: TreePine,
+  chácara: TreePine,
+  sítio: TreePine,
+  fazenda: TreePine,
+  outros: Plus,
+};
 
 interface PropertyFilterBarProps {
   search: string;
@@ -549,7 +568,7 @@ export function PropertyFilterBar({
             )}
             {filterType !== "all" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
-                <span>Tipo: {filterType}</span>
+                <span>Tipo: {getPropertyTypeLabel(filterType)}</span>
                 <button 
                   type="button" 
                   onClick={() => setFilterType("all")} 
@@ -567,29 +586,15 @@ export function PropertyFilterBar({
       <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pb-1">
         {[
           { id: "all", label: "Todos", icon: Home },
-          { id: "apartamento", label: "Apartamentos", icon: Building },
-          { id: "casa", label: "Casas", icon: Home },
-          { id: "condomínio", label: "Condomínio", icon: ShieldCheck },
-          { id: "sobrado", label: "Sobrados", icon: Home },
-          { id: "cobertura", label: "Coberturas", icon: Building },
-          { id: "studio", label: "Studios / Kitnets", icon: Layers },
-          { id: "sala", label: "Salas Comerciais", icon: Briefcase },
-          { id: "comercial", label: "Comercial", icon: Briefcase },
-          { id: "galpão", label: "Galpões", icon: Warehouse },
-          { id: "prédio", label: "Prédios", icon: Building2 },
-          { id: "terreno", label: "Terrenos", icon: TreePine },
-          { id: "chácara", label: "Chácaras", icon: TreePine },
-          { id: "sítio", label: "Sítios", icon: TreePine },
-          { id: "fazenda", label: "Fazendas", icon: TreePine },
-          { id: "outros", label: "Outros", icon: Plus },
-        ].map(type => {
+          ...PROPERTY_TYPES_LIST.map((t) => ({
+            id: t.id,
+            label: t.label,
+            icon: TYPE_ICONS[t.id] || Home,
+          })),
+        ].map((type) => {
           const count = type.id === "all" 
             ? properties.length 
-            : properties.filter(p => {
-                const normP = (p.type || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const normType = type.id.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return normP === normType;
-              }).length;
+            : properties.filter(p => matchPropertyType(p.type, type.id)).length;
           const isActive = filterType === type.id;
           const Icon = type.icon;
 

@@ -32,6 +32,7 @@ import {
   getCachedContacts
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { matchPropertyType } from "@/lib/property-types";
 import { toast } from "sonner";
 
 // Modular Components
@@ -280,9 +281,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       }
 
       if (filterType !== "all") {
-        const normPType = (p.type || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const normFilter = filterType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (normPType !== normFilter) return false;
+        if (!matchPropertyType(p.type, filterType)) return false;
       }
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
 
