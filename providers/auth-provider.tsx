@@ -35,6 +35,24 @@ if (typeof window !== "undefined") {
       return;
     }
 
+    // Intercepta e recupera automaticamente erros de chunk desatualizado do Next.js
+    if (
+      msg.includes("loading chunk") ||
+      msg.includes("chunkloaderror") ||
+      msg.includes("failed to fetch dynamically imported module")
+    ) {
+      event.preventDefault();
+      console.warn("[AuthProvider] Chunk desatualizado detectado. Recarregando página para buscar versão mais recente...");
+      const reloadKey = "last_chunk_reload_ts";
+      const lastReload = Number(window.sessionStorage?.getItem(reloadKey) || 0);
+      const now = Date.now();
+      if (now - lastReload > 10000) {
+        window.sessionStorage?.setItem(reloadKey, String(now));
+        window.location.reload();
+      }
+      return;
+    }
+
     // Intercepta e silencia erros transitórios de RSC payload fetch / fallback do roteador Next.js
     if (
       msg.includes("failed to fetch rsc payload") ||
