@@ -100,7 +100,7 @@ export function ShowcasePropertyCard({
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {(property.referenceCode || property.reference_code) && (
-              <span className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-amber-300 text-[10px] font-mono font-black uppercase tracking-wider shadow-xs border border-amber-500/40">
+              <span className="px-2.5 py-1 rounded-xl bg-black/95 backdrop-blur-md text-amber-300 text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-lg border-2 border-amber-400 ring-1 ring-black/50">
                 #{property.referenceCode || property.reference_code}
               </span>
             )}
@@ -177,7 +177,19 @@ export function ShowcasePropertyCard({
       {/* Body Content */}
       <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1.5">
-          {property.buildingName && (
+          {(property.referenceCode || property.reference_code) && (
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-mono font-black text-amber-400 bg-amber-400/15 border border-amber-400/30 px-2.5 py-0.5 rounded-md tracking-wider">
+                REF: #{property.referenceCode || property.reference_code}
+              </span>
+              {property.buildingName && (
+                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 truncate">
+                  🏢 {property.buildingName}
+                </span>
+              )}
+            </div>
+          )}
+          {!property.referenceCode && !property.reference_code && property.buildingName && (
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 block line-clamp-1">
               🏢 {property.buildingName}
             </span>

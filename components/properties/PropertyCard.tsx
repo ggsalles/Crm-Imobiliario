@@ -147,9 +147,9 @@ export function PropertyCard({
           <Star className={cn("w-4 h-4 transition-transform", property.isFeatured && "fill-white text-white")} />
         </button>
 
-        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none">
+        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none items-center">
           {(property.referenceCode || property.reference_code) && (
-            <span className="px-2 py-0.5 bg-black/80 backdrop-blur-md text-amber-300 border border-amber-500/40 rounded-lg text-[9px] font-mono font-black uppercase tracking-wider shadow-sm">
+            <span className="px-2.5 py-1 bg-black/95 backdrop-blur-md text-amber-300 border-2 border-amber-400 rounded-xl text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-lg ring-1 ring-black/50">
               #{property.referenceCode || property.reference_code}
             </span>
           )}
@@ -181,8 +181,21 @@ export function PropertyCard({
 
       <div className="p-3.5 sm:p-4 flex flex-col flex-1">
         <div className="mb-2.5">
+          {(property.referenceCode || property.reference_code) && (
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs font-mono font-black text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-lg tracking-wider">
+                REF: #{property.referenceCode || property.reference_code}
+              </span>
+              {property.buildingName && (
+                <span className="text-[11px] font-semibold text-primary truncate flex items-center gap-1">
+                  <span>🏢</span>
+                  <span className="truncate">{property.buildingName}</span>
+                </span>
+              )}
+            </div>
+          )}
           <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1 tracking-tight">{property.title}</h4>
-          {property.buildingName && (
+          {!property.referenceCode && !property.reference_code && property.buildingName && (
             <p className="text-[10px] font-semibold text-primary line-clamp-1 flex items-center gap-1 mt-0.5">
               <span>🏢</span>
               <span className="truncate">{property.buildingName}</span>

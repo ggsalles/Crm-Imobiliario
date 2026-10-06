@@ -209,10 +209,10 @@ export function PropertyDetailModal({
               </AnimatePresence>
 
               {/* Status and Type Pills Overlay */}
-              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
+              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10 items-center">
                 {(property.referenceCode || (property as any).reference_code) && (
-                  <span className="px-2.5 py-1 bg-black/80 backdrop-blur-md text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider shadow-sm">
-                    Ref: #{property.referenceCode || (property as any).reference_code}
+                  <span className="px-3 py-1.5 bg-black/95 backdrop-blur-md text-amber-300 border-2 border-amber-400 rounded-xl text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-lg ring-1 ring-black/50">
+                    #{property.referenceCode || (property as any).reference_code}
                   </span>
                 )}
                 <span className={cn(
@@ -304,6 +304,14 @@ export function PropertyDetailModal({
           {/* 2. Title, Building & Financial Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-muted/30 border border-border/80 rounded-2xl">
             <div>
+              {(property.referenceCode || (property as any).reference_code) && (
+                <div className="mb-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs sm:text-sm font-mono font-black uppercase tracking-wider">
+                    <span>🏷️</span>
+                    <span>CÓDIGO DE REFERÊNCIA: #{property.referenceCode || (property as any).reference_code}</span>
+                  </span>
+                </div>
+              )}
               <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
                 {property.title}
               </h2>
