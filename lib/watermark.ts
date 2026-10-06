@@ -1,7 +1,13 @@
 /**
  * Motor de Aplicação de Marca d'Água em Imagens no Navegador (HTML5 Canvas)
- * Desenvolvido especialmente para imobiliárias e corretores.
- * Aplica o badge oficial da marca (ex: Chiarelli Imóveis) com alta definição.
+ * Desenvolvido exatamente conforme a identidade visual oficial Chiarelli Imóveis:
+ * Texto limpo, sem caixa escura e sem ícone, aplicado diretamente sobre a foto:
+ * 
+ *       Chiarelli
+ *        IMÓVEIS
+ * 
+ * Letras brancas translúcidas com sombreamento suave para contraste perfeito
+ * tanto em áreas claras (paredes brancas, céu) quanto em áreas escuras (telhados, folhagens).
  */
 
 export interface WatermarkOptions {
@@ -9,61 +15,81 @@ export interface WatermarkOptions {
   subtitle?: string;
   position?: 'center' | 'bottom-right' | 'bottom-left' | 'top-right';
   opacity?: number;
-  badgeColor?: string; // Cor de fundo do badge (ex: '#1e3a8a' ou '#0f172a')
-  accentColor?: string; // Cor de destaque (ex: '#38bdf8')
-  creci?: string;
 }
 
 /**
- * Desenha o logotipo estilizado da imobiliária (Prédio / Edifício moderno em vetor no Canvas)
+ * Desenha a marca d'água Chiarelli Imóveis no Canvas.
  */
-function drawBuildingIcon(
+function drawChiarelliWatermark(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  size: number,
-  accentColor: string
+  width: number,
+  height: number,
+  options: WatermarkOptions = {}
 ) {
+  const {
+    companyName = 'Chiarelli',
+    subtitle = 'IMÓVEIS',
+    position = 'center',
+    opacity = 0.82
+  } = options;
+
+  const minDim = Math.min(width, height);
+  // Escala dinâmica proporcional à resolução original da foto
+  const scale = Math.max(0.65, minDim / 800);
+
+  // Proporções tipográficas baseadas na imagem de referência
+  const titleFontSize = Math.round(54 * scale);
+  const subFontSize = Math.round(20 * scale);
+  const lineGap = Math.round(12 * scale);
+
   ctx.save();
-  ctx.translate(x, y);
+  ctx.globalAlpha = opacity;
 
-  const scale = size / 40;
-  ctx.scale(scale, scale);
+  // Sombreamento sutil para garantir legibilidade sobre qualquer plano de fundo
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+  ctx.shadowBlur = Math.round(6 * scale);
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = Math.round(2 * scale);
 
-  // Telhado / Formas geométricas modernas de edifício
-  ctx.strokeStyle = accentColor;
-  ctx.fillStyle = accentColor;
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
-  // Base do prisma do prédio
-  ctx.beginPath();
-  ctx.moveTo(20, 2);
-  ctx.lineTo(36, 12);
-  ctx.lineTo(20, 22);
-  ctx.lineTo(4, 12);
-  ctx.closePath();
-  ctx.stroke();
+  // Ponto central padrão
+  let centerX = width / 2;
+  let centerY = height / 2;
 
-  // Linhas verticais do prédio (efeito 3D de colunas)
-  ctx.beginPath();
-  ctx.moveTo(4, 12);
-  ctx.lineTo(4, 28);
-  ctx.lineTo(20, 38);
-  ctx.lineTo(36, 28);
-  ctx.lineTo(36, 12);
-  ctx.stroke();
+  if (position === 'bottom-right') {
+    centerX = width - Math.round(160 * scale);
+    centerY = height - Math.round(90 * scale);
+  } else if (position === 'bottom-left') {
+    centerX = Math.round(160 * scale);
+    centerY = height - Math.round(90 * scale);
+  } else if (position === 'top-right') {
+    centerX = width - Math.round(160 * scale);
+    centerY = Math.round(90 * scale);
+  }
 
-  // Colunas internas verticais
-  ctx.beginPath();
-  ctx.moveTo(12, 17);
-  ctx.lineTo(12, 33);
-  ctx.moveTo(20, 22);
-  ctx.lineTo(20, 38);
-  ctx.moveTo(28, 17);
-  ctx.lineTo(28, 33);
-  ctx.stroke();
+  // 1. Linha principal: "Chiarelli" (peso 700 / Bold, primeira letra maiúscula)
+  ctx.font = `bold ${titleFontSize}px ${fontFamily}`;
+  const titleY = centerY - Math.round((subFontSize + lineGap) / 2);
+  ctx.fillText(companyName, centerX, titleY);
+
+  // 2. Linha secundária: "IMÓVEIS" (caixa alta com espaçamento elegante entre caracteres)
+  ctx.font = `bold ${subFontSize}px ${fontFamily}`;
+  const subY = titleY + Math.round(titleFontSize * 0.6) + lineGap;
+
+  // Aplica espaçamento uniforme (tracking) nas letras de IMÓVEIS
+  const subUpper = subtitle.toUpperCase();
+  if ('letterSpacing' in ctx) {
+    (ctx as any).letterSpacing = `${Math.round(5 * scale)}px`;
+    ctx.fillText(subUpper, centerX, subY);
+  } else {
+    // Fallback para navegadores sem letterSpacing nativo no canvas
+    const spaced = subUpper.split('').join('  ');
+    ctx.fillText(spaced, centerX, subY);
+  }
 
   ctx.restore();
 }
@@ -79,20 +105,10 @@ export async function applyWatermarkToImage(
     return file;
   }
 
-  // Ignora SVGs e GIFs
+  // Ignora arquivos que não são fotos (SVGs, GIFs)
   if (file.type === 'image/svg+xml' || file.type === 'image/gif') {
     return file;
   }
-
-  const {
-    companyName = 'Chiarelli',
-    subtitle = 'IMÓVEIS',
-    position = 'center',
-    opacity = 0.92,
-    badgeColor = 'rgba(15, 23, 42, 0.88)', // Slate 900 com transparência elegante
-    accentColor = '#0284c7', // Azul ciano vibrante
-    creci = ''
-  } = options;
 
   return new Promise<File>((resolve) => {
     try {
@@ -114,97 +130,15 @@ export async function applyWatermarkToImage(
               return;
             }
 
-            // 1. Desenha a foto base
+            // 1. Desenha a foto original com alta nitidez
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
 
-            // 2. Calcula proporções responsivas da marca d'água de acordo com a resolução da foto
-            const minDimension = Math.min(width, height);
-            const scaleFactor = Math.max(0.6, minDimension / 900);
+            // 2. Aplica a marca d'água limpa Chiarelli Imóveis
+            drawChiarelliWatermark(ctx, width, height, options);
 
-            // Tamanhos calculados
-            const titleFontSize = Math.round(26 * scaleFactor);
-            const subFontSize = Math.round(13 * scaleFactor);
-            const iconSize = Math.round(36 * scaleFactor);
-            const paddingX = Math.round(24 * scaleFactor);
-            const paddingY = Math.round(16 * scaleFactor);
-            const gap = Math.round(14 * scaleFactor);
-            const borderRadius = Math.round(18 * scaleFactor);
-
-            // Medir largura do texto
-            ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-            const titleMetrics = ctx.measureText(companyName);
-            
-            ctx.font = `900 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-            const subText = creci ? `${subtitle} • ${creci}` : subtitle;
-            const subMetrics = ctx.measureText(subText);
-
-            const textWidth = Math.max(titleMetrics.width, subMetrics.width);
-            const badgeWidth = iconSize + gap + textWidth + paddingX * 2;
-            const badgeHeight = Math.max(iconSize, titleFontSize + subFontSize + 6) + paddingY * 2;
-
-            // 3. Determinar posição
-            let badgeX = (width - badgeWidth) / 2;
-            let badgeY = (height - badgeHeight) / 2;
-
-            const margin = Math.round(30 * scaleFactor);
-            if (position === 'bottom-right') {
-              badgeX = width - badgeWidth - margin;
-              badgeY = height - badgeHeight - margin;
-            } else if (position === 'bottom-left') {
-              badgeX = margin;
-              badgeY = height - badgeHeight - margin;
-            } else if (position === 'top-right') {
-              badgeX = width - badgeWidth - margin;
-              badgeY = margin;
-            }
-
-            // 4. Desenhar o badge com sombra e cantos arredondados
-            ctx.save();
-            ctx.globalAlpha = opacity;
-
-            // Sombra suave do badge
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-            ctx.shadowBlur = Math.round(16 * scaleFactor);
-            ctx.shadowOffsetY = Math.round(6 * scaleFactor);
-
-            // Fundo do Badge
-            ctx.beginPath();
-            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, borderRadius);
-            ctx.fillStyle = badgeColor;
-            ctx.fill();
-
-            // Borda refinada com gradiente suave
-            ctx.shadowColor = 'transparent';
-            ctx.lineWidth = Math.max(1.5, Math.round(2 * scaleFactor));
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-            ctx.stroke();
-
-            // 5. Desenhar o Ícone
-            const iconX = badgeX + paddingX;
-            const iconY = badgeY + (badgeHeight - iconSize) / 2;
-            drawBuildingIcon(ctx, iconX, iconY, iconSize, accentColor);
-
-            // 6. Desenhar Textos
-            const textStartX = iconX + iconSize + gap;
-            const titleY = badgeY + paddingY + titleFontSize * 0.85;
-
-            // Título principal (Nome da Empresa, ex: "Chiarelli")
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${titleFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-            ctx.fillText(companyName, textStartX, titleY);
-
-            // Subtítulo (ex: "IMÓVEIS")
-            const subY = titleY + subFontSize + Math.round(6 * scaleFactor);
-            ctx.fillStyle = accentColor;
-            ctx.font = `900 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-            ctx.letterSpacing = '2px';
-            ctx.fillText(subText, textStartX, subY);
-
-            ctx.restore();
-
-            // 7. Exportar Canvas para novo File
+            // 3. Exporta para blob/file com excelente qualidade (JPEG 92%)
             const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
             canvas.toBlob(
               (blob) => {
@@ -218,7 +152,7 @@ export async function applyWatermarkToImage(
                   lastModified: Date.now(),
                 });
 
-                console.log(`[Watermark] Marca d'água aplicada com sucesso em "${file.name}" (${companyName})`);
+                console.log(`[Watermark] Marca d'água Chiarelli aplicada em "${file.name}"`);
                 resolve(newFile);
               },
               mimeType,

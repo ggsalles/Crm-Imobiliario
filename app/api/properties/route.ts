@@ -76,13 +76,16 @@ export async function GET(req: NextRequest) {
             ? (property.tags.startsWith('[') ? (() => { try { return JSON.parse(property.tags); } catch { return []; } })() : property.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
             : []);
 
+      const isSingleInactive = property.status === 'inativo' || singleTags.includes('Inativo') || singleTags.includes('Status:Inativo');
+      const resolvedSingleStatus = isSingleInactive ? 'inativo' : property.status;
+
       return NextResponse.json({
         id: property.id,
         referenceCode: property.reference_code || (property as any).referenceCode || null,
         reference_code: property.reference_code || null,
         title: String(property.title || "Sem título"),
         type: property.type,
-        status: property.status,
+        status: resolvedSingleStatus,
         price: Number(property.price || 0),
         location: String(property.location || ""),
         cep: String(property.cep || ""),
@@ -285,13 +288,22 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const tagsList: string[] = Array.isArray(item.tags)
+        ? item.tags
+        : (typeof item.tags === 'string'
+            ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
+            : []);
+
+      const isItemInactive = item.status === 'inativo' || tagsList.includes('Inativo') || tagsList.includes('Status:Inativo');
+      const resolvedItemStatus = isItemInactive ? 'inativo' : item.status;
+
       return {
         id: item.id,
         referenceCode: item.reference_code || item.referenceCode || null,
         reference_code: item.reference_code || null,
         title: String(item.title || "Sem título"),
         type: item.type,
-        status: item.status,
+        status: resolvedItemStatus,
         price: Number(item.price || 0),
         location: String(item.location || ""),
         cep: String(item.cep || ""),
@@ -315,11 +327,7 @@ export async function GET(req: NextRequest) {
         notes: isPublic ? null : (item.notes ? String(item.notes) : null),
         internalNotes: isPublic ? null : (item.notes ? String(item.notes) : null),
         description: item.description ? String(item.description) : null,
-        tags: Array.isArray(item.tags)
-          ? item.tags
-          : (typeof item.tags === 'string'
-              ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
-              : []),
+        tags: tagsList,
         imageUrls: urls,
         ownerId: item.owner_id,
         tenantId: item.tenant_id,
@@ -413,6 +421,24 @@ export async function POST(req: NextRequest) {
         .select();
       result = retry.data;
       error = retry.error;
+    }
+
+    // Fallback gracioso para a restrição properties_status_check caso o status 'inativo' ainda não esteja no check constraint do Supabase
+    if (error && (error.message?.includes('properties_status_check') || error.code === '23514')) {
+      console.warn("[API/Properties] POST: 'properties_status_check' ainda não aceita 'inativo' nativamente no DB. Salvando como 'reservado' com tag 'Inativo':", error.message);
+      const fallbackStatus = { ...sanitized };
+      if (fallbackStatus.status === 'inativo') {
+        fallbackStatus.status = 'reservado';
+        const currentTags = Array.isArray(fallbackStatus.tags) ? [...fallbackStatus.tags] : [];
+        if (!currentTags.includes('Inativo')) currentTags.push('Inativo');
+        fallbackStatus.tags = currentTags;
+      }
+      const retryStatus = await supabase
+        .from('properties')
+        .insert([fallbackStatus])
+        .select();
+      result = retryStatus.data;
+      error = retryStatus.error;
     }
 
     if (error) {
@@ -537,6 +563,29 @@ export async function PATCH(req: NextRequest) {
 
       const retry = await retryQuery;
       error = retry.error;
+    }
+
+    // Fallback gracioso para a restrição properties_status_check no PATCH
+    if (error && (error.message?.includes('properties_status_check') || error.code === '23514')) {
+      console.warn(`[API/Properties] PATCH ID ${id}: 'properties_status_check' ainda não aceita 'inativo'. Usando 'reservado' com tag 'Inativo':`, error.message);
+      const fallbackStatus = { ...sanitized };
+      if (fallbackStatus.status === 'inativo') {
+        fallbackStatus.status = 'reservado';
+        const currentTags = Array.isArray(fallbackStatus.tags) ? [...fallbackStatus.tags] : [];
+        if (!currentTags.includes('Inativo')) currentTags.push('Inativo');
+        fallbackStatus.tags = currentTags;
+      }
+      let retryQuery = supabase
+        .from('properties')
+        .update(fallbackStatus)
+        .eq('id', id);
+
+      if (activeTenantId) {
+        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
+      }
+
+      const retryStatus = await retryQuery;
+      error = retryStatus.error;
     }
 
     if (error) {

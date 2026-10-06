@@ -50,13 +50,13 @@ export function PropertyMediaUploader({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-foreground">Marca d&apos;Água Personalizada</span>
+              <span className="text-xs font-bold text-foreground">Marca d&apos;Água Chiarelli Imóveis</span>
               <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-black uppercase tracking-wider">
                 Automática
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Aplica a logo e marca d&apos;água oficial nas fotos enviadas
+              Aplica a tipografia oficial centralizada (&ldquo;Chiarelli IMÓVEIS&rdquo;) diretamente sobre as fotos
             </p>
           </div>
         </div>

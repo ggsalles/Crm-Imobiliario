@@ -161,6 +161,7 @@ export function PropertyBasicFields({
         >
           <option value="disponível" className="bg-card text-foreground py-2">Disponível (Ativo no Catálogo)</option>
           <option value="reservado" className="bg-card text-foreground py-2">Reservado / Em Negociação</option>
+          <option value="inativo" className="bg-card text-foreground py-2">Inativo (Pausado pelo Cliente / Fora de Venda)</option>
           <option value="vendido" className="bg-card text-foreground py-2">Vendido</option>
           <option value="alugado" className="bg-card text-foreground py-2">Alugado</option>
         </select>

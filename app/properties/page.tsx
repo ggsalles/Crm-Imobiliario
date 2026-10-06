@@ -32,6 +32,7 @@ import {
   getCachedContacts
 } from "@/lib/db";
 import { cn, formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { matchSearchTerms, normalizeSearchText } from "@/lib/search-utils";
 import { matchPropertyType } from "@/lib/property-types";
 import { toast } from "sonner";
 
@@ -221,7 +222,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     }).finally(() => {
       setLoading(false);
     });
-  }, [profile, user]);
+  }, []);
 
   // Neighborhoods Memo
   const availableNeighborhoods = useMemo(() => {
@@ -246,18 +247,26 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     return properties.filter((p) => {
       if (onlyFeaturedFilter && !p.isFeatured) return false;
 
+      // 1. Busca Geral (Omni-search): suporta partes do título, código, rua + número, condomínio, etc.
       if (query) {
-        const matchesRef = ((p.referenceCode || (p as any).reference_code || "").toLowerCase().includes(query));
-        const matchesTitle = (p.title || "").toLowerCase().includes(query);
-        const matchesBuilding = (p.buildingName || "").toLowerCase().includes(query);
-        const matchesNeighborhood = (p.neighborhood || "").toLowerCase().includes(query);
-        const matchesStreet = (p.street || "").toLowerCase().includes(query);
-        const matchesLocation = (p.location || "").toLowerCase().includes(query);
-        const matchesCity = (p.city || "").toLowerCase().includes(query);
-        const matchesId = (p.id || "").toLowerCase().includes(query);
-        const matchesTags = (p.tags || []).some(t => t.toLowerCase().includes(query));
+        const fullTarget = [
+          p.referenceCode || (p as any).reference_code || "",
+          p.title,
+          p.street,
+          p.number,
+          p.complement,
+          p.buildingName,
+          p.neighborhood,
+          p.city,
+          p.state,
+          p.location,
+          p.cep,
+          p.id,
+          p.description,
+          ...(p.tags || [])
+        ].filter(Boolean).join(" ");
 
-        if (!matchesRef && !matchesTitle && !matchesBuilding && !matchesNeighborhood && !matchesStreet && !matchesLocation && !matchesCity && !matchesId && !matchesTags) {
+        if (!matchSearchTerms(fullTarget, query)) {
           return false;
         }
       }
@@ -272,10 +281,21 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         if (!matchAllSelected) return false;
       }
 
+      // 2. Filtro de Rua / Logradouro / Número: pesquisa flexível por nome da rua + número
       if (streetQuery) {
-        const pStreet = (p.street || "").toLowerCase();
-        const pLocation = (p.location || "").toLowerCase();
-        if (!pStreet.includes(streetQuery) && !pLocation.includes(streetQuery)) {
+        const addressTarget = [
+          p.street,
+          p.number,
+          p.complement,
+          p.neighborhood,
+          p.city,
+          p.state,
+          p.location,
+          p.cep,
+          p.buildingName
+        ].filter(Boolean).join(" ");
+
+        if (!matchSearchTerms(addressTarget, streetQuery)) {
           return false;
         }
       }
@@ -286,8 +306,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
 
       if (selectedNeighborhood !== "all") {
-        const pNeigh = (p.neighborhood || "").trim().toLowerCase();
-        if (pNeigh !== selectedNeighborhood.trim().toLowerCase()) return false;
+        const normSelected = normalizeSearchText(selectedNeighborhood);
+        const normPNeigh = normalizeSearchText(p.neighborhood);
+        const normPLoc = normalizeSearchText(p.location);
+        if (normPNeigh !== normSelected && !normPLoc.includes(normSelected)) return false;
       }
 
       const price = Number(p.price) || 0;

@@ -27,6 +27,7 @@ import { ShowcasePropertyCard, VitrineProperty as Property } from '@/components/
 import { ShowcaseFilters } from '@/components/vitrine/ShowcaseFilters';
 import { UniversalPagination } from '@/components/properties/PropertyPagination';
 import { CreateDealFromPropertyModal } from '@/components/properties/CreateDealFromPropertyModal';
+import { matchSearchTerms } from '@/lib/search-utils';
 
 interface TenantInfo {
   id: string;
@@ -257,16 +258,20 @@ function VitrineContent() {
     let result = properties.filter((p) => {
       // Search term
       if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
-        const matchRef = (p.referenceCode || (p as any).reference_code || '').toLowerCase().includes(q);
-        const matchTitle = p.title?.toLowerCase().includes(q);
-        const matchLoc = p.location?.toLowerCase().includes(q);
-        const matchNeigh = p.neighborhood?.toLowerCase().includes(q);
-        const matchCity = p.city?.toLowerCase().includes(q);
-        const matchBuilding = p.buildingName?.toLowerCase().includes(q);
-        const matchDesc = p.description?.toLowerCase().includes(q);
-        const matchTags = (p.tags || []).some(t => t.toLowerCase().includes(q));
-        if (!matchRef && !matchTitle && !matchLoc && !matchNeigh && !matchCity && !matchBuilding && !matchDesc && !matchTags) {
+        const fullTarget = [
+          p.referenceCode || (p as any).reference_code || '',
+          p.title,
+          (p as any).street,
+          (p as any).number,
+          p.location,
+          p.neighborhood,
+          p.city,
+          p.buildingName,
+          p.description,
+          ...(p.tags || [])
+        ].filter(Boolean).join(' ');
+
+        if (!matchSearchTerms(fullTarget, searchTerm)) {
           return false;
         }
       }

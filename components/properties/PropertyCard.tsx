@@ -162,6 +162,7 @@ export function PropertyCard({
             "px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider backdrop-blur-md border",
             property.status === 'disponível' ? "bg-emerald-500/80 text-white border-emerald-400" :
             property.status === 'reservado' ? "bg-amber-500/80 text-white border-amber-400" :
+            property.status === 'inativo' ? "bg-zinc-700/90 text-zinc-100 border-zinc-500 shadow-sm" :
             "bg-slate-800/80 text-white border-slate-700"
           )}>
             {property.status}

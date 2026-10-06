@@ -86,3 +86,44 @@ export function formatCEP(v: string) {
   if (v.length <= 5) return v;
   return v.replace(/(\d{5})(\d{0,3})/, "$1-$2");
 }
+
+/**
+ * Normaliza textos para busca: converte para minúsculas, remove acentuação e pontuações.
+ * Ex: "Rua Lopes Trovão, 100" -> "rua lopes trovao 100"
+ */
+export function normalizeSearchText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentuação
+    .replace(/[,;.\-\/ºª#]/g, " ")    // substitui pontuações por espaço
+    .replace(/\s+/g, " ")             // unifica múltiplos espaços
+    .trim();
+}
+
+/**
+ * Motor inteligente de busca multi-termo para endereços e imóveis:
+ * Permite buscar partes do logradouro + número (ex: "lopes trovão 100", "rua lopes 100").
+ * Todos os termos digitados devem existir no conjunto de dados do imóvel.
+ */
+export function matchSearchTerms(targetText: string | null | undefined, searchQuery: string | null | undefined): boolean {
+  if (!searchQuery || !searchQuery.trim()) return true;
+  if (!targetText) return false;
+
+  const normQuery = normalizeSearchText(searchQuery);
+  if (!normQuery) return true;
+
+  const normTarget = normalizeSearchText(targetText);
+  if (!normTarget) return false;
+
+  // Se o alvo contém a busca exata completa
+  if (normTarget.includes(normQuery)) return true;
+
+  // Divide a pesquisa em tokens (palavras e números)
+  const queryTokens = normQuery.split(" ").filter(t => t.length > 0);
+  if (queryTokens.length === 0) return true;
+
+  // Cada termo digitado deve ser encontrado no texto do imóvel
+  return queryTokens.every(token => normTarget.includes(token));
+}

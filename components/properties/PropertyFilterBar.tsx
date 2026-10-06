@@ -118,7 +118,7 @@ export function PropertyFilterBar({
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input 
               type="text" 
-              placeholder="Buscar por nome, edifício/condomínio, rua, bairro, código..."
+              placeholder="Buscar por rua + número (ex: Lopes Trovão 100), condomínio, código..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -267,12 +267,12 @@ export function PropertyFilterBar({
                 {/* 2. Street */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-                    Rua / Logradouro
+                    Rua / Logradouro / Número
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Ex: Av. Brasil, Rua 15..."
+                      placeholder="Ex: Lopes Trovão 100, Av. Brasil..."
                       value={searchStreet}
                       onChange={(e) => setSearchStreet(e.target.value)}
                       onKeyDown={(e) => {
@@ -436,6 +436,7 @@ export function PropertyFilterBar({
                     <option value="all">Todos os status</option>
                     <option value="disponível">Disponível</option>
                     <option value="reservado">Reservado</option>
+                    <option value="inativo">Inativo (Pausado)</option>
                     <option value="vendido">Vendido</option>
                     <option value="alugado">Alugado</option>
                   </select>

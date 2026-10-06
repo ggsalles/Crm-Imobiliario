@@ -219,9 +219,10 @@ export function PropertyDetailModal({
                   "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md border",
                   property.status === 'disponível' ? "bg-emerald-500/90 text-white border-emerald-400" :
                   property.status === 'reservado' ? "bg-amber-500/90 text-white border-amber-400" :
+                  property.status === 'inativo' ? "bg-zinc-700/95 text-zinc-100 border-zinc-500" :
                   "bg-slate-800/90 text-white border-slate-700"
                 )}>
-                  {property.status}
+                  {property.status === 'inativo' ? 'Inativo (Pausado)' : property.status}
                 </span>
 
                 <span className="px-2.5 py-1 bg-background/90 backdrop-blur-md text-foreground border border-border/40 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm">

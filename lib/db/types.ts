@@ -34,7 +34,7 @@ export interface Property {
   reference_code?: string;
   title: string;
   type: PropertyType;
-  status: 'disponível' | 'reservado' | 'vendido' | 'alugado';
+  status: 'disponível' | 'reservado' | 'vendido' | 'alugado' | 'inativo';
   price: number;
   location: string;
   cep?: string;

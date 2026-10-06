@@ -355,7 +355,7 @@ export function PropertyForm({
         setIsUploading(false);
       }
     },
-    [user?.id]
+    [user?.id, applyWatermark, watermarkCompany, watermarkPosition]
   );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
