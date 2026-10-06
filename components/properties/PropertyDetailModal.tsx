@@ -209,7 +209,7 @@ export function PropertyDetailModal({
               </AnimatePresence>
 
               {/* Status and Type Pills Overlay */}
-              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10 items-center">
+              <div className="absolute top-3 left-3 right-14 flex flex-wrap gap-1.5 z-10 items-center">
                 {(property.referenceCode || (property as any).reference_code) && (
                   <span className="px-3 py-1.5 bg-black/95 backdrop-blur-md text-amber-300 border-2 border-amber-400 rounded-xl text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-lg ring-1 ring-black/50">
                     #{property.referenceCode || (property as any).reference_code}

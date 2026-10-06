@@ -147,7 +147,7 @@ export function PropertyCard({
           <Star className={cn("w-4 h-4 transition-transform", property.isFeatured && "fill-white text-white")} />
         </button>
 
-        <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10 pointer-events-none items-center">
+        <div className="absolute top-2.5 left-2.5 right-14 flex flex-wrap gap-1.5 z-10 pointer-events-none items-center">
           {(property.referenceCode || property.reference_code) && (
             <span className="px-2.5 py-1 bg-black/95 backdrop-blur-md text-amber-300 border-2 border-amber-400 rounded-xl text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-lg ring-1 ring-black/50">
               #{property.referenceCode || property.reference_code}
