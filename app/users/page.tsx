@@ -31,6 +31,7 @@ import { InactivateUserModal } from "@/components/users/InactivateUserModal";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { AdminResetPasswordModal } from "@/components/users/AdminResetPasswordModal";
 import { UserCreatedSuccessModal } from "@/components/users/UserCreatedSuccessModal";
+import { EditUserModal } from "@/components/users/EditUserModal";
 import { UsersHeader } from "@/components/users/UsersHeader";
 import { UsersTableContainer } from "@/components/users/UsersTableContainer";
 
@@ -42,6 +43,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
+  const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
   
   // Tenants (Multi-Tenant SaaS) States
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -653,7 +655,7 @@ export default function UsersPage() {
             setEditForm={setEditForm}
             tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
             deletingUid={deletingUid}
-            onEditClick={handleEditClick}
+            onEditClick={(u) => setUserToEdit(u)}
             onSaveEdit={handleSaveEdit}
             onCancelEdit={() => {
               setEditingUser(null);
@@ -668,6 +670,18 @@ export default function UsersPage() {
             onResetPasswordClick={(target) => setUserToResetPassword(target)}
           />
         </div>
+
+        {/* Modal de Edição Completa de Usuário (Nome, Email, Senha, Papéis, Tenants) */}
+        <EditUserModal
+          isOpen={!!userToEdit}
+          onClose={() => setUserToEdit(null)}
+          user={userToEdit}
+          onSuccess={() => {
+            forceDataResync();
+          }}
+          isAdmin={isAdmin}
+          tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}
+        />
 
         {/* Modal para Inativar Usuário */}
         <InactivateUserModal 
