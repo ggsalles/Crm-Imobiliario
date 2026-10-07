@@ -107,6 +107,39 @@ export function PropertyForm({
     setSelectedType(newType);
     if (!editingProperty) {
       fetchNextRef(newType);
+    } else {
+      // Se estiver editando um imóvel existente e o tipo mudar, atualiza o prefixo da referência automaticamente
+      const typePrefixes: Record<string, string> = {
+        apartamento: 'AP',
+        casa: 'CA',
+        'condomínio': 'CD',
+        condominio: 'CD',
+        sobrado: 'SO',
+        cobertura: 'CO',
+        studio: 'ST',
+        sala: 'SL',
+        comercial: 'CM',
+        'galpão': 'GP',
+        galpao: 'GP',
+        'prédio': 'PR',
+        predio: 'PR',
+        terreno: 'TR',
+        'sítio': 'SI',
+        sitio: 'SI',
+        'chácara': 'CH',
+        chacara: 'CH',
+        fazenda: 'FZ'
+      };
+      const newPrefix = typePrefixes[newType.toLowerCase()] || 'IM';
+      if (referenceCode) {
+        const match = referenceCode.match(/^([A-Za-z]+)(\d+)$/);
+        if (match) {
+          const numPart = match[2];
+          setReferenceCode(`${newPrefix}${numPart}`);
+        }
+      } else {
+        fetchNextRef(newType);
+      }
     }
   };
 
