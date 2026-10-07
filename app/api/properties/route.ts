@@ -21,6 +21,33 @@ export function invalidateServerPropertiesCache() {
   serverPropertiesCache.clear();
 }
 
+function resolvePropertyTypeAndStatus(type: string | undefined | null, status: string | undefined | null, tagsList: string[]) {
+  // 1. Status Inativo
+  const isInactive = status === 'inativo' || tagsList.includes('Inativo') || tagsList.includes('Status:Inativo');
+  const resolvedStatus = isInactive ? 'inativo' : status;
+
+  // 2. Type fallback extraction (se foi salvo com base segura devido à restrição do banco antigo)
+  let resolvedType = type || 'apartamento';
+  const typeTag = tagsList.find(t => t.toLowerCase().startsWith('tipo:'));
+  if (typeTag) {
+    const rawTypeFromTag = typeTag.slice(5).trim();
+    if (rawTypeFromTag) {
+      resolvedType = rawTypeFromTag;
+    }
+  }
+
+  return { resolvedStatus, resolvedType };
+}
+
+function getSafeFallbackType(desiredType: string | undefined | null): string {
+  const norm = (desiredType || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  if (norm.includes('condominio') || norm.includes('sobrado') || norm.includes('casa')) return 'casa';
+  if (norm.includes('cobertura') || norm.includes('studio') || norm.includes('loft') || norm.includes('flat') || norm.includes('kitnet') || norm.includes('apartamento')) return 'apartamento';
+  if (norm.includes('sala') || norm.includes('galpao') || norm.includes('predio') || norm.includes('comercial')) return 'comercial';
+  if (norm.includes('terreno') || norm.includes('lote') || norm.includes('chacara') || norm.includes('sitio') || norm.includes('fazenda')) return 'terreno';
+  return 'apartamento';
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
@@ -76,15 +103,14 @@ export async function GET(req: NextRequest) {
             ? (property.tags.startsWith('[') ? (() => { try { return JSON.parse(property.tags); } catch { return []; } })() : property.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
             : []);
 
-      const isSingleInactive = property.status === 'inativo' || singleTags.includes('Inativo') || singleTags.includes('Status:Inativo');
-      const resolvedSingleStatus = isSingleInactive ? 'inativo' : property.status;
+      const { resolvedStatus: resolvedSingleStatus, resolvedType: resolvedSingleType } = resolvePropertyTypeAndStatus(property.type, property.status, singleTags);
 
       return NextResponse.json({
         id: property.id,
         referenceCode: property.reference_code || (property as any).referenceCode || null,
         reference_code: property.reference_code || null,
         title: String(property.title || "Sem título"),
-        type: property.type,
+        type: resolvedSingleType,
         status: resolvedSingleStatus,
         price: Number(property.price || 0),
         location: String(property.location || ""),
@@ -294,15 +320,14 @@ export async function GET(req: NextRequest) {
             ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
             : []);
 
-      const isItemInactive = item.status === 'inativo' || tagsList.includes('Inativo') || tagsList.includes('Status:Inativo');
-      const resolvedItemStatus = isItemInactive ? 'inativo' : item.status;
+      const { resolvedStatus: resolvedItemStatus, resolvedType: resolvedItemType } = resolvePropertyTypeAndStatus(item.type, item.status, tagsList);
 
       return {
         id: item.id,
         referenceCode: item.reference_code || item.referenceCode || null,
         reference_code: item.reference_code || null,
         title: String(item.title || "Sem título"),
-        type: item.type,
+        type: resolvedItemType,
         status: resolvedItemStatus,
         price: Number(item.price || 0),
         location: String(item.location || ""),
@@ -367,6 +392,10 @@ export async function POST(req: NextRequest) {
     const { imageUrls, ...sanitized } = data;
     (sanitized as any).tenant_id = resolvedTenantId;
 
+    if (sanitized.tags && Array.isArray(sanitized.tags)) {
+      sanitized.tags = sanitized.tags.filter((t: string) => !t.toLowerCase().startsWith('tipo:'));
+    }
+
     // Normalize camelCase to snake_case for Supabase columns
     if ('condoFee' in sanitized) {
       sanitized.condo_fee = sanitized.condoFee;
@@ -421,6 +450,25 @@ export async function POST(req: NextRequest) {
         .select();
       result = retry.data;
       error = retry.error;
+    }
+
+    // Fallback gracioso para a restrição properties_type_check caso novos tipos ainda não estejam no check constraint do Supabase
+    if (error && (error.message?.includes('properties_type_check') || (error.code === '23514' && error.message?.includes('type')))) {
+      console.warn(`[API/Properties] POST: 'properties_type_check' rejeitou tipo '${sanitized.type}'. Usando fallback de tipo seguro:`, error.message);
+      const fallbackTypeObj = { ...sanitized };
+      const originalType = sanitized.type;
+      fallbackTypeObj.type = getSafeFallbackType(originalType);
+      const currentTags = Array.isArray(fallbackTypeObj.tags) ? [...fallbackTypeObj.tags] : [];
+      const cleanTags = currentTags.filter(t => !t.toLowerCase().startsWith('tipo:'));
+      if (originalType) cleanTags.push(`Tipo:${originalType}`);
+      fallbackTypeObj.tags = cleanTags;
+
+      const retryType = await supabase
+        .from('properties')
+        .insert([fallbackTypeObj])
+        .select();
+      result = retryType.data;
+      error = retryType.error;
     }
 
     // Fallback gracioso para a restrição properties_status_check caso o status 'inativo' ainda não esteja no check constraint do Supabase
@@ -500,6 +548,10 @@ export async function PATCH(req: NextRequest) {
       sanitized.tenant_id = activeTenantId;
     }
 
+    if (sanitized.tags && Array.isArray(sanitized.tags)) {
+      sanitized.tags = sanitized.tags.filter((t: string) => !t.toLowerCase().startsWith('tipo:'));
+    }
+
     // Normalize camelCase to snake_case for Supabase columns
     if ('condoFee' in sanitized) {
       sanitized.condo_fee = sanitized.condoFee;
@@ -563,6 +615,36 @@ export async function PATCH(req: NextRequest) {
 
       const retry = await retryQuery;
       error = retry.error;
+    }
+
+    // Fallback gracioso para a restrição properties_type_check no PATCH
+    if (error && (error.message?.includes('properties_type_check') || (error.code === '23514' && error.message?.includes('type')))) {
+      console.warn(`[API/Properties] PATCH ID ${id}: 'properties_type_check' rejeitou '${sanitized.type}'. Usando fallback de tipo seguro:`, error.message);
+      const fallbackTypeObj = { ...sanitized };
+      const originalType = sanitized.type;
+      fallbackTypeObj.type = getSafeFallbackType(originalType);
+      let currentTags = Array.isArray(fallbackTypeObj.tags) ? [...fallbackTypeObj.tags] : [];
+      if (!fallbackTypeObj.tags) {
+        const { data: existingRow } = await supabase.from('properties').select('tags').eq('id', id).maybeSingle();
+        if (existingRow && Array.isArray(existingRow.tags)) {
+          currentTags = [...existingRow.tags];
+        }
+      }
+      const cleanTags = currentTags.filter(t => !t.toLowerCase().startsWith('tipo:'));
+      if (originalType) cleanTags.push(`Tipo:${originalType}`);
+      fallbackTypeObj.tags = cleanTags;
+
+      let retryQuery = supabase
+        .from('properties')
+        .update(fallbackTypeObj)
+        .eq('id', id);
+
+      if (activeTenantId) {
+        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
+      }
+
+      const retryType = await retryQuery;
+      error = retryType.error;
     }
 
     // Fallback gracioso para a restrição properties_status_check no PATCH
