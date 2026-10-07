@@ -64,6 +64,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
 export async function updateUserProfile(id: string, data: any, skipResync = false) {
   const updateData: any = { updated_at: new Date().toISOString() };
   if (data.displayName !== undefined) updateData.display_name = data.displayName;
+  if (data.email !== undefined) updateData.email = String(data.email).trim().toLowerCase();
   if (data.photoURL !== undefined) updateData.photo_url = data.photoURL;
   if (data.role !== undefined) updateData.role = data.role;
   if (data.userType !== undefined) updateData.user_type = data.userType;

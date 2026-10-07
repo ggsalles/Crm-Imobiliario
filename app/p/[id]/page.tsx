@@ -303,7 +303,12 @@ export default function PublicPropertyCapturePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
 
               {/* Badges Overlay */}
-              <div className="absolute top-6 left-6 flex flex-wrap gap-2">
+              <div className="absolute top-6 left-6 flex flex-wrap gap-2 items-center">
+                {(property.referenceCode || property.reference_code) && (
+                  <span className="py-1 px-3.5 bg-amber-400 text-amber-950 rounded-xl text-xs sm:text-sm font-black font-mono tracking-wider uppercase shadow-xl border-2 border-white ring-2 ring-black/40 flex items-center gap-1.5">
+                    #{property.referenceCode || property.reference_code}
+                  </span>
+                )}
                 {property.isFeatured && (
                   <span className="py-1 px-3.5 bg-amber-500 text-white rounded-full text-xs font-black tracking-wide uppercase shadow-lg shadow-amber-500/30 flex items-center gap-1.5 border border-white/20">
                     <Sparkles className="w-3.5 h-3.5 fill-white" /> Destaque
@@ -369,8 +374,9 @@ export default function PublicPropertyCapturePage() {
               {/* Title & Price Bottom Overlay */}
               <div className="absolute bottom-6 left-6 right-6 text-white text-left">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 font-mono leading-none mb-1">
-                    CÓD: #{property.referenceCode || property.reference_code || property.id.slice(0, 8).toUpperCase()}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-mono font-black text-xs sm:text-sm uppercase tracking-wider w-fit shadow-md mb-1 border border-white">
+                    <span>🏷️ REF:</span>
+                    <span>#{property.referenceCode || property.reference_code || property.id.slice(0, 8).toUpperCase()}</span>
                   </span>
                   <h2 className="text-xl md:text-3xl font-black tracking-tight drop-shadow-sm leading-tight inline-flex items-center gap-1.5">{property.title}</h2>
                   {property.buildingName && (

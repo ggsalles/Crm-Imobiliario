@@ -1,0 +1,19 @@
+[
+  {
+    "id": "65825150-6862-43e6-9a83-968680380f57",
+    "display_name": "Paulo Silva",
+    "email": "paulo@paulo.com",
+    "photo_url": null,
+    "role": "Membro",
+    "user_type": "funcionário",
+    "is_admin": false,
+    "tenantIds": [
+      "c177f8cd-71b6-4bdc-a26d-4d26af076b4f"
+    ],
+    "is_active": true,
+    "inactive_reason": null,
+    "security_keyword": null,
+    "created_at": "2026-10-07T18:19:44.596Z",
+    "updated_at": "2026-10-07T18:21:53.696Z"
+  }
+]

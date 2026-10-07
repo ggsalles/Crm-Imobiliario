@@ -215,7 +215,9 @@ export async function createProperty(data: any, bypassUserId?: string) {
     cleanImageUrls = data.imageUrls.map((u: any) => String(u || '').trim()).filter((u: string) => u.length > 0);
   }
 
-  const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
+  const primaryImageUrl = cleanImageUrls.length > 1
+    ? JSON.stringify(cleanImageUrls)
+    : (cleanImageUrls.length === 1 ? cleanImageUrls[0] : "");
 
   const insertData = { 
     ...sanitized, 
@@ -252,7 +254,9 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
     cleanImageUrls = data.imageUrls.map((u: any) => String(u || '').trim()).filter((u: string) => u.length > 0);
   }
 
-  const primaryImageUrl = cleanImageUrls.length > 0 ? cleanImageUrls[0] : "";
+  const primaryImageUrl = cleanImageUrls.length > 1
+    ? JSON.stringify(cleanImageUrls)
+    : (cleanImageUrls.length === 1 ? cleanImageUrls[0] : "");
 
   const updateData = {
     ...sanitized,

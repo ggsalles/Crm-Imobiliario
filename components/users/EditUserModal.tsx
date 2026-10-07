@@ -19,7 +19,7 @@ import {
   Copy,
   UserX
 } from 'lucide-react';
-import { UserProfile, Tenant, apiFetch } from '@/lib/db';
+import { UserProfile, Tenant, apiFetch, updateUserProfile } from '@/lib/db';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -146,10 +146,7 @@ export function EditUserModal({
         securityKeyword: securityKeyword.trim() || null
       };
 
-      await apiFetch(`/api/profiles?id=${user.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload)
-      });
+      await updateUserProfile(user.id, payload);
 
       // 2. Se informou nova senha, redefine a senha no Auth do Supabase
       if (newPassword && newPassword.length >= 6) {

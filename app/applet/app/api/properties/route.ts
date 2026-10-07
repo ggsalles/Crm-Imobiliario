@@ -83,20 +83,19 @@ export async function GET(req: NextRequest) {
         .eq('property_id', id);
 
       if (imagesError) {
-        console.warn("[API/Properties] Erro ao carregar fotos da tabela property_images:", imagesError);
+        console.warn("[API/Properties] Erro ao carregar fotos:", imagesError);
       }
 
-      let dbUrls: string[] = (images || []).map((img: any) => String(img.url));
-      let propUrls: string[] = [];
-      if (property.image_url) {
+      let urls: string[] = (images || []).map((img: any) => String(img.url));
+      
+      if (urls.length === 0 && property.image_url) {
         try {
           const parsed = typeof property.image_url === 'string' ? JSON.parse(property.image_url) : property.image_url;
-          propUrls = Array.isArray(parsed) ? parsed.map(String) : [String(property.image_url)];
+          urls = Array.isArray(parsed) ? parsed : [String(property.image_url)];
         } catch {
-          propUrls = [String(property.image_url)];
+          urls = [String(property.image_url)];
         }
       }
-      const urls: string[] = Array.from(new Set([...dbUrls, ...propUrls].filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
 
       const singleTags = Array.isArray(property.tags)
         ? property.tags
@@ -279,35 +278,41 @@ export async function GET(req: NextRequest) {
     if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
     // Fetch images safely:
+    // Query property_images in a single high-performance query (very small table) instead of sequential chunks.
     const imagesByPropertyId: Record<string, string[]> = {};
-    try {
-      const { data: imagesChunk, error: imgError } = await supabase
-        .from('property_images')
-        .select('property_id, url')
-        .limit(10000);
+    const idsNeedingImages = properties
+      .filter((p: any) => !p.image_url)
+      .map((p: any) => p.id);
 
-      if (!imgError && Array.isArray(imagesChunk)) {
-        for (const img of imagesChunk) {
-          if (!imagesByPropertyId[img.property_id]) imagesByPropertyId[img.property_id] = [];
-          imagesByPropertyId[img.property_id].push(String(img.url));
+    if (idsNeedingImages.length > 0) {
+      try {
+        const { data: imagesChunk, error: imgError } = await supabase
+          .from('property_images')
+          .select('property_id, url')
+          .limit(5000);
+
+        if (!imgError && Array.isArray(imagesChunk)) {
+          for (const img of imagesChunk) {
+            if (!imagesByPropertyId[img.property_id]) imagesByPropertyId[img.property_id] = [];
+            imagesByPropertyId[img.property_id].push(String(img.url));
+          }
         }
+      } catch (imgErr) {
+        console.warn("[API/Properties] Erro ao carregar property_images:", imgErr);
       }
-    } catch (imgErr) {
-      console.warn("[API/Properties] Erro ao carregar property_images:", imgErr);
     }
 
     let items = properties.map((item: any) => {
-      let dbUrls: string[] = imagesByPropertyId[item.id] || [];
-      let propUrls: string[] = [];
-      if (item.image_url) {
+      let urls: string[] = imagesByPropertyId[item.id] || [];
+      
+      if (urls.length === 0 && item.image_url) {
         try {
           const parsed = typeof item.image_url === 'string' ? JSON.parse(item.image_url) : item.image_url;
-          propUrls = Array.isArray(parsed) ? parsed.map(String) : [String(item.image_url)];
+          urls = Array.isArray(parsed) ? parsed : [String(item.image_url)];
         } catch {
-          propUrls = [String(item.image_url)];
+          urls = [String(item.image_url)];
         }
       }
-      const urls = Array.from(new Set([...dbUrls, ...propUrls].filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
 
       const tagsList: string[] = Array.isArray(item.tags)
         ? item.tags
@@ -386,10 +391,6 @@ export async function POST(req: NextRequest) {
     
     const { imageUrls, ...sanitized } = data;
     (sanitized as any).tenant_id = resolvedTenantId;
-
-    if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
-      sanitized.image_url = imageUrls.length > 1 ? JSON.stringify(imageUrls) : String(imageUrls[0]);
-    }
 
     if (sanitized.tags && Array.isArray(sanitized.tags)) {
       sanitized.tags = sanitized.tags.filter((t: string) => !t.toLowerCase().startsWith('tipo:'));
@@ -504,8 +505,7 @@ export async function POST(req: NextRequest) {
     if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
       const imageInserts = imageUrls.map(url => ({
         property_id: propertyId,
-        url: String(url),
-        tenant_id: resolvedTenantId
+        url: String(url)
       }));
 
       const { error: imgError } = await supabase
@@ -546,10 +546,6 @@ export async function PATCH(req: NextRequest) {
     const { imageUrls, ...sanitized } = data;
     if (activeTenantId) {
       sanitized.tenant_id = activeTenantId;
-    }
-
-    if (imageUrls && Array.isArray(imageUrls)) {
-      sanitized.image_url = imageUrls.length > 1 ? JSON.stringify(imageUrls) : (imageUrls.length === 1 ? String(imageUrls[0]) : null);
     }
 
     if (sanitized.tags && Array.isArray(sanitized.tags)) {
@@ -688,8 +684,7 @@ export async function PATCH(req: NextRequest) {
       if (imageUrls.length > 0) {
         const imageInserts = imageUrls.map(url => ({
           property_id: id,
-          url: String(url),
-          tenant_id: activeTenantId || DEFAULT_TENANT_ID
+          url: String(url)
         }));
         const { error: insError } = await supabase.from('property_images').insert(imageInserts);
         if (insError) console.warn(`[API/Properties] PATCH ID ${id}: Erro ao inserir novas imagens:`, insError);
