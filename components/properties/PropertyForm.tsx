@@ -91,7 +91,7 @@ export function PropertyForm({
     try {
       const res = await fetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}`);
       if (res.ok) {
-        const data = await res.json().catch(() => null);
+        const data = await res.json();
         if (data?.nextCode) {
           setReferenceCode(data.nextCode);
         }
@@ -206,9 +206,9 @@ export function PropertyForm({
     setIsFetchingCep(true);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${rawCep}/json/`);
-      const data = await response.json().catch(() => null);
+      const data = await response.json();
 
-      if (data && !data.erro) {
+      if (!data.erro) {
         setAddressData({
           street: data.logradouro || "",
           neighborhood: data.bairro || "",
@@ -292,7 +292,7 @@ export function PropertyForm({
         throw new Error(errData.error || "Falha na estimativa de valor.");
       }
 
-      const data: ValuationResult = (await res.json().catch(() => null)) || {} as ValuationResult;
+      const data: ValuationResult = await res.json();
       data.portfolioAvgM2 = portfolioAvgM2;
       data.matchingPropertiesCount = similarInPortfolio.length;
 
@@ -434,13 +434,26 @@ export function PropertyForm({
   // Criação ou Atualização do Imóvel
   const handleCreateOrUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isSaving || isUploading || isFetchingCep || isSubmittingRef.current) {
+    if (isSaving || isUploading) {
       if (isUploading) toast.error("Aguarde o upload das imagens terminar.");
-      if (isFetchingCep) toast.error("Aguarde a busca do CEP terminar.");
       return;
     }
 
     const formData = new FormData(e.currentTarget);
+
+    const titleVal = String(formData.get("title") || title || "").trim();
+    if (!titleVal) {
+      toast.error("Por favor, informe o título do imóvel.");
+      return;
+    }
+
+    const rawPrice = formData.get("price") ? String(formData.get("price")) : displayPrice;
+    const priceVal = Number(parseCurrencyBRLToNumber(String(rawPrice || "0")));
+    if (!priceVal || priceVal <= 0) {
+      toast.error("Por favor, informe o valor de venda do imóvel.");
+      return;
+    }
+
     setIsSaving(true);
     isSubmittingRef.current = true;
 
@@ -458,9 +471,9 @@ export function PropertyForm({
     try {
       if (!user) throw new Error("Sessão inválida ou expirada.");
 
-      const neighborhood = String(formData.get("neighborhood") || "");
-      const city = String(formData.get("city") || "");
-      const state = String(formData.get("state") || "");
+      const neighborhood = String(formData.get("neighborhood") || addressData.neighborhood || "");
+      const city = String(formData.get("city") || addressData.city || "");
+      const state = String(formData.get("state") || addressData.state || "");
       const location = String(formData.get("location") || "") || `${neighborhood}, ${city} - ${state}`;
 
       const isEditing = !!editingProperty;
@@ -474,13 +487,13 @@ export function PropertyForm({
         .map((u) => String(u).trim());
 
       const data: Partial<Property> = {
-        title: String(formData.get("title") || "").substring(0, 200),
-        buildingName: String(formData.get("buildingName") || "").trim().substring(0, 200),
+        title: titleVal.substring(0, 200),
+        buildingName: String(formData.get("buildingName") || buildingName || "").trim().substring(0, 200),
         companyId: companyId || String(formData.get("companyId") || "") || undefined,
         referenceCode: (String(formData.get("referenceCode") || referenceCode || "")).trim().toUpperCase() || undefined,
         type: (selectedType || formData.get("type") || "apartamento") as any,
         status: (formData.get("status") as any) || "disponível",
-        price: Number(parseCurrencyBRLToNumber(String(formData.get("price") || "0"))),
+        price: priceVal,
         iptu: Number(parseCurrencyBRLToNumber(String(formData.get("iptu") || "0"))),
         condoFee: Number(parseCurrencyBRLToNumber(String(formData.get("condoFee") || "0"))),
         location: location.substring(0, 500),
@@ -604,6 +617,7 @@ export function PropertyForm({
         <div className={cn(editingProperty ? "xl:col-span-8" : "w-full")}>
           <form
             ref={formRef}
+            noValidate
             key={editingProperty?.id || "new-property"}
             onSubmit={handleCreateOrUpdate}
             className={cn(
@@ -787,7 +801,7 @@ export function PropertyForm({
                 <div className="md:col-span-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-                      Descritivo Comercial (Público) *
+                      Descritivo Comercial (Público)
                     </label>
                     <span className="text-[10px] font-semibold text-muted-foreground">
                       Visível na Vitrine Pública e para Clientes
@@ -795,7 +809,6 @@ export function PropertyForm({
                   </div>
                   <textarea
                     name="description"
-                    required
                     defaultValue={editingProperty?.description}
                     rows={4}
                     placeholder="Descreva os pontos fortes do imóvel, vista, acabamento, etc."

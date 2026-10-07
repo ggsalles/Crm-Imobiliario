@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
-import { DEFAULT_TENANT_ID } from '@/lib/constants';
+import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
     if (id && id !== 'undefined' && id !== 'null') {
       const isPublic = searchParams.get('public') === 'true';
       const user = getAuthenticatedUser(req);
+      const isMaster = user?.email ? isPlatformAdmin(user.email) : false;
       const activeTenantId = await getActiveTenantId(supabase, user, req);
 
       let singleQuery = supabase
@@ -66,15 +67,25 @@ export async function GET(req: NextRequest) {
         .select('*')
         .eq('id', id);
 
-      // Strict tenant isolation for CRM / authenticated requests
-      if (!isPublic && activeTenantId) {
-        singleQuery = singleQuery.eq('tenant_id', activeTenantId);
-      }
-
       const { data: property, error: propError } = await singleQuery.maybeSingle();
 
       if (propError) throw propError;
       if (!property) return NextResponse.json(null);
+
+      // Access control for authenticated CRM view
+      if (!isPublic && !isMaster && user?.id && property.tenant_id) {
+        if (activeTenantId && activeTenantId !== property.tenant_id && activeTenantId !== DEFAULT_TENANT_ID) {
+          const { data: assoc } = await supabase
+            .from('profile_tenants')
+            .select('tenant_id')
+            .eq('profile_id', user.id)
+            .eq('tenant_id', property.tenant_id)
+            .maybeSingle();
+          if (!assoc && property.owner_id !== user.id) {
+            return NextResponse.json(null, { status: 403 });
+          }
+        }
+      }
 
       // Fetch images for this property
       const { data: images, error: imagesError } = await supabase
@@ -177,8 +188,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!effectiveTenantId) {
-      effectiveTenantId = DEFAULT_TENANT_ID;
+    const isMaster = user?.email ? isPlatformAdmin(user.email) : false;
+
+    if (isMaster && tenantParam === 'all') {
+      effectiveTenantId = null;
+    } else if (!effectiveTenantId || effectiveTenantId === DEFAULT_TENANT_ID) {
+      if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+        effectiveTenantId = activeTenantId;
+      } else {
+        effectiveTenantId = 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f';
+      }
     }
 
     // Vitrine pública compartilhada por corretor (ex: link de Vivi da Nando Imobiliária):
@@ -191,7 +210,9 @@ export async function GET(req: NextRequest) {
     const cacheKey = `${effectiveTenantId || 'all'}:${shouldFilterByOwner ? ownerId : 'all'}:${isPublic}:${searchParams.get('featured') || 'all'}:${searchParams.get('limit') || 'all'}`;
     const cached = serverPropertiesCache.get(cacheKey);
     const now = Date.now();
-    if (cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
+    // Cache de servidor exclusivo para vitrine pública (acesso anônimo). 
+    // Para o CRM / corretores autenticados, sempre retorna dados em tempo real direto do banco.
+    if (isPublic && cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
       return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
     }
 
@@ -241,7 +262,7 @@ export async function GET(req: NextRequest) {
       const currentBatchSize = Math.min(MAX_POSTGREST_PAGE, targetMax - allProperties.length);
       let batchQuery = supabase
         .from('properties')
-        .select('id, reference_code, title, type, status, price, area, bedrooms, suites, bathrooms, parking_spots, location, neighborhood, city, state, street, number, complement, cep, image_url, tags, is_featured, accepts_financing, building_name, condo_fee, iptu, company_id, owner_id, tenant_id, created_at, updated_at')
+        .select('id, reference_code, title, type, status, price, area, bedrooms, suites, bathrooms, parking_spots, location, neighborhood, city, state, street, number, complement, cep, image_url, tags, is_featured, accepts_financing, building_name, condo_fee, iptu, company_id, owner_id, tenant_id, notes, description, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
@@ -421,6 +442,14 @@ export async function POST(req: NextRequest) {
       sanitized.company_id = sanitized.companyId || null;
       delete sanitized.companyId;
     }
+    if ('referenceCode' in sanitized) {
+      sanitized.reference_code = sanitized.referenceCode;
+      delete sanitized.referenceCode;
+    }
+    if ('ownerId' in sanitized) {
+      sanitized.owner_id = sanitized.ownerId || null;
+      delete sanitized.ownerId;
+    }
 
     console.log("[API/Properties] POST: Inserindo na tabela 'properties'...");
     let { data: result, error } = await supabase
@@ -541,12 +570,54 @@ export async function PATCH(req: NextRequest) {
     console.log(`[API/Properties] PATCH ID ${id}: Dados recebidos:`, data);
     
     const user = getAuthenticatedUser(req);
+    const isMaster = user?.email ? isPlatformAdmin(user.email) : false;
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
-    const { imageUrls, ...sanitized } = data;
-    if (activeTenantId) {
-      sanitized.tenant_id = activeTenantId;
+    // 1. Fetch existing property to verify existence and preserve tenant
+    const { data: existingProp, error: findError } = await supabase
+      .from('properties')
+      .select('id, tenant_id, owner_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError) {
+      console.error(`[API/Properties] PATCH ID ${id} find error:`, findError);
+      return NextResponse.json({ error: findError.message }, { status: 500 });
     }
+
+    if (!existingProp) {
+      console.warn(`[API/Properties] PATCH ID ${id}: Imóvel não encontrado no banco.`);
+      return NextResponse.json({ error: "Imóvel não encontrado." }, { status: 404 });
+    }
+
+    // 2. Permission check:
+    if (!isMaster && user?.id) {
+      const propTenant = existingProp.tenant_id;
+      const isOwner = existingProp.owner_id === user.id;
+      const isTenantMatch = activeTenantId && activeTenantId === propTenant;
+      
+      let hasTenantAssoc = false;
+      if (!isOwner && !isTenantMatch && propTenant) {
+        const { data: assoc } = await supabase
+          .from('profile_tenants')
+          .select('tenant_id')
+          .eq('profile_id', user.id)
+          .eq('tenant_id', propTenant)
+          .maybeSingle();
+        hasTenantAssoc = !!assoc;
+      }
+
+      if (!isOwner && !isTenantMatch && !hasTenantAssoc && propTenant && activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+        console.warn(`[API/Properties] PATCH ID ${id}: Acesso negado para o tenant ${propTenant}`);
+        return NextResponse.json({ error: "Permissão insuficiente para alterar imóvel desta imobiliária." }, { status: 403 });
+      }
+    }
+
+    const { imageUrls, ...sanitized } = data;
+
+    // Never mutate primary key or tenant_id during regular edits
+    delete sanitized.id;
+    delete sanitized.tenant_id;
 
     if (imageUrls && Array.isArray(imageUrls)) {
       sanitized.image_url = imageUrls.length > 1 ? JSON.stringify(imageUrls) : (imageUrls.length === 1 ? String(imageUrls[0]) : null);
@@ -581,22 +652,25 @@ export async function PATCH(req: NextRequest) {
       sanitized.company_id = sanitized.companyId || null;
       delete sanitized.companyId;
     }
-
-    console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
-    let updateQuery = supabase
-      .from('properties')
-      .update(sanitized)
-      .eq('id', id);
-
-    if (activeTenantId) {
-      updateQuery = updateQuery.eq('tenant_id', activeTenantId);
+    if ('referenceCode' in sanitized) {
+      sanitized.reference_code = sanitized.referenceCode;
+      delete sanitized.referenceCode;
+    }
+    if ('ownerId' in sanitized) {
+      sanitized.owner_id = sanitized.ownerId || null;
+      delete sanitized.ownerId;
     }
 
-    let { error } = await updateQuery;
+    console.log(`[API/Properties] PATCH ID ${id}: Atualizando na tabela 'properties'...`);
+    let { data: updatedRows, error } = await supabase
+      .from('properties')
+      .update(sanitized)
+      .eq('id', id)
+      .select();
 
-    // Fallback gracioso caso a coluna 'tags', 'is_featured', 'suites' ou 'company_id' ainda não tenha sido criada no Supabase pelo usuário
+    // Fallback gracioso caso alguma coluna opcional ainda não exista no Supabase
     if (error && (error.message?.includes('tags') || error.message?.includes('is_featured') || error.message?.includes('suites') || error.message?.includes('company_id') || error.code === '42703' || (error.message?.includes('column') && error.message?.includes('does not exist')))) {
-      console.warn(`[API/Properties] PATCH ID ${id}: Coluna ainda não criada no Supabase. Atualizando com fallback:`, error.message);
+      console.warn(`[API/Properties] PATCH ID ${id}: Coluna não existente no Supabase. Atualizando com fallback:`, error.message);
       const fallbackSanitized = { ...sanitized };
       if (error.message?.includes('tags')) delete fallbackSanitized.tags;
       if (error.message?.includes('is_featured')) delete fallbackSanitized.is_featured;
@@ -608,16 +682,13 @@ export async function PATCH(req: NextRequest) {
         delete fallbackSanitized.suites;
         delete fallbackSanitized.company_id;
       }
-      let retryQuery = supabase
+      const retry = await supabase
         .from('properties')
         .update(fallbackSanitized)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
-      if (activeTenantId) {
-        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
-      }
-
-      const retry = await retryQuery;
+      updatedRows = retry.data;
       error = retry.error;
     }
 
@@ -638,16 +709,13 @@ export async function PATCH(req: NextRequest) {
       if (originalType) cleanTags.push(`Tipo:${originalType}`);
       fallbackTypeObj.tags = cleanTags;
 
-      let retryQuery = supabase
+      const retryType = await supabase
         .from('properties')
         .update(fallbackTypeObj)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
-      if (activeTenantId) {
-        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
-      }
-
-      const retryType = await retryQuery;
+      updatedRows = retryType.data;
       error = retryType.error;
     }
 
@@ -661,16 +729,13 @@ export async function PATCH(req: NextRequest) {
         if (!currentTags.includes('Inativo')) currentTags.push('Inativo');
         fallbackStatus.tags = currentTags;
       }
-      let retryQuery = supabase
+      const retryStatus = await supabase
         .from('properties')
         .update(fallbackStatus)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
-      if (activeTenantId) {
-        retryQuery = retryQuery.eq('tenant_id', activeTenantId);
-      }
-
-      const retryStatus = await retryQuery;
+      updatedRows = retryStatus.data;
       error = retryStatus.error;
     }
 
@@ -679,9 +744,14 @@ export async function PATCH(req: NextRequest) {
       throw error;
     }
 
+    if (!updatedRows || updatedRows.length === 0) {
+      console.error(`[API/Properties] PATCH ID ${id}: Nenhuma linha foi atualizada no banco.`);
+      return NextResponse.json({ error: "Falha ao persistir alterações. O registro não foi modificado no banco de dados." }, { status: 400 });
+    }
+
+    // Sincroniza fotos com a imobiliária correta do imóvel
     if (imageUrls && Array.isArray(imageUrls)) {
       console.log(`[API/Properties] PATCH ID ${id}: Sincronizando ${imageUrls.length} imagens...`);
-      // Sync images
       const { error: delError } = await supabase.from('property_images').delete().eq('property_id', id);
       if (delError) console.warn(`[API/Properties] PATCH ID ${id}: Erro ao limpar imagens antigas:`, delError);
       
@@ -689,7 +759,7 @@ export async function PATCH(req: NextRequest) {
         const imageInserts = imageUrls.map(url => ({
           property_id: id,
           url: String(url),
-          tenant_id: activeTenantId || DEFAULT_TENANT_ID
+          tenant_id: existingProp.tenant_id || activeTenantId || DEFAULT_TENANT_ID
         }));
         const { error: insError } = await supabase.from('property_images').insert(imageInserts);
         if (insError) console.warn(`[API/Properties] PATCH ID ${id}: Erro ao inserir novas imagens:`, insError);
@@ -699,7 +769,7 @@ export async function PATCH(req: NextRequest) {
 
     serverPropertiesCache.clear();
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, updated: updatedRows[0] });
   } catch (error: any) {
     console.error(`[API/Properties] PATCH FATAL ERROR:`, error);
     return NextResponse.json({ error: error.message || "Internal Server Error during PATCH" }, { status: 500 });
@@ -716,9 +786,36 @@ export async function DELETE(req: NextRequest) {
     }
 
     const user = getAuthenticatedUser(req);
+    const isMaster = user?.email ? isPlatformAdmin(user.email) : false;
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
     console.log(`[API/Properties] DELETE ID ${id}: Iniciando remoção...`);
+
+    const { data: existingProp } = await supabase
+      .from('properties')
+      .select('id, tenant_id, owner_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!existingProp) {
+      return NextResponse.json({ success: true, message: "Imóvel já removido." });
+    }
+
+    if (!isMaster && user?.id) {
+      const isOwner = existingProp.owner_id === user.id;
+      const isTenantMatch = activeTenantId && activeTenantId === existingProp.tenant_id;
+      if (!isOwner && !isTenantMatch && existingProp.tenant_id && activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+        const { data: assoc } = await supabase
+          .from('profile_tenants')
+          .select('tenant_id')
+          .eq('profile_id', user.id)
+          .eq('tenant_id', existingProp.tenant_id)
+          .maybeSingle();
+        if (!assoc) {
+          return NextResponse.json({ error: "Permissão insuficiente para excluir este imóvel." }, { status: 403 });
+        }
+      }
+    }
 
     // First delete associated images due to possible foreign key constraints
     const { error: imgError } = await supabase
@@ -730,16 +827,10 @@ export async function DELETE(req: NextRequest) {
       console.warn(`[API/Properties] DELETE ID ${id}: Erro ao remover imagens associadas (continuando...):`, imgError);
     }
 
-    let deleteQuery = supabase
+    const { error } = await supabase
       .from('properties')
       .delete()
       .eq('id', id);
-
-    if (activeTenantId) {
-      deleteQuery = deleteQuery.eq('tenant_id', activeTenantId);
-    }
-
-    const { error } = await deleteQuery;
 
     if (error) {
       console.error(`[API/Properties] DELETE ID ${id} error:`, error);

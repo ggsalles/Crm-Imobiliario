@@ -40,10 +40,10 @@ export async function getProperties(ownerId?: string, limit?: number): Promise<P
   console.log("[lib/db/properties] getProperties: Buscando imóveis via API Proxy...");
   
   try {
-    let url = `/api/properties?limit=${limit || 10000}`;
+    let url = `/api/properties?limit=${limit || 10000}&_t=${Date.now()}`;
     if (ownerId) url += `&ownerId=${ownerId}`;
     
-    const data = await apiFetch(url);
+    const data = await apiFetch(url, { bypassCache: true, noCache: true });
     if (Array.isArray(data)) {
       dataCache[cacheKey] = data;
       safePersistSnapshot(cacheKey, data);
@@ -249,6 +249,12 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
   console.log(`[lib/db/properties] updateProperty: Iniciando atualização para o ID: ${id}`);
   const { sanitized } = sanitizePropertyData(data, userId);
 
+  // In updates, preserve existing owner_id unless explicitly changing owner
+  if (!data.ownerId && !data.owner_id) {
+    delete (sanitized as any).owner_id;
+  }
+  delete (sanitized as any).tenant_id;
+
   let cleanImageUrls: string[] = [];
   if (Array.isArray(data.imageUrls)) {
     cleanImageUrls = data.imageUrls.map((u: any) => String(u || '').trim()).filter((u: string) => u.length > 0);
@@ -272,6 +278,14 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
       body: JSON.stringify(updateData)
     });
     console.log("[lib/db/properties] updateProperty Proxy: Transação concluída com sucesso.");
+    
+    // Atualiza otimisticamente a memória local para resposta instantânea
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
+        dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...data, ...updateData } : p);
+      }
+    }
+    
     clearPropertiesCache();
     forceDataResync();
     return id;

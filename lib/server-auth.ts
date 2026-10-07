@@ -124,7 +124,7 @@ export async function getActiveTenantId(
   }
 
   const callerIsMaster = user.email ? isPlatformAdmin(user.email) : false;
-  if (callerIsMaster && requestedTenantId) {
+  if (callerIsMaster && requestedTenantId && requestedTenantId !== DEFAULT_TENANT_ID) {
     return requestedTenantId;
   }
 

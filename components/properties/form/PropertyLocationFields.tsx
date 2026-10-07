@@ -35,7 +35,7 @@ export function PropertyLocationFields({
       {/* Campo de CEP */}
       <div className="space-y-3">
         <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex justify-between">
-          <span>CEP *</span>
+          <span>CEP</span>
           {isFetchingCep && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
         </label>
         <input
@@ -43,7 +43,6 @@ export function PropertyLocationFields({
           value={cep}
           onChange={(e) => onCepChange(formatCEP(e.target.value))}
           onBlur={onCepBlur}
-          required
           placeholder="00000-000"
           autoComplete="new-password"
           className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-mono font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground"
@@ -54,11 +53,10 @@ export function PropertyLocationFields({
       <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="md:col-span-3 space-y-3">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-            Logradouro *
+            Logradouro
           </label>
           <input
             name="street"
-            required
             value={addressData.street}
             onChange={(e) =>
               onAddressDataChange((prev) => ({ ...prev, street: e.target.value }))
@@ -67,12 +65,12 @@ export function PropertyLocationFields({
           />
         </div>
         <div className="space-y-3">
-          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-            Número *
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 flex items-center justify-between">
+            <span>Número</span>
+            <span className="text-[9px] font-semibold text-muted-foreground lowercase">opcional</span>
           </label>
           <input
             name="number"
-            required
             defaultValue={editingProperty?.number}
             className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground"
           />
@@ -83,11 +81,10 @@ export function PropertyLocationFields({
       <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="space-y-3">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-            Bairro *
+            Bairro
           </label>
           <input
             name="neighborhood"
-            required
             value={addressData.neighborhood}
             onChange={(e) =>
               onAddressDataChange((prev) => ({ ...prev, neighborhood: e.target.value }))
@@ -97,11 +94,10 @@ export function PropertyLocationFields({
         </div>
         <div className="space-y-3">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-            Cidade *
+            Cidade
           </label>
           <input
             name="city"
-            required
             value={addressData.city}
             onChange={(e) =>
               onAddressDataChange((prev) => ({ ...prev, city: e.target.value }))
@@ -111,11 +107,10 @@ export function PropertyLocationFields({
         </div>
         <div className="space-y-3">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
-            Estado (UF) *
+            Estado (UF)
           </label>
           <input
             name="state"
-            required
             maxLength={2}
             value={addressData.state}
             onChange={(e) =>
