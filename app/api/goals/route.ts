@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     // Fetch active tenant from user profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);

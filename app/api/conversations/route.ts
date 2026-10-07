@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     // Resolve active tenant of the user to securely assign it (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
@@ -150,7 +150,7 @@ export async function PATCH(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) throw new Error("ID required");
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     // Secure multi-tenant check (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);

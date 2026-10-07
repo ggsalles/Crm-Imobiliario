@@ -217,7 +217,7 @@ export function DataImportSection() {
           throw new Error(errData.error || `Erro no lote ${i + 1}`);
         }
 
-        const data = await res.json();
+        const data = (await res.json().catch(() => null)) || {};
         totalInserted += (data.insertedCount || batch.length);
         totalFailed += (data.failedCount || 0);
 

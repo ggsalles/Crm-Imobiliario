@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
@@ -110,7 +110,7 @@ export async function PATCH(req: NextRequest) {
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     let query = supabase
       .from('companies')

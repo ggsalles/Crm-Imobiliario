@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     const authorName = data.author_name || data.authorName || user?.email || 'Sistema';
     const userId = user?.id || data.owner_id || data.created_by || null;

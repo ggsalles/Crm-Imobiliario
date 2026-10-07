@@ -57,7 +57,7 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt } = await req.json();
+    const { prompt } = await req.json().catch(() => ({}));
 
     if (!process.env.GEMINI_API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
       return NextResponse.json(

@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
   try {
     invalidateServerContactsCache();
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     // Map temperature to role for database storing
     if (data.type === 'cliente') {
@@ -268,7 +268,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required for PATCH" }, { status: 400 });
     }
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     // Map temperature to role for database updates
     if (data.temperature !== undefined) {

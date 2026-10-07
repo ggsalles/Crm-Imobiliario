@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
     const user = getAuthenticatedUser(req);
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { kind, items, targetTenantId } = body;
 
     // 1. Rigorous Authorization: Only ggsalles or authorized admins can run bulk imports

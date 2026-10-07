@@ -52,7 +52,7 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const {
       type = "apartamento",
       neighborhood = "",

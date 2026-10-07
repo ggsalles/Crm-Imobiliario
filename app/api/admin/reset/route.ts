@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { confirmationText, scope = 'current', tenantId, entities = [] } = body;
 
     if (confirmationText !== 'ZERAR TUDO') {

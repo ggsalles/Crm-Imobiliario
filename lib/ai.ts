@@ -58,7 +58,7 @@ export async function safeAiCall(prompt: string, fallbackText: string): Promise<
       throw new Error("A API de IA retornou um formato inesperado (HTML/Text). Tente novamente.");
     }
 
-    const data = await response.json();
+    const data = (await response.json().catch(() => null)) || {};
     
     if (!data.text) {
       throw new Error("No text generated");

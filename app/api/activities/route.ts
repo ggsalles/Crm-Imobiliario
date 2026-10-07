@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) throw new Error("ID required");
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     const { error } = await supabase
       .from('activities')

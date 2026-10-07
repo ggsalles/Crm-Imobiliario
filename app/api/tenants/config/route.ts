@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Access Denied. Platform administrator only." }, { status: 403 });
     }
 
-    const newConfig = await req.json();
+    const newConfig = await req.json().catch(() => ({}));
     if (!newConfig || !Array.isArray(newConfig.blockedTenantIds)) {
       return NextResponse.json({ error: "Invalid SaaS configuration body." }, { status: 400 });
     }

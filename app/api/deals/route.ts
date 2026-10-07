@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
     
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
@@ -137,7 +137,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Valid ID required" }, { status: 400 });
     }
 
-    const data = await req.json();
+    const data = await req.json().catch(() => ({}));
 
     // Sanitize body data UUIDs
     const sanitizeId = (val: any) => (val && val !== 'undefined' && val !== 'null') ? val : null;

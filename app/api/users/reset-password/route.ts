@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida ou não autenticada." }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { targetUserId, targetEmail, newPassword } = body;
 
     if (!newPassword || newPassword.length < 6) {
