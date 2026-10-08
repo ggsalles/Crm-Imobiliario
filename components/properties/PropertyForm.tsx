@@ -38,7 +38,7 @@ interface PropertyFormProps {
   contacts: Contact[];
   user: any;
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (savedProperty?: Property) => void;
 }
 
 export function PropertyForm({
@@ -542,6 +542,8 @@ export function PropertyForm({
 
       toastId = toast.loading(isEditing ? "Atualizando registro..." : "Salvando novo imóvel...");
 
+      let savedPropObj: Property | undefined = undefined;
+
       if (isEditing && currentPropertyId) {
         await updateProperty(currentPropertyId, data, user.id);
         recordAuditEvent({
@@ -559,8 +561,24 @@ export function PropertyForm({
             type: data.type,
           },
         });
+        
+        savedPropObj = {
+          ...(editingProperty || {}),
+          ...data,
+          id: currentPropertyId,
+          imageUrls: (data.imageUrls || []).filter(Boolean),
+          updatedAt: new Date().toISOString()
+        } as Property;
       } else {
         const newId = await createProperty(data, user.id);
+        savedPropObj = {
+          ...data,
+          id: newId,
+          imageUrls: (data.imageUrls || []).filter(Boolean),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        } as Property;
+        
         recordAuditEvent({
           action: "CREATE_PROPERTY",
           title: "Cadastro de Novo Imóvel",
@@ -582,7 +600,7 @@ export function PropertyForm({
       toast.success(isEditing ? "Imóvel atualizado com sucesso!" : "Imóvel cadastrado com sucesso!", {
         id: toastId,
       });
-      onSuccess();
+      onSuccess(savedPropObj);
     } catch (err: any) {
       console.error("[Properties] Falha crítica no salvamento:", err);
       clearTimeout(uiTimeoutId);

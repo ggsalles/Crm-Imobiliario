@@ -134,14 +134,30 @@ export function subscribeToShowcaseProperties(
   };
 }
 
+// Reactive In-Memory Subscribers Store (padrão iFood / Optimistic UI instantâneo)
+const propertySubscribers = new Set<(properties: Property[]) => void>();
+
+export function notifyPropertiesUpdated(updatedList: Property[]) {
+  if (!Array.isArray(updatedList)) return;
+  propertySubscribers.forEach((cb) => {
+    try {
+      cb([...updatedList]);
+    } catch (err) {
+      console.warn("[lib/db/properties] Falha ao notificar subscriber:", err);
+    }
+  });
+}
+
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
   const cacheKey = `properties:${ownerId || 'all'}`;
+  propertySubscribers.add(callback);
+
   const initialData = getCachedProperties(ownerId);
   if (initialData && initialData.length > 0) {
     callback(initialData);
   }
 
-  const fetchProperties = async () => {
+  const fetchProperties = async (silent = false) => {
     try {
       const data = await getProperties(ownerId, 10000);
       if (data && Array.isArray(data)) {
@@ -162,10 +178,11 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
   };
 
   fetchProperties();
-  const subscription = createRealtimeChannel('properties', fetchProperties);
-  const poll = createVisibilityAwarePoll(fetchProperties, POLL_INTERVAL);
+  const subscription = createRealtimeChannel('properties', () => fetchProperties(true));
+  const poll = createVisibilityAwarePoll(() => fetchProperties(true), POLL_INTERVAL);
 
   return () => {
+    propertySubscribers.delete(callback);
     supabase.removeChannel(subscription);
     if ((subscription as any)._customCleanup) (subscription as any)._customCleanup();
     clearInterval(poll);
@@ -248,11 +265,11 @@ export async function createProperty(data: any, bypassUserId?: string) {
       if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
         dataCache[k] = [newPropertyObj, ...dataCache[k]];
         safePersistSnapshot(k, dataCache[k]);
+        notifyPropertiesUpdated(dataCache[k]);
       }
     }
 
     invalidateApiCache('/api/properties');
-    forceDataResync();
     return result.id;
   } catch (err) {
     console.error("[lib/db/properties] createProperty Proxy FATAL:", err);
@@ -298,16 +315,22 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
     });
     console.log("[lib/db/properties] updateProperty Proxy: Transação concluída com sucesso.");
     
-    // Atualiza otimisticamente a memória local para resposta instantânea
+    // Atualiza otimisticamente a memória local para resposta instantânea (0ms)
+    let updatedSnapshot: Property[] | null = null;
     for (const k of Object.keys(dataCache)) {
       if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
-        dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...data, ...updateData } : p);
+        dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...data, ...updateData, imageUrls: cleanImageUrls } : p);
         safePersistSnapshot(k, dataCache[k]);
+        if (!updatedSnapshot) updatedSnapshot = dataCache[k];
       }
     }
     
+    // Notifica instantaneamente todos os componentes React montados na tela
+    if (updatedSnapshot) {
+      notifyPropertiesUpdated(updatedSnapshot);
+    }
+    
     invalidateApiCache('/api/properties');
-    forceDataResync();
     return id;
   } catch (err) {
     console.error(`[lib/db/properties] updateProperty Proxy FATAL para o ID ${id}:`, err);
@@ -322,8 +345,15 @@ export async function deleteProperty(id: string) {
     await apiFetch(`/api/properties?id=${id}`, {
       method: "DELETE"
     });
-    clearPropertiesCache();
-    forceDataResync();
+    
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
+        dataCache[k] = dataCache[k].filter((p: any) => p.id !== id);
+        safePersistSnapshot(k, dataCache[k]);
+        notifyPropertiesUpdated(dataCache[k]);
+      }
+    }
+    invalidateApiCache('/api/properties');
     return true;
   } catch (error) {
     console.error("[lib/db/properties] Error in deleteProperty Proxy:", error);

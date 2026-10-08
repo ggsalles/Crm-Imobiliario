@@ -749,7 +749,16 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               contacts={contacts}
               user={user}
               onCancel={() => setView('list')}
-              onSuccess={() => {
+              onSuccess={(savedProperty?: Property) => {
+                if (savedProperty) {
+                  setProperties((prev) => {
+                    const exists = prev.some((p) => p.id === savedProperty.id);
+                    if (exists) {
+                      return prev.map((p) => (p.id === savedProperty.id ? { ...p, ...savedProperty } : p));
+                    }
+                    return [savedProperty, ...prev];
+                  });
+                }
                 setEditingProperty(null);
                 setView('list');
               }}
