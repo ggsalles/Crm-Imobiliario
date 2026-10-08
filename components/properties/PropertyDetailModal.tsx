@@ -319,7 +319,7 @@ export function PropertyDetailModal({
             <div>
               {(activeProperty.referenceCode || (activeProperty as any).reference_code) && (
                 <div className="mb-2.5">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/15 text-amber-950 dark:text-amber-300 border-2 border-amber-400/50 rounded-xl text-sm sm:text-base font-mono font-black uppercase tracking-wider shadow-xs">
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-400 text-amber-950 border-2 border-yellow-200 rounded-xl text-sm sm:text-base font-mono font-black uppercase tracking-wider shadow-sm">
                     <span className="text-base sm:text-lg">🏷️</span>
                     <span>CÓDIGO DE REFERÊNCIA: #{activeProperty.referenceCode || (activeProperty as any).reference_code}</span>
                   </span>
