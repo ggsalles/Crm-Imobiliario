@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     const { data: result, error } = await supabase
       .from('deals')
       .insert([newDealPayload])
-      .select('id');
+      .select(DEAL_SELECT_COLUMNS);
 
     if (error) {
       console.error("[API/Deals] POST Insert Error:", error);
@@ -169,10 +169,15 @@ export async function POST(req: NextRequest) {
     // Invalida cache após inserção bem sucedida
     invalidateServerDealsCache();
 
-    return NextResponse.json({ id: result[0].id }, { status: 201 });
+    const createdDeal = formatDeal(result[0]);
+    return NextResponse.json({ 
+      success: true, 
+      id: result[0].id, 
+      deal: createdDeal 
+    }, { status: 201, headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Deals] POST Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -182,12 +187,12 @@ export async function PATCH(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id || id === 'undefined' || id === 'null') {
-      return NextResponse.json({ error: "ID de negócio inválido" }, { status: 400 });
+      return NextResponse.json({ error: "ID de negócio inválido" }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     const user = getAuthenticatedUser(req);
     if (!user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401, headers: NO_CACHE_HEADERS });
     }
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
@@ -198,7 +203,7 @@ export async function PATCH(req: NextRequest) {
     }
     const { data: existingDeal, error: checkError } = await checkQuery.maybeSingle();
     if (checkError || !existingDeal) {
-      return NextResponse.json({ error: "Negócio não encontrado ou sem permissão de acesso" }, { status: 404 });
+      return NextResponse.json({ error: "Negócio não encontrado ou sem permissão de acesso" }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
     const body = await req.json().catch(() => ({}));
@@ -236,7 +241,7 @@ export async function PATCH(req: NextRequest) {
       updateQuery = updateQuery.eq('tenant_id', activeTenantId);
     }
 
-    const { error: updateError } = await updateQuery;
+    const { data: updatedDeals, error: updateError } = await updateQuery.select(DEAL_SELECT_COLUMNS);
     if (updateError) {
       console.error("[API/Deals] PATCH update error:", updateError);
       throw updateError;
@@ -245,10 +250,15 @@ export async function PATCH(req: NextRequest) {
     // Invalida cache após mutação
     invalidateServerDealsCache();
 
-    return NextResponse.json({ success: true });
+    const updatedDeal = updatedDeals && updatedDeals.length > 0 ? formatDeal(updatedDeals[0]) : null;
+
+    return NextResponse.json({ 
+      success: true, 
+      deal: updatedDeal 
+    }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Deals] PATCH Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -258,12 +268,12 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id || id === 'undefined' || id === 'null') {
-      return NextResponse.json({ error: "ID de negócio inválido" }, { status: 400 });
+      return NextResponse.json({ error: "ID de negócio inválido" }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     const user = getAuthenticatedUser(req);
     if (!user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401, headers: NO_CACHE_HEADERS });
     }
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
@@ -274,7 +284,7 @@ export async function DELETE(req: NextRequest) {
     }
     const { data: existingDeal, error: checkError } = await checkQuery.maybeSingle();
     if (checkError || !existingDeal) {
-      return NextResponse.json({ error: "Negócio não encontrado ou sem permissão para exclusão" }, { status: 404 });
+      return NextResponse.json({ error: "Negócio não encontrado ou sem permissão para exclusão" }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
     let deleteQuery = supabase
@@ -295,9 +305,9 @@ export async function DELETE(req: NextRequest) {
     // Invalida cache após remoção
     invalidateServerDealsCache();
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Deals] DELETE Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

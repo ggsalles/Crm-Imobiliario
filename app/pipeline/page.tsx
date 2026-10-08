@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
@@ -542,11 +540,17 @@ export default function PipelinePage() {
   const handleSaveDeal = async (data: Partial<Deal>) => {
     try {
       if (editingDeal?.id) {
-        await updateDeal(editingDeal.id, data);
+        const updatedDeal = await updateDeal(editingDeal.id, data);
+        
+        // Sincronização imediata no estado do React
+        setDeals((prev) =>
+          prev.map((d) => (d.id === editingDeal.id ? (updatedDeal || { ...d, ...data }) : d))
+        );
+
         recordAuditEvent({
           action: "UPDATE_DEAL",
           title: "Edição de Oportunidade / Negócio",
-          content: `Negócio "${data.title}" foi atualizado.`,
+          content: `Negócio "${data.title || editingDeal.title}" foi atualizado.`,
           severity: "medium",
           category: "modification",
           relatedId: editingDeal.id,
@@ -555,7 +559,7 @@ export default function PipelinePage() {
         });
         toast.success("Negócio atualizado com sucesso!");
       } else {
-        const docId = await createDeal({
+        const res = await createDeal({
           title: data.title || "Novo Negócio",
           value: data.value || 0,
           stage: data.stage || "lead",
@@ -564,6 +568,13 @@ export default function PipelinePage() {
           propertyId: data.propertyId,
           ownerId: data.ownerId || user?.id,
         });
+
+        // Sincronização imediata no estado do React
+        if (res?.deal) {
+          setDeals((prev) => [res.deal, ...prev]);
+        }
+
+        const docId = res?.id || res?.deal?.id;
 
         recordAuditEvent({
           action: "CREATE_DEAL",
@@ -627,6 +638,10 @@ export default function PipelinePage() {
     try {
       setIsDeletingDeal(true);
       await deleteDeal(dealToDelete.id);
+
+      // Sincronização imediata no estado do React
+      setDeals((prev) => prev.filter((d) => d.id !== dealToDelete.id));
+
       recordAuditEvent({
         action: "DELETE_DEAL",
         title: "Exclusão de Negócio / Oportunidade",

@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
@@ -429,11 +427,16 @@ export default function UsersPage() {
     const assignedTenantIds = newUserData.tenantIds && newUserData.tenantIds.length > 0 ? newUserData.tenantIds : [assignedTenantId];
 
     try {
-      await createUserProfile({
+      const res = await createUserProfile({
         ...newUserData,
         tenantId: assignedTenantId,
         tenantIds: assignedTenantIds
       });
+
+      // Sincronização imediata no estado local do React
+      if (res?.profile) {
+        setUsers(prev => [res.profile, ...prev.filter(u => u.id !== res.profile.id)]);
+      }
 
       recordAuditEvent({
         action: 'CREATE_USER',
@@ -676,8 +679,12 @@ export default function UsersPage() {
           isOpen={!!userToEdit}
           onClose={() => setUserToEdit(null)}
           user={userToEdit}
-          onSuccess={() => {
-            forceDataResync();
+          onSuccess={(updated) => {
+            if (updated) {
+              setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+            } else {
+              forceDataResync();
+            }
           }}
           isAdmin={isAdmin}
           tenants={isPlatformAdmin ? tenants : tenants.filter(t => t.id === currentTenantId)}

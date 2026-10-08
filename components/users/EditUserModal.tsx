@@ -27,7 +27,7 @@ interface EditUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: UserProfile | null;
-  onSuccess: () => void;
+  onSuccess: (updatedUser?: UserProfile) => void;
   isAdmin: boolean;
   tenants: Tenant[];
 }
@@ -146,7 +146,7 @@ export function EditUserModal({
         securityKeyword: securityKeyword.trim() || null
       };
 
-      await updateUserProfile(user.id, payload);
+      const updated = await updateUserProfile(user.id, payload);
 
       // 2. Se informou nova senha, redefine a senha no Auth do Supabase
       if (newPassword && newPassword.length >= 6) {
@@ -161,7 +161,7 @@ export function EditUserModal({
       }
 
       toast.success(`Usuário ${displayName} atualizado com sucesso!`);
-      onSuccess();
+      onSuccess(updated);
       onClose();
     } catch (err: any) {
       console.error("Erro ao atualizar usuário:", err);

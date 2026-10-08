@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Search } from "lucide-react";
+import { X, Search, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import { Deal, Company, Contact, Property, UserProfile } from "@/lib/db";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
@@ -76,14 +77,22 @@ export function DealModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const formData = new FormData(e.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    if (!title) {
+      toast.error("O título do negócio é obrigatório");
+      return;
+    }
+
     const selectedPropId = selectedPropertyId || (formData.get("propertyId") as string) || undefined;
     const selectedContId = selectedContactId || (formData.get("contactId") as string) || undefined;
     const selectedProp = properties.find((p) => p.id === selectedPropId);
     const autoCompanyId = selectedProp?.companyId || editingDeal?.companyId || undefined;
 
     const data: Partial<Deal> = {
-      title: formData.get("title") as string,
+      title,
       value: parseCurrencyBRLToNumber(displayValue || (formData.get("value") as string)),
       stage: formData.get("stage") as string,
       companyId: autoCompanyId,
@@ -369,9 +378,16 @@ export function DealModal({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 py-2.5 px-4 font-bold text-xs sm:text-sm bg-primary text-white rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-2.5 px-4 font-bold text-xs sm:text-sm bg-primary text-white rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isSubmitting ? "Salvando..." : editingDeal?.id ? "Salvar Alterações" : "Salvar Negócio"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Gravando no Banco...</span>
+                    </>
+                  ) : (
+                    editingDeal?.id ? "Salvar Alterações" : "Salvar Negócio"
+                  )}
                 </button>
               </div>
             </form>

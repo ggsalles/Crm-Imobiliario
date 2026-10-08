@@ -3,6 +3,12 @@ import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/serv
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 interface CacheEntry {
   data: any[];
   timestamp: number;
@@ -12,6 +18,29 @@ const CACHE_TTL_MS = 120000; // 2 minutes in-memory cache to save 99% Supabase e
 
 export function invalidateServerContactsCache() {
   serverContactsCache.clear();
+}
+
+/**
+ * Helper de formatação consistente do registro de contato retornado pelo banco
+ */
+export function formatContactDbRow(item: any, contactDeals: any[] = []): any {
+  const smartTemp = computeSmartTemperature(item, contactDeals);
+  return {
+    id: item.id,
+    name: item.name || '',
+    role: item.type === 'equipe' ? (item.role || '') : '',
+    temperature: smartTemp,
+    rawRole: item.role || null,
+    email: item.email || '',
+    phone: item.phone || '',
+    type: item.type === 'equipe' ? 'equipe' : 'cliente',
+    department: item.department || undefined,
+    companyId: item.company_id || undefined,
+    source: item.source || undefined,
+    ownerId: item.owner_id || '',
+    createdAt: item.created_at || new Date().toISOString(),
+    updatedAt: item.updated_at || new Date().toISOString()
+  };
 }
 
 /**
@@ -82,36 +111,19 @@ export async function GET(req: NextRequest) {
         }
         const { data, error } = await singleQuery.maybeSingle();
         if (error) throw error;
-        if (!data) return NextResponse.json(null);
+        if (!data) return NextResponse.json(null, { headers: NO_CACHE_HEADERS });
 
         // Fetch deals for single contact to compute smart temperature
         let contactDeals: any[] = [];
         if (data.type === 'cliente') {
           const { data: dealsData } = await supabase
             .from('deals')
-            .select('id, stage, created_at, updated_at')
+            .select('contact_id, stage')
             .eq('contact_id', data.id);
           contactDeals = dealsData || [];
         }
 
-        const smartTemp = computeSmartTemperature(data, contactDeals);
-
-        return NextResponse.json({
-            id: data.id,
-            name: data.name,
-            role: data.type === 'equipe' ? data.role : "",
-            temperature: smartTemp,
-            rawRole: data.role,
-            email: data.email,
-            phone: data.phone,
-            type: data.type,
-            department: data.department,
-            companyId: data.company_id,
-            source: data.source,
-            ownerId: data.owner_id,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-        });
+        return NextResponse.json(formatContactDbRow(data, contactDeals), { headers: NO_CACHE_HEADERS });
     }
 
     // Check server cache
@@ -119,7 +131,7 @@ export async function GET(req: NextRequest) {
     const cached = serverContactsCache.get(cacheKey);
     const now = Date.now();
     if (cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
-      return NextResponse.json(cached.data);
+      return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
     }
 
     // PostgREST limits single queries to 1,000 rows.
@@ -161,60 +173,42 @@ export async function GET(req: NextRequest) {
     const contacts = allContacts;
     console.log(`[API/Contacts] GET: query returned ${contacts.length} contacts for tenant ${activeTenantId}`);
 
-    if (contacts.length === 0) return NextResponse.json([]);
+    if (contacts.length === 0) {
+      serverContactsCache.set(cacheKey, { data: [], timestamp: Date.now() });
+      return NextResponse.json([], { headers: NO_CACHE_HEADERS });
+    }
 
-    // Fetch active deals in safe batches for calculating Smart Temperature
-    let allDeals: any[] = [];
-    let dealsOffset = 0;
-    while (allDeals.length < 20000) {
+    // Egress Optimization: Fetch deals lightweight (only contact_id, stage) and only if there are client contacts
+    const hasClients = contacts.some((c: any) => c.type === 'cliente');
+    const dealsByContactId = new Map<string, any[]>();
+
+    if (hasClients) {
       let dealsBatchQuery = supabase
         .from('deals')
-        .select('id, contact_id, stage, created_at, updated_at');
+        .select('contact_id, stage');
       if (activeTenantId) {
         dealsBatchQuery = dealsBatchQuery.eq('tenant_id', activeTenantId);
       }
-      const { data: dBatch, error: dError } = await dealsBatchQuery.range(dealsOffset, dealsOffset + 999);
-      if (dError || !dBatch || dBatch.length === 0) break;
-      allDeals.push(...dBatch);
-      if (dBatch.length < 1000) break;
-      dealsOffset += dBatch.length;
-    }
-
-    // Index deals by contact_id for O(1) lookup
-    const dealsByContactId = new Map<string, any[]>();
-    for (const d of allDeals) {
-      if (d.contact_id) {
-        const arr = dealsByContactId.get(d.contact_id) || [];
-        arr.push(d);
-        dealsByContactId.set(d.contact_id, arr);
+      const { data: dBatch, error: dError } = await dealsBatchQuery.limit(3000);
+      if (!dError && dBatch) {
+        for (const d of dBatch) {
+          if (d.contact_id) {
+            const arr = dealsByContactId.get(d.contact_id) || [];
+            arr.push(d);
+            dealsByContactId.set(d.contact_id, arr);
+          }
+        }
       }
     }
 
     const items = contacts.map((item: any) => {
       const contactDeals = dealsByContactId.get(item.id) || [];
-      const smartTemp = computeSmartTemperature(item, contactDeals);
-
-      return {
-        id: item.id,
-        name: item.name,
-        role: item.type === 'equipe' ? item.role : "",
-        temperature: smartTemp,
-        rawRole: item.role,
-        email: item.email,
-        phone: item.phone,
-        type: item.type,
-        department: item.department,
-        companyId: item.company_id,
-        source: item.source,
-        ownerId: item.owner_id,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at
-      };
+      return formatContactDbRow(item, contactDeals);
     });
 
     serverContactsCache.set(cacheKey, { data: items, timestamp: Date.now() });
 
-    return NextResponse.json(items);
+    return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Contacts] GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -226,6 +220,10 @@ export async function POST(req: NextRequest) {
     invalidateServerContactsCache();
     const supabase = getSupabase(req);
     const data = await req.json().catch(() => ({}));
+
+    if (!data.name || !String(data.name).trim()) {
+      return NextResponse.json({ error: "O nome do contato é obrigatório." }, { status: 400 });
+    }
     
     // Map temperature to role for database storing
     if (data.type === 'cliente') {
@@ -251,10 +249,13 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
     if (!result || result.length === 0) throw new Error("Failed to create contact");
 
-    return NextResponse.json({ id: result[0].id });
+    serverContactsCache.clear();
+
+    const created = formatContactDbRow(result[0], []);
+    return NextResponse.json({ success: true, id: result[0].id, contact: created }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Contacts] POST Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Erro ao cadastrar contato" }, { status: 500 });
   }
 }
 
@@ -279,17 +280,32 @@ export async function PATCH(req: NextRequest) {
       delete data.temperature;
     }
 
-    const { error } = await supabase
+    const { data: result, error } = await supabase
       .from('contacts')
       .update(data)
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
     if (error) throw error;
+    if (!result || result.length === 0) throw new Error("Contato não encontrado ou sem permissão para atualizar");
 
-    return NextResponse.json({ success: true });
+    serverContactsCache.clear();
+
+    // Fetch deals for temperature recalculation if client
+    let contactDeals: any[] = [];
+    if (result[0].type === 'cliente') {
+      const { data: dealsData } = await supabase
+        .from('deals')
+        .select('contact_id, stage')
+        .eq('contact_id', id);
+      contactDeals = dealsData || [];
+    }
+
+    const updated = formatContactDbRow(result[0], contactDeals);
+    return NextResponse.json({ success: true, id, contact: updated }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Contacts] PATCH Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Erro ao atualizar contato" }, { status: 500 });
   }
 }
 
@@ -313,7 +329,9 @@ export async function DELETE(req: NextRequest) {
     if (error) throw error;
     if (!data || data.length === 0) throw new Error("No contact was deleted.");
 
-    return NextResponse.json({ success: true, deleted: data[0] });
+    serverContactsCache.clear();
+
+    return NextResponse.json({ success: true, id, deleted: data[0] }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Contacts] DELETE Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -51,6 +51,7 @@ export function PropertyForm({
 }: PropertyFormProps) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const isSubmittingRef = useRef(false);
+  const lastEnterPressRef = useRef<number>(0);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -197,6 +198,14 @@ export function PropertyForm({
             }
             if (full.description) {
               setDescriptionInput(full.description);
+            }
+            if (full.street || full.neighborhood || full.city || full.state) {
+              setAddressData({
+                street: full.street || editingProperty.street || "",
+                neighborhood: full.neighborhood || editingProperty.neighborhood || "",
+                city: full.city || editingProperty.city || "",
+                state: full.state || editingProperty.state || "",
+              });
             }
           }
         }).catch(() => {});
@@ -497,7 +506,13 @@ export function PropertyForm({
       const neighborhood = String(formData.get("neighborhood") || addressData.neighborhood || "");
       const city = String(formData.get("city") || addressData.city || "");
       const state = String(formData.get("state") || addressData.state || "");
-      const location = String(formData.get("location") || "") || `${neighborhood}, ${city} - ${state}`;
+      const streetVal = String(formData.get("street") || addressData.street || "").trim();
+      const numberVal = String(formData.get("number") || editingProperty?.number || "").trim();
+      const cepVal = String(formData.get("cep") || cep || "").replace(/\D/g, "").substring(0, 8);
+      
+      const streetWithNum = streetVal ? `${streetVal}${numberVal ? `, ${numberVal}` : ''}` : '';
+      const locationParts = [streetWithNum, neighborhood, city ? `${city}${state ? ` - ${state}` : ''}` : state].filter(Boolean);
+      const location = locationParts.length > 0 ? locationParts.join(", ") : `${neighborhood}, ${city} - ${state}`;
 
       const isEditing = !!editingProperty;
       const currentPropertyId = editingProperty?.id;
@@ -520,8 +535,8 @@ export function PropertyForm({
         iptu: Number(parseCurrencyBRLToNumber(String(formData.get("iptu") || "0"))),
         condoFee: Number(parseCurrencyBRLToNumber(String(formData.get("condoFee") || "0"))),
         location: location.substring(0, 500),
-        cep: String(formData.get("cep") || "").replace(/\D/g, "").substring(0, 8),
-        street: String(formData.get("street") || "").substring(0, 200),
+        cep: cepVal,
+        street: streetVal.substring(0, 200),
         neighborhood: neighborhood.substring(0, 100),
         city: city.substring(0, 100),
         state: state.substring(0, 2),
@@ -545,53 +560,40 @@ export function PropertyForm({
       let savedPropObj: Property | undefined = undefined;
 
       if (isEditing && currentPropertyId) {
-        await updateProperty(currentPropertyId, data, user.id);
+        const confirmedProp = await updateProperty(currentPropertyId, data, user.id);
+        savedPropObj = confirmedProp;
         recordAuditEvent({
           action: "UPDATE_PROPERTY",
           title: "Edição de Imóvel",
-          content: `Imóvel "${data.title}" foi editado e atualizado no catálogo.`,
+          content: `Imóvel "${confirmedProp.title || data.title}" foi editado e atualizado no catálogo.`,
           severity: "medium",
           category: "modification",
           relatedId: currentPropertyId,
           entityType: "property",
           metadata: {
-            title: data.title,
-            price: data.price,
-            location: data.location,
-            type: data.type,
+            title: confirmedProp.title || data.title,
+            price: confirmedProp.price || data.price,
+            location: confirmedProp.location || data.location,
+            type: confirmedProp.type || data.type,
           },
         });
-        
-        savedPropObj = {
-          ...(editingProperty || {}),
-          ...data,
-          id: currentPropertyId,
-          imageUrls: (data.imageUrls || []).filter(Boolean),
-          updatedAt: new Date().toISOString()
-        } as Property;
       } else {
-        const newId = await createProperty(data, user.id);
-        savedPropObj = {
-          ...data,
-          id: newId,
-          imageUrls: (data.imageUrls || []).filter(Boolean),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        } as Property;
+        const confirmedProp = await createProperty(data, user.id);
+        savedPropObj = confirmedProp;
         
         recordAuditEvent({
           action: "CREATE_PROPERTY",
           title: "Cadastro de Novo Imóvel",
-          content: `Novo imóvel "${data.title}" cadastrado com sucesso no catálogo.`,
+          content: `Novo imóvel "${confirmedProp.title || data.title}" cadastrado com sucesso no catálogo.`,
           severity: "info",
           category: "modification",
-          relatedId: newId || undefined,
+          relatedId: confirmedProp.id,
           entityType: "property",
           metadata: {
-            title: data.title,
-            price: data.price,
-            location: data.location,
-            type: data.type,
+            title: confirmedProp.title || data.title,
+            price: confirmedProp.price || data.price,
+            location: confirmedProp.location || data.location,
+            type: confirmedProp.type || data.type,
           },
         });
       }
@@ -662,10 +664,26 @@ export function PropertyForm({
             key={editingProperty?.id || "new-property"}
             onSubmit={handleCreateOrUpdate}
             onKeyDown={(e) => {
-              // Previne o envio acidental ou fechamento da tela ao teclar Enter em inputs/combos
               // Permite Enter somente em textareas para quebra de linha normal
               if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
                 e.preventDefault();
+                const now = Date.now();
+                if (now - lastEnterPressRef.current < 3000) {
+                  // Segundo Enter pressionado em menos de 3 segundos -> Grava o formulário
+                  lastEnterPressRef.current = 0;
+                  toast.dismiss("enter-save-confirm");
+                  if (formRef.current) {
+                    formRef.current.requestSubmit();
+                  }
+                } else {
+                  // Primeiro Enter -> Alerta de confirmação de gravação
+                  lastEnterPressRef.current = now;
+                  toast.info("💾 Pressione ENTER novamente para salvar o imóvel", {
+                    id: "enter-save-confirm",
+                    duration: 3000,
+                    description: "Confirmação ativada contra acionamentos acidentais. Pressione Enter mais uma vez para gravar.",
+                  });
+                }
               }
             }}
             className={cn(
@@ -899,6 +917,22 @@ export function PropertyForm({
                   onRemoveImage={(idx) =>
                     setImageUrls((prev) => prev.filter((_, i) => i !== idx))
                   }
+                  onSetCoverImage={(idx) => {
+                    setImageUrls((prev) => {
+                      const newArr = [...prev];
+                      const [selected] = newArr.splice(idx, 1);
+                      return [selected, ...newArr];
+                    });
+                    toast.success("Foto definida como capa principal!");
+                  }}
+                  onMoveImage={(fromIdx, toIndex) => {
+                    setImageUrls((prev) => {
+                      const newArr = [...prev];
+                      const [moved] = newArr.splice(fromIdx, 1);
+                      newArr.splice(toIndex, 0, moved);
+                      return newArr;
+                    });
+                  }}
                   isUploading={isUploading}
                   isDragging={isDragging}
                   onDragOver={handleDragOver}

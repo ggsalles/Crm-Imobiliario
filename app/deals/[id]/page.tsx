@@ -91,7 +91,7 @@ export default function DealDetailPage() {
 
     setIsSavingActivity(true);
     try {
-      const newActId = await createActivity({
+      const res = await createActivity({
         title: activityTitle,
         type: activityType,
         date: new Date(activityDate).toISOString(),
@@ -100,6 +100,7 @@ export default function DealDetailPage() {
         dealId: deal.id,
         description: activityDescription
       });
+      const newActId = typeof res === 'string' ? res : res?.id;
 
       recordAuditEvent({
         action: 'CREATE_ACTIVITY',
@@ -107,7 +108,7 @@ export default function DealDetailPage() {
         content: `Atividade "${activityTitle}" (${activityType}) vinculada ao negócio "${deal.title}".`,
         severity: 'info',
         category: 'modification',
-        relatedId: typeof newActId === 'string' ? newActId : undefined,
+        relatedId: newActId,
         entityType: 'activity',
         metadata: {
           title: activityTitle,
@@ -340,7 +341,10 @@ export default function DealDetailPage() {
                       const nextStage = STAGES[currentIndex + 1];
                       try {
                         setLoading(true);
-                        await updateDeal(deal.id, { stage: nextStage.id });
+                        const updated = await updateDeal(deal.id, { stage: nextStage.id });
+                        if (updated) {
+                          setDeal(updated);
+                        }
                         recordAuditEvent({
                           action: 'UPDATE_DEAL_STAGE',
                           title: 'Avanço de Etapa no Negócio',

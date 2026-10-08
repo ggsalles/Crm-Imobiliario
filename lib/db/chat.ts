@@ -4,6 +4,8 @@ import { getUserProfile } from './profiles';
 import { 
   apiFetch, 
   dataCache, 
+  safePersistSnapshot,
+  safeRestoreSnapshot,
   createRealtimeChannel, 
   createVisibilityAwarePoll, 
   forceDataResync, 
@@ -12,9 +14,32 @@ import {
   POLL_INTERVAL 
 } from './core';
 
+export function getCachedConversations(category: 'client' | 'team' = 'client', ownerId?: string): Conversation[] {
+  const cacheKey = `conversations:${category}:${ownerId || 'all'}`;
+  if (dataCache[cacheKey]) return dataCache[cacheKey];
+  const restored = safeRestoreSnapshot<Conversation[]>(cacheKey, []);
+  if (restored && restored.length > 0) {
+    dataCache[cacheKey] = restored;
+    return restored;
+  }
+  return [];
+}
+
+export function getCachedMessages(conversationId: string): ChatMessage[] {
+  const cacheKey = `messages:${conversationId}`;
+  if (dataCache[cacheKey]) return dataCache[cacheKey];
+  const restored = safeRestoreSnapshot<ChatMessage[]>(cacheKey, []);
+  if (restored && restored.length > 0) {
+    dataCache[cacheKey] = restored;
+    return restored;
+  }
+  return [];
+}
+
 export function subscribeToConversations(category: 'client' | 'team', callback: (conversations: Conversation[]) => void, ownerId?: string) {
   const cacheKey = `conversations:${category}:${ownerId || 'all'}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  const initial = getCachedConversations(category, ownerId);
+  if (initial.length > 0) callback(initial);
 
   const fetchConversations = async () => {
     try {
@@ -36,11 +61,13 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
           unreadCount: item.unreadCount || item.unread_count || {}
         })) as Conversation[];
         dataCache[cacheKey] = mapped;
+        safePersistSnapshot(cacheKey, mapped);
         callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db/chat] subscribeToConversations error, maintaining stale data:", err);
-      if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+      const stale = getCachedConversations(category, ownerId);
+      if (stale.length > 0) callback(stale);
     }
   };
 
@@ -58,7 +85,8 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 
 export function subscribeToMessages(conversationId: string, callback: (messages: ChatMessage[]) => void) {
   const cacheKey = `messages:${conversationId}`;
-  if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+  const initial = getCachedMessages(conversationId);
+  if (initial.length > 0) callback(initial);
 
   const fetchMessages = async () => {
     try {
@@ -66,21 +94,23 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
       if (data && Array.isArray(data)) {
         const mapped = data.map((item: any) => ({
           id: item.id,
-          conversationId: item.conversation_id,
-          senderId: item.sender_id,
+          conversationId: item.conversation_id || item.conversationId,
+          senderId: item.sender_id || item.senderId,
           content: item.content,
-          type: item.type,
-          fileName: item.file_name,
-          fileUrl: item.file_url,
-          createdAt: item.created_at,
-          ownerId: item.owner_id
+          type: item.type || 'text',
+          fileName: item.file_name || item.fileName,
+          fileUrl: item.file_url || item.fileUrl,
+          createdAt: item.created_at || item.createdAt,
+          ownerId: item.owner_id || item.ownerId
         })) as ChatMessage[];
         dataCache[cacheKey] = mapped;
+        safePersistSnapshot(cacheKey, mapped);
         callback(mapped);
       }
     } catch (err) {
       console.warn("[lib/db/chat] subscribeToMessages error, maintaining stale data:", err);
-      if (dataCache[cacheKey]) callback(dataCache[cacheKey]);
+      const stale = getCachedMessages(conversationId);
+      if (stale.length > 0) callback(stale);
     }
   };
 
@@ -117,6 +147,26 @@ export async function sendChatMessage(conversationId: string, content: string, t
       body: JSON.stringify(messageData)
     });
 
+    const msgId = result?.id || result;
+    const newMsg: ChatMessage = {
+      id: msgId,
+      conversationId,
+      senderId: user.id,
+      content,
+      type,
+      fileName: fileData?.name,
+      fileUrl: fileData?.url,
+      createdAt: result?.created_at || new Date().toISOString(),
+      ownerId: user.id
+    };
+
+    // Atualização otimista imediata do cache local de mensagens
+    const msgCacheKey = `messages:${conversationId}`;
+    const currentMsgs = getCachedMessages(conversationId);
+    const updatedMsgs = [...currentMsgs.filter(m => !m.id.startsWith('temp-')), newMsg];
+    dataCache[msgCacheKey] = updatedMsgs;
+    safePersistSnapshot(msgCacheKey, updatedMsgs);
+
     const conv = await apiFetch(`/api/conversations?id=${conversationId}`);
     
     const updateData: any = {
@@ -142,10 +192,9 @@ export async function sendChatMessage(conversationId: string, content: string, t
 
     invalidateApiCache('/api/messages');
     invalidateApiCache('/api/conversations');
-    delete dataCache[`messages:${conversationId}`];
     forceDataResync();
 
-    return result.id;
+    return msgId;
   } catch (err) {
     console.error("[lib/db/chat] sendChatMessage FATAL:", err);
     throw err;
@@ -247,11 +296,20 @@ export async function createConversation(participants: string[], category: 'clie
   }
 }
 
-export async function deleteChatMessage(id: string) {
+export async function deleteChatMessage(id: string, conversationId?: string) {
   try {
     await apiFetch(`/api/messages?id=${id}`, {
       method: "DELETE"
     });
+    if (conversationId) {
+      const cacheKey = `messages:${conversationId}`;
+      const current = getCachedMessages(conversationId);
+      const updated = current.filter(m => m.id !== id);
+      dataCache[cacheKey] = updated;
+      safePersistSnapshot(cacheKey, updated);
+    }
+    invalidateApiCache('/api/messages');
+    forceDataResync();
     return true;
   } catch (err) {
     console.error("[lib/db/chat] deleteChatMessage FATAL:", err);
@@ -259,11 +317,21 @@ export async function deleteChatMessage(id: string) {
   }
 }
 
-export async function deleteConversation(id: string) {
+export async function deleteConversation(id: string, category: 'client' | 'team' = 'client') {
   try {
     await apiFetch(`/api/conversations?id=${id}`, {
       method: "DELETE"
     });
+    const cacheKey = `conversations:${category}:all`;
+    const current = getCachedConversations(category);
+    const updated = current.filter(c => c.id !== id);
+    dataCache[cacheKey] = updated;
+    safePersistSnapshot(cacheKey, updated);
+
+    delete dataCache[`messages:${id}`];
+    invalidateApiCache('/api/conversations');
+    invalidateApiCache('/api/messages');
+    forceDataResync();
     return true;
   } catch (err) {
     console.error("[lib/db/chat] deleteConversation FATAL:", err);

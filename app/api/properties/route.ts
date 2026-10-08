@@ -48,6 +48,69 @@ function getSafeFallbackType(desiredType: string | undefined | null): string {
   return 'apartamento';
 }
 
+export function formatPropertyDbRow(item: any, explicitUrls?: string[], isPublic = false) {
+  let propUrls: string[] = [];
+  if (explicitUrls && Array.isArray(explicitUrls) && explicitUrls.length > 0) {
+    propUrls = explicitUrls;
+  } else if (item.image_url) {
+    try {
+      const parsed = typeof item.image_url === 'string' ? JSON.parse(item.image_url) : item.image_url;
+      propUrls = Array.isArray(parsed) ? parsed.map(String) : [String(item.image_url)];
+    } catch {
+      propUrls = [String(item.image_url)];
+    }
+  }
+  const allUrls = Array.from(new Set(propUrls.filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
+  const previewUrls = explicitUrls && explicitUrls.length > 0 ? explicitUrls : allUrls.slice(0, 10);
+
+  const tagsList: string[] = Array.isArray(item.tags)
+    ? item.tags
+    : (typeof item.tags === 'string'
+        ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
+        : []);
+
+  const { resolvedStatus: resolvedItemStatus, resolvedType: resolvedItemType } = resolvePropertyTypeAndStatus(item.type, item.status, tagsList);
+
+  return {
+    id: item.id,
+    referenceCode: item.reference_code || item.referenceCode || null,
+    reference_code: item.reference_code || null,
+    title: String(item.title || "Sem título"),
+    type: resolvedItemType,
+    status: resolvedItemStatus,
+    price: Number(item.price || 0),
+    location: String(item.location || ""),
+    cep: String(item.cep || ""),
+    street: String(item.street || ""),
+    neighborhood: String(item.neighborhood || ""),
+    city: String(item.city || ""),
+    state: String(item.state || ""),
+    number: String(item.number || ""),
+    complement: item.complement ? String(item.complement) : null,
+    area: Number(item.area || 0),
+    bedrooms: Number(item.bedrooms || 0),
+    suites: Number(item.suites || 0),
+    bathrooms: Number(item.bathrooms || 0),
+    parkingSpots: Number(item.parking_spots !== undefined && item.parking_spots !== null ? item.parking_spots : (item.parkingSpots || 0)),
+    acceptsFinancing: Boolean(item.accepts_financing !== undefined ? item.accepts_financing : item.acceptsFinancing),
+    isFeatured: Boolean(item.is_featured !== undefined ? item.is_featured : item.isFeatured),
+    iptu: item.iptu !== null && item.iptu !== undefined ? Number(item.iptu) : null,
+    condoFee: (item.condo_fee !== null && item.condo_fee !== undefined) ? Number(item.condo_fee) : ((item.condoFee !== null && item.condoFee !== undefined) ? Number(item.condoFee) : null),
+    buildingName: item.building_name || item.buildingName || null,
+    companyId: item.company_id || item.companyId || null,
+    notes: isPublic ? null : (item.notes ? String(item.notes) : null),
+    internalNotes: isPublic ? null : (item.notes ? String(item.notes) : null),
+    description: item.description ? String(item.description) : null,
+    tags: tagsList,
+    imageUrls: previewUrls,
+    photoCount: allUrls.length,
+    ownerId: item.owner_id || item.ownerId || null,
+    tenantId: item.tenant_id || item.tenantId || null,
+    createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+    updatedAt: item.updated_at || item.updatedAt || new Date().toISOString()
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
@@ -109,51 +172,7 @@ export async function GET(req: NextRequest) {
       }
       const urls: string[] = Array.from(new Set([...dbUrls, ...propUrls].filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
 
-      const singleTags = Array.isArray(property.tags)
-        ? property.tags
-        : (typeof property.tags === 'string'
-            ? (property.tags.startsWith('[') ? (() => { try { return JSON.parse(property.tags); } catch { return []; } })() : property.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
-            : []);
-
-      const { resolvedStatus: resolvedSingleStatus, resolvedType: resolvedSingleType } = resolvePropertyTypeAndStatus(property.type, property.status, singleTags);
-
-      return NextResponse.json({
-        id: property.id,
-        referenceCode: property.reference_code || (property as any).referenceCode || null,
-        reference_code: property.reference_code || null,
-        title: String(property.title || "Sem título"),
-        type: resolvedSingleType,
-        status: resolvedSingleStatus,
-        price: Number(property.price || 0),
-        location: String(property.location || ""),
-        cep: String(property.cep || ""),
-        street: String(property.street || ""),
-        neighborhood: String(property.neighborhood || ""),
-        city: String(property.city || ""),
-        state: String(property.state || ""),
-        number: String(property.number || ""),
-        complement: property.complement ? String(property.complement) : null,
-        area: Number(property.area || 0),
-        bedrooms: Number(property.bedrooms || 0),
-        suites: Number(property.suites || 0),
-        bathrooms: Number(property.bathrooms || 0),
-        parkingSpots: Number(property.parking_spots || 0),
-        acceptsFinancing: Boolean(property.accepts_financing),
-        isFeatured: Boolean(property.is_featured),
-        iptu: property.iptu !== null && property.iptu !== undefined ? Number(property.iptu) : null,
-        condoFee: property.condo_fee !== null && property.condo_fee !== undefined ? Number(property.condo_fee) : null,
-        buildingName: property.building_name ? String(property.building_name) : null,
-        companyId: property.company_id ? String(property.company_id) : null,
-        notes: isPublic ? null : (property.notes ? String(property.notes) : null),
-        internalNotes: isPublic ? null : (property.notes ? String(property.notes) : null),
-        description: property.description ? String(property.description) : null,
-        tags: singleTags,
-        imageUrls: urls,
-        ownerId: property.owner_id,
-        tenantId: property.tenant_id,
-        createdAt: property.created_at,
-        updatedAt: property.updated_at
-      }, { headers: NO_CACHE_HEADERS });
+      return NextResponse.json(formatPropertyDbRow(property, urls, isPublic), { headers: NO_CACHE_HEADERS });
     }
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
@@ -304,67 +323,7 @@ export async function GET(req: NextRequest) {
     // Para a listagem geral (catálogo, vitrine, mapa, Kanban), extraímos as fotos diretamente do campo image_url
     // sem disparar varreduras em lote adicionais na tabela property_images (que transferiam megabytes a cada chamada).
     // A galeria completa (20-50 fotos) é carregada pontualmente sob demanda ao abrir a ficha técnica individual (?id=...).
-    let items = properties.map((item: any) => {
-      let propUrls: string[] = [];
-      if (item.image_url) {
-        try {
-          const parsed = typeof item.image_url === 'string' ? JSON.parse(item.image_url) : item.image_url;
-          propUrls = Array.isArray(parsed) ? parsed.map(String) : [String(item.image_url)];
-        } catch {
-          propUrls = [String(item.image_url)];
-        }
-      }
-      const allUrls = Array.from(new Set(propUrls.filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
-      // Mantém capa + até 5 fotos para pré-visualização e carrossel do card (reduz 90% do payload JSON)
-      const previewUrls = allUrls.slice(0, 6);
-
-      const tagsList: string[] = Array.isArray(item.tags)
-        ? item.tags
-        : (typeof item.tags === 'string'
-            ? (item.tags.startsWith('[') ? (() => { try { return JSON.parse(item.tags); } catch { return []; } })() : item.tags.split(',').map((t: string) => t.trim()).filter(Boolean))
-            : []);
-
-      const { resolvedStatus: resolvedItemStatus, resolvedType: resolvedItemType } = resolvePropertyTypeAndStatus(item.type, item.status, tagsList);
-
-      return {
-        id: item.id,
-        referenceCode: item.reference_code || item.referenceCode || null,
-        reference_code: item.reference_code || null,
-        title: String(item.title || "Sem título"),
-        type: resolvedItemType,
-        status: resolvedItemStatus,
-        price: Number(item.price || 0),
-        location: String(item.location || ""),
-        cep: String(item.cep || ""),
-        street: String(item.street || ""),
-        neighborhood: String(item.neighborhood || ""),
-        city: String(item.city || ""),
-        state: String(item.state || ""),
-        number: String(item.number || ""),
-        complement: item.complement ? String(item.complement) : null,
-        area: Number(item.area || 0),
-        bedrooms: Number(item.bedrooms || 0),
-        suites: Number(item.suites || 0),
-        bathrooms: Number(item.bathrooms || 0),
-        parkingSpots: Number(item.parking_spots || 0),
-        acceptsFinancing: Boolean(item.accepts_financing),
-        isFeatured: Boolean(item.is_featured),
-        iptu: item.iptu !== null && item.iptu !== undefined ? Number(item.iptu) : null,
-        condoFee: item.condo_fee !== null && item.condo_fee !== undefined ? Number(item.condo_fee) : null,
-        buildingName: item.building_name ? String(item.building_name) : null,
-        companyId: item.company_id ? String(item.company_id) : null,
-        notes: isPublic ? null : (item.notes ? String(item.notes) : null),
-        internalNotes: isPublic ? null : (item.notes ? String(item.notes) : null),
-        description: item.description ? String(item.description) : null,
-        tags: tagsList,
-        imageUrls: previewUrls,
-        photoCount: allUrls.length,
-        ownerId: item.owner_id,
-        tenantId: item.tenant_id,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at
-      };
-    });
+    let items = properties.map((item: any) => formatPropertyDbRow(item, undefined, isPublic));
 
     if (isPublic) {
       items = items.filter(item => {
@@ -396,6 +355,13 @@ export async function POST(req: NextRequest) {
     
     const { imageUrls, ...sanitized } = data;
     (sanitized as any).tenant_id = resolvedTenantId;
+
+    if (!sanitized.title || String(sanitized.title).trim() === '') {
+      return NextResponse.json({ error: "O título do imóvel é obrigatório para gravação." }, { status: 400 });
+    }
+    if (!sanitized.price || Number(sanitized.price) <= 0) {
+      return NextResponse.json({ error: "O valor de venda do imóvel é obrigatório e deve ser maior que zero." }, { status: 400 });
+    }
 
     if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
       sanitized.image_url = imageUrls.length > 1 ? JSON.stringify(imageUrls) : String(imageUrls[0]);
@@ -539,7 +505,8 @@ export async function POST(req: NextRequest) {
 
     serverPropertiesCache.clear();
 
-    return NextResponse.json({ id: propertyId });
+    const formattedCreated = formatPropertyDbRow(result[0], imageUrls);
+    return NextResponse.json({ success: true, id: propertyId, property: formattedCreated }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Properties] POST FATAL ERROR:", error);
     return NextResponse.json({ error: error.message || "Internal Server Error during POST" }, { status: 500 });
@@ -758,7 +725,8 @@ export async function PATCH(req: NextRequest) {
 
     serverPropertiesCache.clear();
 
-    return NextResponse.json({ success: true, updated: updatedRows[0] });
+    const formattedUpdated = formatPropertyDbRow(updatedRows[0], imageUrls);
+    return NextResponse.json({ success: true, id, updated: formattedUpdated }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error(`[API/Properties] PATCH FATAL ERROR:`, error);
     return NextResponse.json({ error: error.message || "Internal Server Error during PATCH" }, { status: 500 });

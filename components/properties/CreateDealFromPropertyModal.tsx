@@ -95,13 +95,14 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
     const toastId = toast.loading("Criando negociação no funil...");
 
     try {
-      const newDealId = await createDeal({
+      const res = await createDeal({
         title: dealTitle.trim(),
         value: numericValue,
         stage: selectedStage,
         propertyId: property.id,
         contactId: selectedContactId || null,
       });
+      const newDealId = typeof res === "string" ? res : (res?.id || property.id);
 
       recordAuditEvent({
         action: "CREATE_DEAL",
@@ -109,7 +110,7 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
         content: `Oportunidade "${dealTitle.trim()}" criada diretamente a partir do imóvel "${property.title}" no valor de ${formatCurrencyBRL(numericValue)}.`,
         severity: "medium",
         category: "modification",
-        relatedId: typeof newDealId === "string" ? newDealId : property.id,
+        relatedId: newDealId,
         entityType: "deal",
         metadata: {
           propertyId: property.id,

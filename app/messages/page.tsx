@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, History, Mail, Loader2 } from "lucide-react";
@@ -349,12 +347,13 @@ function MessagesContent() {
   const confirmDeleteConversation = async () => {
     if (!convToDelete) return;
     const convId = convToDelete.id;
+    const category = convToDelete.category || activeTab || 'client';
     setIsDeletingConv(true);
     const toastId = toast.loading("Excluindo conversa...");
     setConversations((prev) => prev.filter((c) => c.id !== convId));
 
     try {
-      await deleteConversation(convId);
+      await deleteConversation(convId, category);
       if (selectedConv?.id === convId) {
         setSelectedConv(null);
       }
@@ -372,12 +371,13 @@ function MessagesContent() {
   const confirmDeleteMessage = async () => {
     if (!msgToDelete) return;
     const msgId = msgToDelete.id;
+    const convId = selectedConv?.id;
     setIsDeletingMsg(true);
     const toastId = toast.loading("Apagando mensagem...");
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
 
     try {
-      await deleteChatMessage(msgId);
+      await deleteChatMessage(msgId, convId);
       toast.success("Mensagem apagada com sucesso!", { id: toastId });
       setMsgToDelete(null);
     } catch (err: any) {

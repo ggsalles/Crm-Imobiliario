@@ -251,33 +251,38 @@ export async function createProperty(data: any, bypassUserId?: string) {
       method: "POST",
       body: JSON.stringify(insertData)
     });
+
+    if (!result || !result.id) {
+      throw new Error(result?.error || "Servidor não confirmou a criação do imóvel.");
+    }
+
     console.log("[lib/db/properties] createProperty Proxy: SUCESSO. Novo ID:", result.id);
-    const newPropertyObj: Property = {
+    const confirmedRecord: Property = result.property || ({
       id: result.id,
       ...sanitized,
       imageUrls: cleanImageUrls,
       tags: sanitized.tags || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    } as any;
+    } as any);
 
     for (const k of Object.keys(dataCache)) {
       if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
-        dataCache[k] = [newPropertyObj, ...dataCache[k]];
+        dataCache[k] = [confirmedRecord, ...dataCache[k]];
         safePersistSnapshot(k, dataCache[k]);
         notifyPropertiesUpdated(dataCache[k]);
       }
     }
 
     invalidateApiCache('/api/properties');
-    return result.id;
+    return confirmedRecord;
   } catch (err) {
     console.error("[lib/db/properties] createProperty Proxy FATAL:", err);
     throw err;
   }
 }
 
-export async function updateProperty(id: string, data: any, bypassUserId?: string) {
+export async function updateProperty(id: string, data: any, bypassUserId?: string): Promise<Property> {
   if (!id) throw new Error("ID do imóvel é obrigatório.");
   const userId = bypassUserId;
   if (!userId) throw new Error("Usuário não identificado.");
@@ -309,17 +314,29 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
 
   try {
     console.log(`[lib/db/properties] updateProperty: Enviando atualização via API Proxy...`, updateData);
-    await apiFetch(`/api/properties?id=${id}`, {
+    const result = await apiFetch(`/api/properties?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
+
+    if (!result || !result.success) {
+      throw new Error(result?.error || "Servidor não confirmou a gravação do imóvel.");
+    }
+
     console.log("[lib/db/properties] updateProperty Proxy: Transação concluída com sucesso.");
     
-    // Atualiza otimisticamente a memória local para resposta instantânea (0ms)
+    const confirmedRecord: Property = result.updated || ({
+      id,
+      ...sanitized,
+      ...updateData,
+      imageUrls: cleanImageUrls
+    } as any);
+
+    // Atualiza a memória local com o registro carimbado pelo banco de dados
     let updatedSnapshot: Property[] | null = null;
     for (const k of Object.keys(dataCache)) {
       if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
-        dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...data, ...updateData, imageUrls: cleanImageUrls } : p);
+        dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...confirmedRecord } : p);
         safePersistSnapshot(k, dataCache[k]);
         if (!updatedSnapshot) updatedSnapshot = dataCache[k];
       }
@@ -331,7 +348,7 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
     }
     
     invalidateApiCache('/api/properties');
-    return id;
+    return confirmedRecord;
   } catch (err) {
     console.error(`[lib/db/properties] updateProperty Proxy FATAL para o ID ${id}:`, err);
     throw err;

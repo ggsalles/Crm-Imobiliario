@@ -117,7 +117,7 @@ export function subscribeToDeals(callback: (deals: Deal[]) => void, ownerId?: st
   };
 }
 
-export async function createDeal(data: any) {
+export async function createDeal(data: any): Promise<{ id: string; deal: Deal }> {
   const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
@@ -147,20 +147,53 @@ export async function createDeal(data: any) {
       body: JSON.stringify(dealData)
     });
 
+    const createdId = result?.id || result?.deal?.id;
+    const officialDeal: Deal = result?.deal || {
+      id: createdId,
+      title: dealData.title,
+      value: dealData.value,
+      stage: dealData.stage,
+      companyId: dealData.company_id,
+      contactId: dealData.contact_id,
+      propertyId: dealData.property_id,
+      ownerId: dealData.owner_id,
+      priority: dealData.priority,
+      status: dealData.status,
+      probability: dealData.probability,
+      expectedCloseDate: dealData.expected_close_date,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Sincroniza imediatamente o cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('deals:')) {
+        if (Array.isArray(dataCache[k])) {
+          const existingIdx = dataCache[k].findIndex((d: any) => d.id === createdId);
+          if (existingIdx >= 0) {
+            dataCache[k][existingIdx] = officialDeal;
+          } else {
+            dataCache[k] = [officialDeal, ...dataCache[k]];
+          }
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
     invalidateApiCache('/api/deals');
     forceDataResync();
 
-    return result.id;
+    return { id: createdId, deal: officialDeal };
   } catch (err) {
     console.error("[lib/db/deals] createDeal FATAL:", err);
     throw err;
   }
 }
 
-export async function updateDeal(id: string, data: any) {
+export async function updateDeal(id: string, data: any): Promise<Deal> {
   if (!id || id === 'undefined' || id === 'null') {
     console.warn("[lib/db/deals] updateDeal: Invalid ID, ignoring update request.", id);
-    return;
+    throw new Error("ID de negócio inválido");
   }
 
   const updateData: any = { updated_at: new Date().toISOString() };
@@ -188,38 +221,44 @@ export async function updateDeal(id: string, data: any) {
     updateData.owner_id = sanitizeId(data.ownerId || data.owner_id);
   }
 
-  // Atualização otimista no cache local em memória
-  for (const k of Object.keys(dataCache)) {
-    if (k.startsWith('deals:') && Array.isArray(dataCache[k])) {
-      dataCache[k] = dataCache[k].map((d: any) => {
-        if (d.id === id) {
-          return {
-            ...d,
-            ...data,
-            value: data.value !== undefined ? Number(data.value) || 0 : d.value,
-            updatedAt: updateData.updated_at
-          };
-        }
-        return d;
-      });
-    }
-  }
-
   try {
-    await apiFetch(`/api/deals?id=${id}`, {
+    const result = await apiFetch(`/api/deals?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
 
+    const officialDeal: Deal = result?.deal || {
+      id,
+      title: updateData.title || data.title,
+      value: updateData.value !== undefined ? updateData.value : data.value,
+      stage: updateData.stage || data.stage,
+      ...data,
+      updatedAt: updateData.updated_at
+    };
+
+    // Atualização imediata no cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('deals:') && Array.isArray(dataCache[k])) {
+        dataCache[k] = dataCache[k].map((d: any) => {
+          if (d.id === id) {
+            return { ...d, ...officialDeal };
+          }
+          return d;
+        });
+        safePersistSnapshot(k, dataCache[k]);
+      }
+    }
+
     invalidateApiCache('/api/deals');
     forceDataResync();
+    return officialDeal;
   } catch (err) {
     console.error("[lib/db/deals] updateDeal FATAL:", err);
     throw err;
   }
 }
 
-export async function deleteDeal(id: string) {
+export async function deleteDeal(id: string): Promise<boolean> {
   if (!id || id === 'undefined' || id === 'null') {
     console.warn("[lib/db/deals] deleteDeal: Invalid ID, ignoring delete request.", id);
     return false;
@@ -232,6 +271,7 @@ export async function deleteDeal(id: string) {
       if (k.startsWith('deals:')) {
         if (Array.isArray(dataCache[k])) {
           dataCache[k] = dataCache[k].filter((d: any) => d.id !== id);
+          safePersistSnapshot(k, dataCache[k]);
         }
       }
     }

@@ -19,6 +19,23 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+interface ProfilesCacheEntry {
+  data: any[];
+  timestamp: number;
+}
+const serverProfilesCache = new Map<string, ProfilesCacheEntry>();
+const CACHE_TTL_MS = 60000; // 60s memory cache to optimize Supabase Free tier egress
+
+export function invalidateServerProfilesCache() {
+  serverProfilesCache.clear();
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
@@ -321,7 +338,7 @@ export async function GET(req: NextRequest) {
         isActive,
         inactiveReason,
         securityKeyword
-      });
+      }, { headers: NO_CACHE_HEADERS });
     }
 
     if (email) {
@@ -354,9 +371,9 @@ export async function GET(req: NextRequest) {
             isActive: found.is_active !== false,
             inactiveReason: found.inactive_reason || null,
             securityKeyword: found.security_keyword || null
-          });
+          }, { headers: NO_CACHE_HEADERS });
         }
-        return NextResponse.json(null);
+        return NextResponse.json(null, { headers: NO_CACHE_HEADERS });
       }
 
       const inactiveDetail = getUserInactiveDetail(data.id);
@@ -393,7 +410,21 @@ export async function GET(req: NextRequest) {
         isActive,
         inactiveReason,
         securityKeyword
-      });
+      }, { headers: NO_CACHE_HEADERS });
+    }
+
+    const callerUser = getAuthenticatedUser(req);
+    const callerIsMaster = callerUser?.email ? isPlatformAdmin(callerUser.email) : false;
+    const requestedTenantId = searchParams.get('tenantId');
+    const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser, req) : null);
+
+    const cacheKey = `${activeTenantId || 'all'}:${requestedTenantId || 'default'}:${callerIsMaster ? 'master' : (callerUser?.id || 'anon')}`;
+    const cached = serverProfilesCache.get(cacheKey);
+    const now = Date.now();
+    const isBypass = searchParams.get('nocache') === 'true';
+
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS) && !isBypass) {
+      return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
     }
 
     let { data: profiles, error } = await supabase.from('profiles').select('*');
@@ -462,11 +493,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const callerUser = getAuthenticatedUser(req);
-    const callerIsMaster = callerUser?.email ? isPlatformAdmin(callerUser.email) : false;
-    const requestedTenantId = searchParams.get('tenantId');
-    const activeTenantId = requestedTenantId || (callerUser ? await getActiveTenantId(supabase, callerUser, req) : null);
-
     let items = mergedProfiles.map((item: any) => {
       const inactiveDetail = getUserInactiveDetail(item.id);
       const isLocallyInactive = isUserInactiveInStore(item.id);
@@ -508,10 +534,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(items);
+    serverProfilesCache.set(cacheKey, { data: items, timestamp: now });
+    return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Profiles] GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -702,13 +729,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ id: profileId });
+    invalidateServerProfilesCache();
+
+    const createdProfile = {
+      id: profileId,
+      displayName: profileData.display_name || profileData.displayName || profileData.email.split('@')[0],
+      email: profileData.email.toLowerCase(),
+      photoURL: profileData.photo_url || profileData.photoURL || null,
+      role: finalRole || profileData.role || 'Membro',
+      userType: profileData.user_type || profileData.userType || 'funcionário',
+      isAdmin: (finalRole === 'Admin' || profileData.role === 'Admin'),
+      tenantId: profileData.tenant_id || resolvedTenantIds[0] || DEFAULT_TENANT_ID,
+      tenantIds: resolvedTenantIds,
+      isActive: initialIsActive,
+      inactiveReason: initialReason || null,
+      securityKeyword: profileData.security_keyword || profileData.securityKeyword || null
+    };
+
+    return NextResponse.json({ 
+      success: true, 
+      id: profileId, 
+      profile: createdProfile 
+    }, { status: 201, headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Profiles] POST Error:", error);
     if (error.code === '23505' || (error.message && error.message.toLowerCase().includes('unique constraint'))) {
-      return NextResponse.json({ error: "Este e-mail já está sendo utilizado por outro usuário no CRM." }, { status: 400 });
+      return NextResponse.json({ error: "Este e-mail já está sendo utilizado por outro usuário no CRM." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -871,10 +919,27 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    invalidateServerProfilesCache();
+
+    const updatedProfile = {
+      id,
+      displayName: otherData.display_name || otherData.displayName || undefined,
+      email: otherData.email || undefined,
+      photoURL: otherData.photo_url || otherData.photoURL || null,
+      role: otherData.role || undefined,
+      userType: otherData.user_type || otherData.userType || undefined,
+      isAdmin: otherData.is_admin !== undefined ? otherData.is_admin : (otherData.role === 'Admin'),
+      tenantId: otherData.tenant_id || (validTenantIds.length > 0 ? validTenantIds[0] : undefined),
+      tenantIds: validTenantIds.length > 0 ? validTenantIds : undefined,
+      isActive: otherData.is_active !== undefined ? otherData.is_active : true,
+      inactiveReason: otherData.inactive_reason || null,
+      securityKeyword: otherData.security_keyword || null
+    };
+
+    return NextResponse.json({ success: true, profile: updatedProfile }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Profiles] PATCH Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -884,7 +949,7 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id || id === 'undefined' || id === 'null') {
-      return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400 });
+      return NextResponse.json({ error: "Valid ID required for DELETE" }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     deleteCustomUser(id);
@@ -896,9 +961,11 @@ export async function DELETE(req: NextRequest) {
       console.warn("[API/Profiles] Aviso ao excluir perfil no Supabase:", e);
     }
 
-    return NextResponse.json({ success: true });
+    invalidateServerProfilesCache();
+
+    return NextResponse.json({ success: true, id }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Profiles] DELETE Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

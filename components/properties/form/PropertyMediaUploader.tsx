@@ -1,13 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { Upload, Loader2, X, ShieldCheck, Sparkles, Sliders } from "lucide-react";
+import { Upload, Loader2, X, ShieldCheck, Sparkles, Sliders, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 export interface PropertyMediaUploaderProps {
   imageUrls: string[];
   onRemoveImage: (index: number) => void;
+  onSetCoverImage?: (index: number) => void;
+  onMoveImage?: (fromIndex: number, toIndex: number) => void;
   isUploading: boolean;
   isDragging: boolean;
   onDragOver: (e: React.DragEvent) => void;
@@ -25,6 +27,8 @@ export interface PropertyMediaUploaderProps {
 export function PropertyMediaUploader({
   imageUrls,
   onRemoveImage,
+  onSetCoverImage,
+  onMoveImage,
   isUploading,
   isDragging,
   onDragOver,
@@ -185,13 +189,21 @@ export function PropertyMediaUploader({
             <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
               Fotos Cadastradas ({imageUrls.length})
             </span>
+            <span className="text-[10px] text-muted-foreground">
+              A 1ª foto com badge dourada é a **Foto de Capa** da vitrine.
+            </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {imageUrls.map((url, idx) => (
               <div
                 key={idx}
-                className="relative aspect-video rounded-2xl overflow-hidden border border-border group bg-muted/50 shadow-xs"
+                className={cn(
+                  "relative aspect-video rounded-2xl overflow-hidden border group bg-muted/50 shadow-xs transition-all",
+                  idx === 0 
+                    ? "border-amber-500 border-2 ring-2 ring-amber-500/20" 
+                    : "border-border hover:border-primary/50"
+                )}
               >
                 <Image
                   src={url}
@@ -200,18 +212,82 @@ export function PropertyMediaUploader({
                   className="object-cover"
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveImage(idx);
-                    }}
-                    className="w-9 h-9 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer"
-                    title="Remover imagem"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+
+                {/* Badge Capa Principal */}
+                {idx === 0 && (
+                  <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-lg bg-amber-500 text-amber-950 font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shadow-md">
+                    <Star className="w-3 h-3 fill-amber-950" />
+                    <span>Foto de Capa</span>
+                  </div>
+                )}
+
+                {/* Overlay de Ações */}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2.5 z-20">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-white/80 bg-black/40 px-1.5 py-0.5 rounded-md">
+                      #{idx + 1}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveImage(idx);
+                      }}
+                      className="w-7 h-7 rounded-xl bg-red-500/90 hover:bg-red-500 text-white flex items-center justify-center shadow-md hover:scale-110 transition-all cursor-pointer"
+                      title="Remover foto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-1.5">
+                    {/* Botão Mover Esquerda */}
+                    {idx > 0 && onMoveImage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMoveImage(idx, idx - 1);
+                        }}
+                        className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/40 text-white flex items-center justify-center shadow-sm cursor-pointer"
+                        title="Mover para esquerda"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {/* Botão Definir como Capa */}
+                    {idx !== 0 && onSetCoverImage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSetCoverImage(idx);
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-amber-950 text-[11px] font-black flex items-center gap-1 shadow-lg hover:scale-105 transition-all cursor-pointer"
+                        title="Definir esta foto como capa principal"
+                      >
+                        <Star className="w-3 h-3 fill-amber-950" />
+                        <span>Tornar Capa</span>
+                      </button>
+                    )}
+
+                    {/* Botão Mover Direita */}
+                    {idx < imageUrls.length - 1 && onMoveImage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMoveImage(idx, idx + 1);
+                        }}
+                        className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/40 text-white flex items-center justify-center shadow-sm cursor-pointer"
+                        title="Mover para direita"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 /**
  * SalesScore CRM - Versão Estável Sincronizada & Modularizada
  */
@@ -421,7 +419,12 @@ function DashboardContent() {
   // Memoized action callbacks
   const handleToggleActivity = useCallback(async (activity: Activity) => {
     const newStatus = activity.status === 'pending' ? 'completed' : 'pending';
-    await updateActivity(activity.id, { status: newStatus });
+    setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: newStatus } : a));
+    try {
+      await updateActivity(activity.id, { status: newStatus });
+    } catch {
+      setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: activity.status } : a));
+    }
   }, []);
 
   const handleTabChange = useCallback((tab: string) => {

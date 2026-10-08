@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/sidebar";
@@ -213,7 +211,9 @@ export default function ActivitiesPage() {
       };
 
       if (editingActivity) {
-        await updateActivity(editingActivity.id, activityData);
+        const updated = await updateActivity(editingActivity.id, activityData);
+        setActivities(prev => prev.map(a => a.id === editingActivity.id ? (updated || { ...a, ...activityData }) : a));
+
         recordAuditEvent({
           action: 'UPDATE_ACTIVITY',
           title: 'Edição de Atividade',
@@ -230,17 +230,22 @@ export default function ActivitiesPage() {
         });
         toast.success("Atividade atualizada com sucesso!");
       } else {
-        const newActivityId = await createActivity({
+        const res = await createActivity({
           ...activityData,
           status: 'pending',
         });
+        if (res?.activity) {
+          setActivities(prev => [...prev, res.activity]);
+        }
+        const newActivityId = res?.id || res?.activity?.id;
+
         recordAuditEvent({
           action: 'CREATE_ACTIVITY',
           title: 'Criação de Nova Atividade',
           content: `Nova atividade/tarefa "${formData.title}" (${formData.type}) agendada para ${format(new Date(formData.date), "dd/MM/yyyy HH:mm")}.`,
           severity: 'info',
           category: 'modification',
-          relatedId: typeof newActivityId === 'string' ? newActivityId : undefined,
+          relatedId: newActivityId,
           entityType: 'activity',
           metadata: {
             title: formData.title,

@@ -5,6 +5,8 @@ import { safeJsonParse } from '../safe-storage';
 import { 
   apiFetch, 
   dataCache, 
+  safePersistSnapshot,
+  safeRestoreSnapshot,
   createRealtimeChannel, 
   createVisibilityAwarePoll, 
   forceDataResync, 
@@ -12,7 +14,44 @@ import {
   POLL_INTERVAL 
 } from './core';
 
+export function getCachedUsers(ownerId?: string, tenantId?: string): UserProfile[] | null {
+  const specificKey = `users:${tenantId || 'all'}:${ownerId || 'all'}`;
+  if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
+    return dataCache[specificKey];
+  }
+  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('users:all:all');
+  if (restored) {
+    dataCache[specificKey] = restored;
+    return restored;
+  }
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('users:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
+      return dataCache[k];
+    }
+  }
+  return null;
+}
+
 export async function getUserProfile(id: string): Promise<UserProfile | null> {
+  if (!id) return null;
+
+  // Verificação 1: Memória local ativa (0 egress)
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('users:')) {
+      if (Array.isArray(dataCache[k])) {
+        const found = dataCache[k].find((u: any) => u.id === id);
+        if (found) return found;
+      }
+    }
+  }
+
+  // Verificação 2: Snapshot persistente local (0 egress)
+  const restored = safeRestoreSnapshot('users:all:all');
+  if (Array.isArray(restored)) {
+    const found = restored.find((u: any) => u.id === id);
+    if (found) return found;
+  }
+
   try {
     const data = await apiFetch(`/api/profiles?id=${id}`);
     if (Array.isArray(data)) return data[0] as UserProfile;
@@ -25,25 +64,30 @@ export async function getUserProfile(id: string): Promise<UserProfile | null> {
 
 export function subscribeToUsers(callback: (users: UserProfile[]) => void, ownerId?: string, tenantId?: string) {
   const cacheKey = `users:${tenantId || 'all'}:${ownerId || 'all'}`;
-  if (dataCache[cacheKey] && dataCache[cacheKey].length > 0) callback(dataCache[cacheKey]);
+  const initial = getCachedUsers(ownerId, tenantId);
+  if (initial && initial.length > 0) {
+    callback(initial);
+  }
 
   const fetchUsers = async () => {
     try {
       let url = '/api/profiles';
       if (tenantId) url += `?tenantId=${tenantId}`;
-      const data = await apiFetch(url, { bypassCache: true });
+      const data = await apiFetch(url);
       if (data && Array.isArray(data)) {
         let filtered = data as UserProfile[];
         if (ownerId) filtered = filtered.filter(u => u.id === ownerId);
         dataCache[cacheKey] = filtered;
+        safePersistSnapshot(cacheKey, filtered);
         callback(filtered);
       } else if (!dataCache[cacheKey]) {
         callback([]);
       }
     } catch (err) {
       console.warn("[lib/db/profiles] subscribeToUsers error:", err);
-      if (dataCache[cacheKey]) {
-        callback(dataCache[cacheKey]);
+      const fallback = getCachedUsers(ownerId, tenantId);
+      if (fallback) {
+        callback(fallback);
       } else {
         callback([]);
       }
@@ -61,7 +105,7 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void, owner
   };
 }
 
-export async function updateUserProfile(id: string, data: any, skipResync = false) {
+export async function updateUserProfile(id: string, data: any, skipResync = false): Promise<UserProfile> {
   const updateData: any = { updated_at: new Date().toISOString() };
   if (data.displayName !== undefined) updateData.display_name = data.displayName;
   if (data.email !== undefined) updateData.email = String(data.email).trim().toLowerCase();
@@ -103,49 +147,72 @@ export async function updateUserProfile(id: string, data: any, skipResync = fals
       }
     }
 
-    invalidateApiCache('/api/profiles');
-
-    for (const k of Object.keys(dataCache)) {
-      if (k.startsWith('users:')) {
-        dataCache[k] = (dataCache[k] || []).map((u: any) => {
-          if (u.id === id) {
-            return {
-              ...u,
-              displayName: data.displayName !== undefined ? data.displayName : u.displayName,
-              role: data.role !== undefined ? data.role : u.role,
-              userType: data.userType !== undefined ? data.userType : u.userType,
-              tenantId: data.tenantId !== undefined ? data.tenantId : u.tenantId,
-              tenantIds: data.tenantIds !== undefined ? data.tenantIds : u.tenantIds,
-              isActive: data.isActive !== undefined ? data.isActive : u.isActive,
-              inactiveReason: data.inactiveReason !== undefined ? data.inactiveReason : u.inactiveReason,
-              securityKeyword: data.securityKeyword !== undefined ? data.securityKeyword : (data.security_keyword !== undefined ? data.security_keyword : u.securityKeyword)
-            };
-          }
-          return u;
-        });
-      }
-    }
-
-    await apiFetch(`/api/profiles?id=${id}`, {
+    const result = await apiFetch(`/api/profiles?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
+
+    const officialProfile: UserProfile = result?.profile || {
+      id,
+      displayName: data.displayName,
+      email: data.email,
+      photoURL: data.photoURL,
+      role: data.role,
+      userType: data.userType,
+      isAdmin: data.role === 'Admin',
+      tenantId: data.tenantId,
+      tenantIds: data.tenantIds,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      inactiveReason: data.inactiveReason,
+      securityKeyword: data.securityKeyword || data.security_keyword
+    };
+
+    // Sincronização imediata no cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('users:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].map((u: any) => {
+            if (u.id === id) {
+              return { ...u, ...officialProfile };
+            }
+            return u;
+          });
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
+    invalidateApiCache('/api/profiles');
     
     if (!skipResync) {
       forceDataResync();
     }
+
+    return officialProfile;
   } catch (err) {
     console.error("[lib/db/profiles] updateUserProfile FATAL:", err);
     throw err;
   }
 }
 
-export async function deleteUserProfile(id: string) {
+export async function deleteUserProfile(id: string): Promise<boolean> {
   try {
     await apiFetch(`/api/profiles?id=${id}`, {
       method: "DELETE"
     });
+
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('users:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((u: any) => u.id !== id);
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
+    invalidateApiCache('/api/profiles');
     forceDataResync();
+    return true;
   } catch (err) {
     console.error("[lib/db/profiles] deleteUserProfile FATAL:", err);
     throw err;
@@ -173,7 +240,7 @@ export async function createUserProfile(data: {
   inactiveReason?: string;
   securityKeyword?: string;
   password?: string;
-}) {
+}): Promise<{ id: string; profile: UserProfile }> {
   const tempId = crypto.randomUUID();
   
   const profileData = {
@@ -196,8 +263,41 @@ export async function createUserProfile(data: {
       method: "POST",
       body: JSON.stringify(profileData)
     });
+
+    const createdId = result?.id || tempId;
+    const officialProfile: UserProfile = result?.profile || {
+      id: createdId,
+      displayName: data.displayName,
+      email: data.email.toLowerCase(),
+      photoURL: undefined,
+      role: data.role,
+      userType: data.userType,
+      isAdmin: data.role === 'Admin',
+      tenantId: data.tenantId || DEFAULT_TENANT_ID,
+      tenantIds: data.tenantIds || [data.tenantId || DEFAULT_TENANT_ID],
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      inactiveReason: data.inactiveReason,
+      securityKeyword: data.securityKeyword
+    };
+
+    // Sincronização imediata no cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('users:')) {
+        if (Array.isArray(dataCache[k])) {
+          const existingIdx = dataCache[k].findIndex((u: any) => u.id === createdId);
+          if (existingIdx >= 0) {
+            dataCache[k][existingIdx] = officialProfile;
+          } else {
+            dataCache[k] = [officialProfile, ...dataCache[k]];
+          }
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
+    invalidateApiCache('/api/profiles');
     forceDataResync();
-    return result.id;
+    return { id: createdId, profile: officialProfile };
   } catch (err) {
     console.error("[lib/db/profiles] createUserProfile FATAL:", err);
     throw err;

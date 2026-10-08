@@ -3,6 +3,41 @@ import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/serv
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+const ACTIVITY_SELECT_COLUMNS = 'id, tenant_id, title, description, date, type, status, contact_id, deal_id, owner_id, created_at, updated_at';
+
+interface ActivitiesCacheEntry {
+  data: any[];
+  timestamp: number;
+}
+const serverActivitiesCache = new Map<string, ActivitiesCacheEntry>();
+const CACHE_TTL_MS = 60000; // 60s in-memory server cache to optimize Supabase Free tier egress
+
+export function invalidateServerActivitiesCache() {
+  serverActivitiesCache.clear();
+}
+
+function formatActivityDbRow(item: any) {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description || undefined,
+    date: item.date,
+    type: item.type || 'task',
+    status: item.status || 'pending',
+    contactId: item.contact_id || undefined,
+    dealId: item.deal_id || undefined,
+    ownerId: item.owner_id,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase(req);
@@ -10,11 +45,17 @@ export async function GET(req: NextRequest) {
     const ownerId = searchParams.get('ownerId');
     const contactId = searchParams.get('contactId');
 
-    // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
 
-    let query = supabase.from('activities').select('*').order('date', { ascending: true });
+    const cacheKey = `${activeTenantId || 'default'}:${ownerId || 'all'}:${contactId || 'all'}`;
+    const cached = serverActivitiesCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+      return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
+    }
+
+    let query = supabase.from('activities').select(ACTIVITY_SELECT_COLUMNS).order('date', { ascending: true });
     
     if (activeTenantId) {
       query = query.eq('tenant_id', activeTenantId);
@@ -31,26 +72,15 @@ export async function GET(req: NextRequest) {
     const { data: activities, error } = await query;
 
     if (error) throw error;
-    if (!activities) return NextResponse.json([]);
+    if (!activities) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
-    const items = activities.map((item: any) => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      date: item.date,
-      type: item.type,
-      status: item.status,
-      contactId: item.contact_id,
-      dealId: item.deal_id,
-      ownerId: item.owner_id,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
+    const items = activities.map(formatActivityDbRow);
+    serverActivitiesCache.set(cacheKey, { data: items, timestamp: now });
 
-    return NextResponse.json(items);
+    return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Activities] GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -59,7 +89,6 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase(req);
     const data = await req.json().catch(() => ({}));
     
-    // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);
     const activeTenantId = await getActiveTenantId(supabase, user, req);
     if (activeTenantId) {
@@ -73,7 +102,7 @@ export async function POST(req: NextRequest) {
       if (activityTime < nowWithGrace) {
         return NextResponse.json(
           { error: "Não é possível agendar um compromisso com data ou horário no passado." },
-          { status: 400 }
+          { status: 400, headers: NO_CACHE_HEADERS }
         );
       }
     }
@@ -83,7 +112,7 @@ export async function POST(req: NextRequest) {
       const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
       const { data: recentDuplicate } = await supabase
         .from('activities')
-        .select('id')
+        .select(ACTIVITY_SELECT_COLUMNS)
         .eq('owner_id', data.owner_id)
         .eq('title', data.title)
         .gte('created_at', tenSecondsAgo)
@@ -91,22 +120,30 @@ export async function POST(req: NextRequest) {
 
       if (recentDuplicate && recentDuplicate.length > 0) {
         console.warn("[API/Activities] Prevented rapid duplicate activity insertion:", recentDuplicate[0].id);
-        return NextResponse.json({ id: recentDuplicate[0].id });
+        const dupItem = formatActivityDbRow(recentDuplicate[0]);
+        return NextResponse.json({ success: true, id: recentDuplicate[0].id, activity: dupItem }, { headers: NO_CACHE_HEADERS });
       }
     }
 
     const { data: result, error } = await supabase
       .from('activities')
       .insert([data])
-      .select();
+      .select(ACTIVITY_SELECT_COLUMNS);
 
     if (error) throw error;
     if (!result || result.length === 0) throw new Error("Failed to create activity");
 
-    return NextResponse.json({ id: result[0].id });
+    invalidateServerActivitiesCache();
+
+    const createdActivity = formatActivityDbRow(result[0]);
+    return NextResponse.json({ 
+      success: true, 
+      id: result[0].id, 
+      activity: createdActivity 
+    }, { status: 201, headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Activities] POST Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -118,18 +155,27 @@ export async function PATCH(req: NextRequest) {
     if (!id) throw new Error("ID required");
 
     const data = await req.json().catch(() => ({}));
+    data.updated_at = new Date().toISOString();
 
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('activities')
       .update(data)
-      .eq('id', id);
+      .eq('id', id)
+      .select(ACTIVITY_SELECT_COLUMNS);
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    invalidateServerActivitiesCache();
+
+    const updatedActivity = updated && updated.length > 0 ? formatActivityDbRow(updated[0]) : null;
+
+    return NextResponse.json({ 
+      success: true, 
+      activity: updatedActivity 
+    }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Activities] PATCH Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -147,9 +193,11 @@ export async function DELETE(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    invalidateServerActivitiesCache();
+
+    return NextResponse.json({ success: true, id }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("[API/Activities] DELETE Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

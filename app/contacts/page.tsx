@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -80,6 +78,7 @@ function ContactsContent() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isMessaging, setIsMessaging] = useState<string | null>(null);
   const [displayPhone, setDisplayPhone] = useState("");
@@ -406,23 +405,37 @@ function ContactsContent() {
 
   const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSaving) return;
+
     const formData = new FormData(e.currentTarget);
+    const nameVal = String(formData.get('name') || '').trim();
+    if (!nameVal) {
+      toast.error("O nome do contato é obrigatório.");
+      return;
+    }
+    const phoneVal = String(formData.get('phone') || displayPhone || '').trim();
+    const emailVal = String(formData.get('email') || '').trim();
+
     const data = {
-      name: formData.get('name') as string,
-      email: formData.get('email') as string,
-      phone: formData.get('phone') as string,
-      role: activeTab === 'cliente' ? undefined : formData.get('role') as string,
+      name: nameVal,
+      email: emailVal,
+      phone: phoneVal,
+      role: activeTab === 'cliente' ? undefined : (formData.get('role') as string),
       type: activeTab,
-      companyId: activeTab === 'cliente' ? undefined : formData.get('companyId') as string,
-      source: activeTab === 'cliente' ? formData.get('source') as string : undefined,
-      department: activeTab === 'equipe' ? formData.get('department') as string : undefined,
-      temperature: activeTab === 'cliente' ? formData.get('temperature') as 'quente' | 'morno' | 'frio' : undefined,
+      companyId: activeTab === 'cliente' ? undefined : (formData.get('companyId') as string),
+      source: activeTab === 'cliente' ? (formData.get('source') as string) : undefined,
+      department: activeTab === 'equipe' ? (formData.get('department') as string) : undefined,
+      temperature: activeTab === 'cliente' ? (formData.get('temperature') as 'quente' | 'morno' | 'frio') : undefined,
     };
 
+    setIsSaving(true);
     try {
       if (editingContact) {
-        await updateContact(editingContact.id, data);
+        const updatedContact = await updateContact(editingContact.id, data);
         
+        // Sincronização atômica imediata no estado da página
+        setContacts(prev => prev.map(c => c.id === editingContact.id ? (updatedContact || { ...c, ...data }) : c));
+
         recordAuditEvent({
           action: 'UPDATE_CONTACT',
           title: 'Edição de Dados de Contato',
@@ -457,12 +470,13 @@ function ContactsContent() {
           });
         }
         
-        toast.success("Contato atualizado!");
+        toast.success("Contato atualizado com sucesso!");
       } else {
         if (activeTab === 'equipe') {
           const emailExists = await isEmailRegistered(data.email);
           if (emailExists) {
             toast.error("Este e-mail já está vinculado a um usuário cadastrado.");
+            setIsSaving(false);
             return;
           }
 
@@ -476,7 +490,15 @@ function ContactsContent() {
           toast.success("Membro da equipe convidado e perfil criado!");
         }
 
-        const contactId = await createContact(data);
+        const result = await createContact(data);
+        const contactId = result?.id || result?.contact?.id;
+        const newContact = result?.contact;
+
+        // Inclusão atômica imediata do novo contato no topo da lista
+        if (newContact) {
+          setContacts(prev => [newContact, ...prev.filter(c => c.id !== newContact.id)]);
+        }
+
         if (contactId) {
           recordAuditEvent({
             action: 'CREATE_CONTACT',
@@ -504,15 +526,17 @@ function ContactsContent() {
             metadata: { type: 'creation' }
           });
         }
-        if (activeTab !== 'equipe') toast.success("Contato criado!");
+        if (activeTab !== 'equipe') toast.success("Contato criado com sucesso!");
       }
       setIsModalOpen(false);
       setEditingContact(null);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Erro ao salvar contato.");
+    } finally {
+      setIsSaving(false);
     }
-  }, [activeTab, editingContact]);
+  }, [activeTab, editingContact, displayPhone, isSaving]);
 
   if (authLoading) return null;
 
@@ -675,6 +699,7 @@ function ContactsContent() {
         setDisplayPhone={setDisplayPhone}
         onSave={handleSave}
         onDeleteRequest={handleDeletePrompt}
+        isSaving={isSaving}
       />
 
       {/* Modal de Confirmação de Exclusão de Contato */}

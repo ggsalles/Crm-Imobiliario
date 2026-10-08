@@ -267,7 +267,7 @@ export default function ContactDetail360Page() {
       const dealTitle = `${matchedProperty.title} - ${contact.name}`;
       const value = matchedProperty.price;
 
-      const newDealId = await createDeal({
+      const res = await createDeal({
         title: dealTitle,
         value: value,
         stage: 'lead',
@@ -275,6 +275,7 @@ export default function ContactDetail360Page() {
         propertyId: matchedProperty.id,
         ownerId: user.id
       });
+      const newDealId = typeof res === 'string' ? res : (res?.id || '');
 
       recordAuditEvent({
         action: 'CREATE_DEAL_FROM_MATCH',
@@ -282,7 +283,7 @@ export default function ContactDetail360Page() {
         content: `Negócio "${dealTitle}" criado via match do imóvel "${matchedProperty.title}" com o contato "${contact.name}".`,
         severity: 'info',
         category: 'modification',
-        relatedId: typeof newDealId === 'string' ? newDealId : undefined,
+        relatedId: newDealId || undefined,
         entityType: 'deal',
         metadata: {
           dealTitle,
@@ -334,7 +335,7 @@ export default function ContactDetail360Page() {
       const departmentText = JSON.stringify(payloadProfile);
       const tempUpdated = contact.temperature !== formTemperature;
       
-      await updateContact(contact.id, { 
+      const updatedContact = await updateContact(contact.id, { 
         department: departmentText,
         temperature: formTemperature
       });
@@ -354,8 +355,12 @@ export default function ContactDetail360Page() {
         }
       });
 
-      const refreshed = await getContact(id);
-      setContact(refreshed);
+      if (updatedContact) {
+        setContact(updatedContact);
+      } else {
+        const refreshed = await getContact(id);
+        if (refreshed) setContact(refreshed);
+      }
 
       toast.success("Perfil de interesse atualizado com sucesso!");
       setIsProfileModalOpen(false);
@@ -405,13 +410,14 @@ export default function ContactDetail360Page() {
     };
 
     try {
-      const newActId = await createActivity({
+      const res = await createActivity({
         title: titles[type],
         type: type === 'meeting' ? 'meeting' : (type === 'task' ? 'task' : (type === 'call' ? 'call' : 'other')),
         date: new Date().toISOString(),
         status: 'pending',
         contactId: contact.id
       });
+      const newActId = typeof res === 'string' ? res : res?.id;
 
       recordAuditEvent({
         action: 'CREATE_ACTIVITY',
@@ -419,7 +425,7 @@ export default function ContactDetail360Page() {
         content: `Atividade "${titles[type]}" vinculada ao contato "${contact.name}".`,
         severity: 'info',
         category: 'modification',
-        relatedId: typeof newActId === 'string' ? newActId : undefined,
+        relatedId: newActId,
         entityType: 'activity',
         metadata: {
           title: titles[type],

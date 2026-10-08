@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -48,6 +46,39 @@ export default function CalendarPage() {
       <CalendarContent />
     </Suspense>
   );
+}
+
+function mapActivityToCalendarEvent(act: any): CalendarEventItem {
+  const descText = act.description || "";
+  const descLines = descText.split("\n");
+  const firstLine = descLines[0] || "";
+  
+  const isTimeFormat = /^\d{2}:\d{2}\s-\s\d{2}:\d{2}/.test(firstLine);
+  
+  let displayTime = "Agendado";
+  let dateObj: Date;
+  try {
+    dateObj = act.date ? (typeof act.date === "string" ? parseISO(act.date) : new Date(act.date)) : new Date();
+    
+    if (isTimeFormat) {
+      displayTime = firstLine;
+    } else if (act.date) {
+      displayTime = format(dateObj, "HH:mm");
+    }
+  } catch {
+    dateObj = new Date();
+  }
+
+  return {
+    id: act.id,
+    title: act.title || "Sem título",
+    description: isTimeFormat ? descLines.slice(1).join("\n") : descText,
+    date: dateObj,
+    time: displayTime,
+    type: act.type === "meeting" ? "Visita" : act.type === "call" ? "Follow-up" : "Reunião",
+    client: "",
+    status: act.status
+  };
 }
 
 function CalendarContent() {
@@ -121,40 +152,7 @@ function CalendarContent() {
     const ownerId = profile.role === "Admin" ? undefined : user.id;
     
     const unsub = subscribeToActivities((data) => {
-      const mappedEvents: CalendarEventItem[] = data.map(act => {
-        const descText = act.description || "";
-        const descLines = descText.split("\n");
-        const firstLine = descLines[0] || "";
-        
-        const isTimeFormat = /^\d{2}:\d{2}\s-\s\d{2}:\d{2}/.test(firstLine);
-        
-        let displayTime = "Agendado";
-        let dateObj: Date;
-        try {
-          dateObj = act.date ? (typeof act.date === "string" ? parseISO(act.date) : new Date(act.date)) : new Date();
-          
-          if (isTimeFormat) {
-            displayTime = firstLine;
-          } else if (act.date) {
-            displayTime = format(dateObj, "HH:mm");
-          }
-        } catch (e) {
-          console.error("Error formatting date", e);
-          dateObj = new Date();
-        }
-
-        return {
-          id: act.id,
-          title: act.title || "Sem título",
-          description: isTimeFormat ? descLines.slice(1).join("\n") : descText,
-          date: dateObj,
-          time: displayTime,
-          type: act.type === "meeting" ? "Visita" : act.type === "call" ? "Follow-up" : "Reunião",
-          client: "",
-          status: act.status
-        };
-      });
-      setEvents(mappedEvents);
+      setEvents(data.map(mapActivityToCalendarEvent));
     }, ownerId);
 
     return () => unsub();
@@ -356,7 +354,12 @@ function CalendarContent() {
 
     try {
       if (editingEvent) {
-        await updateActivity(editingEvent.id, activityData);
+        const updated = await updateActivity(editingEvent.id, activityData);
+        if (updated) {
+          const mapped = mapActivityToCalendarEvent(updated);
+          setEvents(prev => prev.map(e => e.id === editingEvent.id ? mapped : e));
+        }
+
         recordAuditEvent({
           action: "UPDATE_ACTIVITY",
           title: "Edição de Agendamento na Agenda",
@@ -373,14 +376,20 @@ function CalendarContent() {
         });
         toast.success("Compromisso atualizado com sucesso!");
       } else {
-        const newActId = await createActivity(activityData);
+        const res = await createActivity(activityData);
+        if (res?.activity) {
+          const mapped = mapActivityToCalendarEvent(res.activity);
+          setEvents(prev => [...prev, mapped]);
+        }
+        const newActId = res?.id || res?.activity?.id;
+
         recordAuditEvent({
           action: "CREATE_ACTIVITY",
           title: "Novo Agendamento na Agenda",
           content: `Novo compromisso "${newEvent.title}" (${newEvent.type}) agendado para ${format(activityDate, "dd/MM/yyyy")} às ${newEvent.time}.`,
           severity: "info",
           category: "modification",
-          relatedId: typeof newActId === "string" ? newActId : undefined,
+          relatedId: newActId,
           entityType: "activity",
           metadata: {
             title: newEvent.title,
@@ -450,8 +459,13 @@ function CalendarContent() {
 
   const handleToggleStatus = useCallback(async (event: CalendarEventItem) => {
     const newStatus = event.status === "completed" ? "pending" : "completed";
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, status: newStatus } : e));
     try {
-      await updateActivity(event.id, { status: newStatus as any });
+      const updated = await updateActivity(event.id, { status: newStatus as any });
+      if (updated) {
+        const mapped = mapActivityToCalendarEvent(updated);
+        setEvents(prev => prev.map(e => e.id === event.id ? mapped : e));
+      }
       recordAuditEvent({
         action: "UPDATE_ACTIVITY",
         title: newStatus === "completed" ? "Compromisso Concluído" : "Compromisso Reaberto",
@@ -467,6 +481,7 @@ function CalendarContent() {
       });
       toast.success(newStatus === "completed" ? "Compromisso concluído!" : "Compromisso reaberto!");
     } catch (err) {
+      setEvents(prev => prev.map(e => e.id === event.id ? { ...e, status: event.status } : e));
       console.error("Error toggling status", err);
       toast.error("Erro ao atualizar status do compromisso.");
     }

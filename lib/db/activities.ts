@@ -81,81 +81,129 @@ export function subscribeToActivities(callback: (activities: Activity[]) => void
   };
 }
 
-const inFlightActivityCreations = new Map<string, Promise<string>>();
-const recentActivityCreations = new Map<string, { id: string; expiresAt: number }>();
-
-export async function createActivity(data: any) {
+export async function createActivity(data: any): Promise<{ id: string; activity: Activity }> {
   const session = await getSafeSession();
   const user = session?.user;
   if (!user) throw new Error("Not authenticated");
-
-  const dedupKey = `${user.id}:${data.title?.trim()}:${data.date}`;
-  const now = Date.now();
-
-  const cached = recentActivityCreations.get(dedupKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.id;
-  }
-
-  if (inFlightActivityCreations.has(dedupKey)) {
-    return inFlightActivityCreations.get(dedupKey)!;
-  }
 
   const activityData = {
     title: data.title,
     description: data.description,
     date: data.date,
-    type: data.type,
-    status: data.status,
-    contact_id: data.contactId || null,
-    deal_id: data.dealId || null,
+    type: data.type || 'task',
+    status: data.status || 'pending',
+    contact_id: data.contactId || data.contact_id || null,
+    deal_id: data.dealId || data.deal_id || null,
     owner_id: user.id
   };
 
-  const creationPromise = (async () => {
-    try {
-      const result = await apiFetch('/api/activities', {
-        method: "POST",
-        body: JSON.stringify(activityData)
-      });
-      recentActivityCreations.set(dedupKey, { id: result.id, expiresAt: Date.now() + 5000 });
-      return result.id;
-    } catch (err) {
-      console.error("[lib/db/activities] createActivity FATAL:", err);
-      throw err;
-    } finally {
-      inFlightActivityCreations.delete(dedupKey);
-    }
-  })();
+  try {
+    const result = await apiFetch('/api/activities', {
+      method: "POST",
+      body: JSON.stringify(activityData)
+    });
 
-  inFlightActivityCreations.set(dedupKey, creationPromise);
-  return creationPromise;
+    const createdId = result?.id || result?.activity?.id;
+    const officialActivity: Activity = result?.activity || {
+      id: createdId,
+      title: activityData.title,
+      description: activityData.description,
+      date: activityData.date,
+      type: activityData.type,
+      status: activityData.status,
+      contactId: activityData.contact_id || undefined,
+      dealId: activityData.deal_id || undefined,
+      ownerId: activityData.owner_id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Sincronização imediata no cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('activities:')) {
+        if (Array.isArray(dataCache[k])) {
+          const existingIdx = dataCache[k].findIndex((a: any) => a.id === createdId);
+          if (existingIdx >= 0) {
+            dataCache[k][existingIdx] = officialActivity;
+          } else {
+            dataCache[k] = [...dataCache[k], officialActivity];
+          }
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
+    invalidateApiCache('/api/activities');
+    return { id: createdId, activity: officialActivity };
+  } catch (err) {
+    console.error("[lib/db/activities] createActivity FATAL:", err);
+    throw err;
+  }
 }
 
-export async function updateActivity(id: string, data: any) {
+export async function updateActivity(id: string, data: any): Promise<Activity> {
+  if (!id) throw new Error("ID de atividade inválido");
+
   const updateData: any = { updated_at: new Date().toISOString() };
   if (data.title !== undefined) updateData.title = data.title;
   if (data.description !== undefined) updateData.description = data.description;
   if (data.date !== undefined) updateData.date = data.date;
   if (data.type !== undefined) updateData.type = data.type;
   if (data.status !== undefined) updateData.status = data.status;
+  if (data.contactId !== undefined) updateData.contact_id = data.contactId;
+  if (data.dealId !== undefined) updateData.deal_id = data.dealId;
 
   try {
-    await apiFetch(`/api/activities?id=${id}`, {
+    const result = await apiFetch(`/api/activities?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
+
+    const officialActivity: Activity = result?.activity || {
+      id,
+      ...data,
+      updatedAt: updateData.updated_at
+    };
+
+    // Atualização imediata no cache de memória local e snapshot persistente
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('activities:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].map((a: any) => {
+            if (a.id === id) {
+              return { ...a, ...officialActivity };
+            }
+            return a;
+          });
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+
+    invalidateApiCache('/api/activities');
+    return officialActivity;
   } catch (err) {
     console.error("[lib/db/activities] updateActivity FATAL:", err);
     throw err;
   }
 }
 
-export async function deleteActivity(id: string) {
+export async function deleteActivity(id: string): Promise<boolean> {
+  if (!id) return false;
   try {
     await apiFetch(`/api/activities?id=${id}`, {
       method: "DELETE"
     });
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('activities:')) {
+        if (Array.isArray(dataCache[k])) {
+          dataCache[k] = dataCache[k].filter((a: any) => a.id !== id);
+          safePersistSnapshot(k, dataCache[k]);
+        }
+      }
+    }
+    invalidateApiCache('/api/activities');
+    return true;
   } catch (err) {
     console.error("[lib/db/activities] deleteActivity FATAL:", err);
     throw err;

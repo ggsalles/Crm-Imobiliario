@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { 
@@ -14,15 +12,19 @@ import {
   Loader2, 
   Trash2, 
   Edit2, 
-  Briefcase 
+  Briefcase,
+  Users,
+  ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { 
   Company, 
+  Contact,
   getCompanies, 
   subscribeToCompanies, 
+  subscribeToContacts,
   createCompany, 
   updateCompany, 
   deleteCompany 
@@ -38,19 +40,14 @@ export default function CompaniesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [isDeletingCompany, setIsDeletingCompany] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const tenantId = profile?.tenantId || (profile as any)?.tenant_id;
-
-  const fetchData = useCallback(async () => {
-    if (!user || !profile) return;
-    const ownerId = undefined;
-    const data = await getCompanies(ownerId, tenantId);
-    setCompanies(data);
-  }, [user, profile, tenantId]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -64,12 +61,19 @@ export default function CompaniesPage() {
     setLoading(true);
     const ownerId = undefined;
 
-    const unsub = subscribeToCompanies((data) => {
+    const unsubCompanies = subscribeToCompanies((data) => {
       setCompanies(data);
       setLoading(false);
     }, ownerId, tenantId);
 
-    return () => unsub();
+    const unsubContacts = subscribeToContacts((data) => {
+      setContacts(data);
+    }, ownerId, tenantId);
+
+    return () => {
+      unsubCompanies();
+      unsubContacts();
+    };
   }, [user, profile, tenantId]);
 
   // Unique industries for fast filtering
@@ -80,6 +84,17 @@ export default function CompaniesPage() {
     });
     return Array.from(set).sort();
   }, [companies]);
+
+  // Contatos vinculados por empresa
+  const contactsCountByCompany = useMemo(() => {
+    const map = new Map<string, number>();
+    contacts.forEach(c => {
+      if (c.companyId) {
+        map.set(c.companyId, (map.get(c.companyId) || 0) + 1);
+      }
+    });
+    return map;
+  }, [contacts]);
 
   // Memoized filtered companies
   const filteredCompanies = useMemo(() => {
@@ -104,6 +119,8 @@ export default function CompaniesPage() {
 
     setIsDeletingCompany(true);
     const toastId = toast.loading("Excluindo empresa...");
+    
+    // Atualização otimista imediata no estado local do React
     setCompanies(prev => prev.filter(c => c.id !== id));
 
     try {
@@ -130,6 +147,7 @@ export default function CompaniesPage() {
       }
     } catch (err: any) {
       console.error("Erro ao excluir empresa:", err);
+      // Reversão em caso de erro
       setCompanies(prev => [...prev, targetCompany]);
       toast.error(err?.message || "Erro ao excluir empresa.", { id: toastId });
     } finally {
@@ -148,17 +166,32 @@ export default function CompaniesPage() {
 
   const handleSave = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSaving) return;
+
     const formData = new FormData(e.currentTarget);
+    const name = String(formData.get('name') || '').trim();
+    if (!name) {
+      toast.error("O nome da empresa é obrigatório.");
+      return;
+    }
+
     const data = {
-      name: formData.get('name') as string,
-      industry: formData.get('industry') as string,
-      website: formData.get('website') as string,
+      name,
+      industry: String(formData.get('industry') || '').trim() || undefined,
+      website: String(formData.get('website') || '').trim() || undefined,
       tenantId: tenantId
     };
 
+    setIsSaving(true);
+    const toastId = toast.loading(editingCompany ? "Salvando alterações..." : "Cadastrando empresa...");
+
     try {
       if (editingCompany) {
-        await updateCompany(editingCompany.id, data);
+        const updated = await updateCompany(editingCompany.id, data);
+        
+        // Sincronização imediata no estado do React (sem recarregar página)
+        setCompanies(prev => prev.map(c => c.id === editingCompany.id ? updated : c));
+
         recordAuditEvent({
           action: 'UPDATE_COMPANY',
           title: 'Edição de Dados da Empresa',
@@ -173,16 +206,21 @@ export default function CompaniesPage() {
             website: data.website
           }
         });
-        toast.success("Empresa atualizada!");
+        toast.success("Empresa atualizada com sucesso!", { id: toastId });
       } else {
-        const newCompanyId = await createCompany(data);
+        const res = await createCompany(data);
+        const newComp = res.company;
+
+        // Sincronização imediata no estado do React (sem recarregar página)
+        setCompanies(prev => [newComp, ...prev.filter(c => c.id !== newComp.id)]);
+
         recordAuditEvent({
           action: 'CREATE_COMPANY',
           title: 'Cadastro de Nova Empresa',
           content: `Nova empresa parceira/cliente "${data.name}" cadastrada no sistema.`,
           severity: 'info',
           category: 'modification',
-          relatedId: typeof newCompanyId === 'string' ? newCompanyId : undefined,
+          relatedId: typeof res.id === 'string' ? res.id : newComp.id,
           entityType: 'company',
           metadata: {
             name: data.name,
@@ -190,15 +228,19 @@ export default function CompaniesPage() {
             website: data.website
           }
         });
-        toast.success("Empresa criada!");
+        toast.success("Empresa cadastrada com sucesso!", { id: toastId });
       }
-      await fetchData();
+
       setIsModalOpen(false);
       setEditingCompany(null);
-    } catch (err) {
-      toast.error("Erro ao salvar empresa.");
+    } catch (err: any) {
+      console.error("Erro ao salvar empresa:", err);
+      // Preserva o formulário aberto com os dados preenchidos em caso de erro
+      toast.error(err?.message || "Erro ao salvar empresa.", { id: toastId });
+    } finally {
+      setIsSaving(false);
     }
-  }, [editingCompany, fetchData, tenantId]);
+  }, [editingCompany, isSaving, tenantId]);
 
   if (authLoading) return null;
 
@@ -211,7 +253,7 @@ export default function CompaniesPage() {
             <div>
               <h1 className="text-xl md:text-2xl font-black tracking-tight">Empresas</h1>
               <p className="text-muted-foreground mt-0.5 text-xs md:text-sm font-medium">
-                Gerencie as organizações parceiras e clientes ({companies.length}).
+                Gerencie as organizações parceiras, construtoras e clientes ({companies.length}).
               </p>
             </div>
             <button 
@@ -219,7 +261,7 @@ export default function CompaniesPage() {
                 setEditingCompany(null);
                 setIsModalOpen(true);
               }}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs cursor-pointer"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-xl font-bold shadow-md hover:shadow-primary/20 transition-all flex items-center gap-1.5 text-xs cursor-pointer active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Nova Empresa
@@ -231,7 +273,7 @@ export default function CompaniesPage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder="Pesquisar empresas..."
+                placeholder="Pesquisar por nome, setor ou website..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-3 py-2 bg-card text-foreground border border-border rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs transition-all font-medium"
@@ -241,7 +283,7 @@ export default function CompaniesPage() {
               <select
                 value={selectedIndustry}
                 onChange={(e) => setSelectedIndustry(e.target.value)}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shrink-0"
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shrink-0 cursor-pointer"
               >
                 <option value="all">Todos os setores ({companies.length})</option>
                 {availableIndustries.map(ind => (
@@ -260,6 +302,7 @@ export default function CompaniesPage() {
               <CompanyCard 
                 key={company.id} 
                 company={company} 
+                contactCount={contactsCountByCompany.get(company.id) || 0}
                 onEdit={handleEditClick} 
                 onDelete={handleDeleteClick} 
               />
@@ -268,7 +311,7 @@ export default function CompaniesPage() {
               <div className="col-span-full py-16 text-center bg-card rounded-2xl border border-border border-dashed flex flex-col items-center">
                 <Building2 className="w-10 h-10 text-muted-foreground mb-3 opacity-20" />
                 <h3 className="text-base md:text-lg font-black tracking-tight">Nenhuma empresa encontrada</h3>
-                <p className="text-muted-foreground text-xs mt-1 font-medium">Cadastre sua primeira empresa para começar.</p>
+                <p className="text-muted-foreground text-xs mt-1 font-medium">Cadastre sua primeira empresa ou parceiro para começar.</p>
               </div>
             )}
           </div>
@@ -278,44 +321,80 @@ export default function CompaniesPage() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !isSaving && setIsModalOpen(false)} className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              initial={{ scale: 0.95, opacity: 0, y: 15 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.9, opacity: 0, y: 20 }} 
+              exit={{ scale: 0.95, opacity: 0, y: 15 }} 
               onClick={(e) => e.stopPropagation()}
               className="bg-card border border-border rounded-2xl p-5 md:p-6 w-full max-w-lg relative shadow-xl overflow-hidden"
             >
-              <button onClick={() => setIsModalOpen(false)} className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-primary/10 transition-colors">
+              <button 
+                onClick={() => !isSaving && setIsModalOpen(false)} 
+                disabled={isSaving}
+                className="absolute right-4 top-4 p-1.5 rounded-full hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-50"
+              >
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
               <h2 className="text-xl font-black mb-4 tracking-tight">{editingCompany ? 'Editar Empresa' : 'Nova Empresa'}</h2>
               <form onSubmit={handleSave} className="space-y-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1 ml-1 block">Nome da Empresa</label>
-                  <input name="name" required defaultValue={editingCompany?.name} placeholder="Ex: Tech Solutions Ltda" className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1 ml-1 block">Nome da Empresa *</label>
+                  <input 
+                    name="name" 
+                    required 
+                    defaultValue={editingCompany?.name} 
+                    placeholder="Ex: Construtora Alfa Ltda" 
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                    autoFocus
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1 ml-1 block">Setor / Atividade</label>
-                  <input name="industry" defaultValue={editingCompany?.industry} placeholder="Ex: Tecnologia da Informação" className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input 
+                    name="industry" 
+                    defaultValue={editingCompany?.industry} 
+                    placeholder="Ex: Construção Civil / Imobiliária" 
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1 ml-1 block">Website (opcional)</label>
-                  <input name="website" defaultValue={editingCompany?.website} placeholder="www.empresa.com.br" className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input 
+                    name="website" 
+                    defaultValue={editingCompany?.website} 
+                    placeholder="www.construtora.com.br" 
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-muted/30 text-foreground text-xs md:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" 
+                  />
                 </div>
                 <div className="pt-2 flex gap-2">
                   {editingCompany && (
                     <button 
                       type="button" 
                       onClick={() => setCompanyToDelete(editingCompany)} 
-                      className="px-3 py-2 rounded-xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer"
+                      disabled={isSaving}
+                      className="px-3 py-2 rounded-xl transition-all border text-red-500 hover:bg-red-500/10 border-red-500/20 flex items-center justify-center cursor-pointer disabled:opacity-50"
                       title="Excluir empresa"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer">Cancelar</button>
-                  <button type="submit" className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer">Salvar</button>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)} 
+                    disabled={isSaving}
+                    className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isSaving ? "Salvando..." : (editingCompany ? "Salvar Alterações" : "Criar Empresa")}
+                  </button>
                 </div>
               </form>
             </motion.div>
@@ -339,10 +418,12 @@ export default function CompaniesPage() {
 
 const CompanyCard = memo(function CompanyCard({
   company,
+  contactCount,
   onEdit,
   onDelete
 }: {
   company: Company;
+  contactCount: number;
   onEdit: (company: Company) => void;
   onDelete: (company: Company) => void;
 }) {
@@ -351,7 +432,7 @@ const CompanyCard = memo(function CompanyCard({
       <div>
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-base text-muted-foreground">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
@@ -385,8 +466,12 @@ const CompanyCard = memo(function CompanyCard({
           </div>
         )}
       </div>
-      <div className="pt-2">
-        <span className="text-[10px] text-muted-foreground font-medium">Cadastrada no CRM</span>
+      <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground font-medium">
+        <span className="flex items-center gap-1">
+          <Users className="w-3 h-3 text-muted-foreground/70" />
+          {contactCount} {contactCount === 1 ? 'contato vinculado' : 'contatos vinculados'}
+        </span>
+        <span className="text-[10px] text-muted-foreground/60">Organização</span>
       </div>
     </div>
   );

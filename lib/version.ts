@@ -15,12 +15,194 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.49";
-export const APP_VERSION_CODE = 249;
+export const APP_VERSION = "v2.57";
+export const APP_VERSION_CODE = 257;
 export const APP_VERSION_DATE = "08/10/2026";
-export const APP_VERSION_TITLE = "Eliminação do Scroll Horizontal e Barra de Rolagem Discreta nas Modais";
+export const APP_VERSION_TITLE = "Auditoria & Blindagem da Central de Mensagens & Chat (Módulo 7 - CRUD 100% Confiável & Otimização de Egress Supabase)";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.57",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem da Central de Mensagens & Chat (Módulo 7 - CRUD 100% Confiável & Otimização de Egress Supabase)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do registro completo formatado (formatConversationDbRow / formatMessage) nas rotas POST, PATCH e DELETE de mensagens e conversas",
+      "Sincronização otimista imediata no estado local do React na Central de Mensagens (/messages) sem depender de novas viagens de rede",
+      "Novo cache cirúrgico em memória no servidor Next.js para mensagens e conversas (/api/messages & /api/conversations) estancando leituras repetidas no Supabase",
+      "Seleção estrita de colunas (MESSAGE_SELECT_COLUMNS & CONVERSATION_SELECT_COLUMNS) no lugar de SELECT * reduzindo drasticamente a cota de egress do Supabase",
+      "Novo sistema de persistência com snapshots locais (getCachedConversations & getCachedMessages) para carregamento instantâneo em 0ms sem telas brancas"
+    ],
+    improvements: [
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todas as rotas e métodos de conversas e mensagens",
+      "Sincronização automática em snapshots offline e memória no envio e na exclusão de mensagens ou conversas",
+      "Integração perfeita entre o canal WebSocket Realtime e o cache local para evitar requisições redundantes pela rede",
+      "Manutenção segura de mensagens pendentes ou rascunhos em caso de instabilidade temporária na rede"
+    ],
+    fixes: [
+      "Correção do POST de conversas que retornava apenas o ID sem o objeto oficial da conversa",
+      "Correção do PATCH de conversas que retornava apenas { success: true } sem atualizar o objeto em memória",
+      "Eliminada a necessidade de recarregar a página (Ctrl + F5) para visualizar novas conversas ou apagar mensagens"
+    ]
+  },
+  {
+    version: "v2.56",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem do Módulo de Equipe & Usuários (Módulo 6 - CRUD 100% Confiável & Proteção de Egress Supabase)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do perfil oficial carimbado pelo banco nas rotas POST e PATCH de usuários e colaboradores",
+      "Sincronização imediata no estado do React na tela de Equipe (/users) refletindo novos corretores e alterações de papéis sem F5",
+      "Ativação do cache de perfis em memória no servidor Next.js (/api/profiles), eliminando o loop de consultas repetidas ao Supabase",
+      "Novo sistema de persistência com snapshots locais (getCachedUsers) para renderização instantânea em 0ms sem telas brancas",
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todos os métodos de leitura e alteração de perfis"
+    ],
+    improvements: [
+      "Integração direta entre CreateUserModal/EditUserModal e o estado local sem necessidade de re-consultas forçadas pela rede",
+      "Sincronização imediata em snapshots offline e memória a cada criação, edição ou exclusão de colaboradores",
+      "Eliminação do bypassCache redundante nas inscrições de usuários para estancar o consumo de leitura do Supabase",
+      "Proteção de inativação e reativação de usuários com atualização visual imediata e liberação/alocação de licenças"
+    ],
+    fixes: [
+      "Correção do POST de perfis que retornava somente ID sem o objeto oficial do usuário criado",
+      "Correção do PATCH de perfis que retornava apenas { success: true } sem os dados atualizados do usuário",
+      "Correção da rota /api/profiles que não persistia a resposta no cache de servidor em leituras completas"
+    ]
+  },
+  {
+    version: "v2.55",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem do Módulo de Empresas (Módulo 5 - CRUD 100% Confiável & Proteção de Egress Supabase)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do registro carimbado pelo banco (formatCompanyDbRow) nas rotas POST e PATCH de empresas",
+      "Sincronização imediata em tempo real do estado local do React na tela de Empresas (/companies) sem necessidade de recarregar a página",
+      "Novo cache cirúrgico em memória no servidor Next.js para empresas (/api/companies) reduzindo requisições repetidas ao Supabase",
+      "Aplicação de colunas estritas (COMPANY_SELECT_COLUMNS) no lugar de SELECT * estancando vazamentos de dados e consumo de egress",
+      "Contador e vínculo inteligente de contatos vinculados por organização exibido diretamente nos cards"
+    ],
+    improvements: [
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todas as rotas e métodos do módulo de empresas",
+      "Sincronização instantânea em snapshots persistentes e cache em memória (getCachedCompanies) a cada criação, edição ou exclusão",
+      "Proteção de bloqueio com Loader2 e estado isSaving evitando cliques duplicados ou submissões redundantes",
+      "Preservação integral dos dados preenchidos no modal de empresa caso o banco ou a rede apresente indisponibilidade"
+    ],
+    fixes: [
+      "Correção do POST de empresas que retornava somente ID sem os campos oficiais carimbados pelo banco",
+      "Correção do PATCH de empresas que retornava apenas { success: true } sem o objeto da empresa atualizado",
+      "Eliminada a necessidade de Ctrl + F5 ou de viagens extras de rede (fetchData redundante) para refletir inclusões e alterações"
+    ]
+  },
+  {
+    version: "v2.54",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem do Módulo de Atividades/Agenda (CRUD 100% Confiável & Otimização de Egress)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do registro carimbado pelo banco (formatActivityDbRow) nas rotas POST e PATCH de atividades",
+      "Sincronização imediata em tempo real do estado local do React nas telas de Atividades (/activities) e Agenda (/calendar)",
+      "Conclusão e alternância de status de compromissos refletida instantaneamente na tela sem precisar de Ctrl + F5",
+      "Novo cache em memória no servidor Next.js para atividades (/api/activities) reduzindo drasticamente consultas repetidas ao Supabase",
+      "Aplicação de colunas cirúrgicas (ACTIVITY_SELECT_COLUMNS) no lugar de SELECT * para estancar o consumo de egress"
+    ],
+    improvements: [
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todas as rotas e métodos do módulo de atividades",
+      "Sincronização instantânea em snapshots persistentes e cache em memória a cada criação, edição ou exclusão",
+      "Reversão graciosa no estado do React na Agenda e Dashboard em caso de falha de conexão",
+      "Preservação do formulário de agendamento em caso de indisponibilidade momentânea"
+    ],
+    fixes: [
+      "Correção do problema onde concluir uma tarefa na Agenda ou Dashboard só atualizava visualmente após recarregar",
+      "Correção do POST de atividades que retornava somente ID sem os campos oficiais carimbados",
+      "Correção do PATCH de atividades que devolvia apenas { success: true } sem o objeto atualizado"
+    ]
+  },
+  {
+    version: "v2.53",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem do Módulo de Negócios / Funil de Vendas (CRUD 100% Confiável)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do registro carimbado pelo banco (formatDeal) nas rotas POST e PATCH de oportunidades",
+      "Sincronização imediata em tempo real do estado local do React no Funil (Pipeline) a cada inclusão, edição e exclusão",
+      "Remoção da dependência de Ctrl + F5 ou polling para refletir mudanças de cards de negócios no Kanban",
+      "Bloqueio de submissão duplicada com indicador visual animado (Loader2) no modal de Negócios",
+      "Validação prévia obrigatória do título da oportunidade antes do envio para a API"
+    ],
+    improvements: [
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todas as rotas e métodos (GET, POST, PATCH, DELETE) do módulo de negócios",
+      "Sincronização imediata em snapshots offline e cache de memória do navegador para consistência instantânea",
+      "Atualização direta no detalhe 360 do negócio ao avançar estágio sem depender de múltiplas viagens de rede",
+      "Preservação integral dos dados preenchidos no modal de negócio em caso de falha de conexão"
+    ],
+    fixes: [
+      "Correção do POST de negócios que retornava apenas o ID sem o objeto oficial criado",
+      "Correção do PATCH de negócios que retornava apenas { success: true } sem os dados atualizados",
+      "Correção da exclusão de negócios no Kanban que deixava o card visível na tela até recarregar a página"
+    ]
+  },
+  {
+    version: "v2.52",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem do Módulo de Contatos/Clientes (CRUD 100% Confiável & Redução de Egress)",
+    type: "minor",
+    highlights: [
+      "Retorno garantido do registro carimbado pelo banco (formatContactDbRow) nas rotas POST e PATCH de contatos",
+      "Sincronização imediata em memória do React e Snapshots a cada inclusão e edição de cliente",
+      "Eliminação do loop massivo de consulta a negócios (deals) na listagem de contatos, blindando e reduzindo o consumo de egress do Supabase",
+      "Estado de salvamento (isSaving) com bloqueio de duplo clique e feedback visual no modal de contato",
+      "Preservação de todos os dados do formulário caso o banco ou conexão retorne falha"
+    ],
+    improvements: [
+      "Cabeçalhos NO_CACHE_HEADERS aplicados a todas as rotas e métodos do módulo de contatos",
+      "Aproveitamento direto do retorno da atualização no perfil 360 do contato, eliminando requisições GET redundantes",
+      "Tratamento resiliente de exclusão de contato com reversão automática de estado em caso de falha de rede"
+    ],
+    fixes: [
+      "Eliminada a necessidade de Ctrl + F5 para enxergar novos clientes cadastrados ou alterações de contatos",
+      "Correção do POST de contatos que retornava somente ID sem os campos oficiais do registro",
+      "Correção do PATCH de contatos que retornava apenas booleano success sem o registro atualizado"
+    ]
+  },
+  {
+    version: "v2.51",
+    releaseDate: "08/10/2026",
+    title: "Auditoria & Blindagem Transacional do Módulo de Imóveis (CRUD 100% Confiável)",
+    type: "minor",
+    highlights: [
+      "Fim do falso otimismo: a tela só confirma sucesso após a resposta 200 OK definitiva do banco de dados",
+      "Retorno garantido do registro carimbado pelo banco (formatPropertyDbRow) nas rotas POST e PATCH de imóveis",
+      "Sincronização imediata da memória do React com os dados oficiais retornados pela API",
+      "Invalidação forçada e cirúrgica de caches locais e do servidor Next.js a cada salvamento",
+      "Permanência segura de todos os dados preenchidos no formulário caso a rede ou banco aponte qualquer erro"
+    ],
+    improvements: [
+      "Padronização do contrato de resposta com cabeçalhos NO_CACHE_HEADERS em todas as operações de imóveis",
+      "Validação prévia obrigatória de título e valor de venda antes de tocar o banco de dados"
+    ],
+    fixes: [
+      "Eliminação de divergências onde a tela exibia sucesso mas o banco não persistia os dados alterados",
+      "Correção do retorno de POST de imóveis que enviava apenas o ID em vez do objeto completo"
+    ]
+  },
+  {
+    version: "v2.50",
+    releaseDate: "08/10/2026",
+    title: "Blindagem Dupla na Gravação de Endereço e CEP de Imóveis",
+    type: "patch",
+    highlights: [
+      "Dupla camada de extração para Logradouro (street) e CEP no formulário de edição de imóveis",
+      "Garantia de persistência mesmo em casos de inputs controlados ou autopreenchimento do navegador",
+      "Sincronização imediata entre estado de formulário e dados submetidos à API",
+    ],
+    improvements: [
+      "Resiliência absoluta no envio dos dados de localização do imóvel",
+      "Eliminação de qualquer possibilidade de divergência entre a tela e o banco de dados"
+    ],
+    fixes: [
+      "Prevenção de gravação em branco de endereço quando o input do formulário não for capturado exclusivamente pelo FormData"
+    ]
+  },
   {
     version: "v2.49",
     releaseDate: "08/10/2026",

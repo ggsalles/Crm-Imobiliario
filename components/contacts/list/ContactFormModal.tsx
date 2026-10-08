@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { formatPhone } from "@/lib/utils";
 import { Contact } from "@/lib/db";
@@ -14,6 +14,7 @@ interface ContactFormModalProps {
   setDisplayPhone: (val: string) => void;
   onSave: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   onDeleteRequest: (contact: Contact) => void;
+  isSaving?: boolean;
 }
 
 export function ContactFormModal({
@@ -24,7 +25,8 @@ export function ContactFormModal({
   displayPhone,
   setDisplayPhone,
   onSave,
-  onDeleteRequest
+  onDeleteRequest,
+  isSaving = false
 }: ContactFormModalProps) {
   return (
     <AnimatePresence>
@@ -166,15 +168,24 @@ export function ContactFormModal({
                 <button 
                   type="button"
                   onClick={onClose}
-                  className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer"
+                  disabled={isSaving}
+                  className="flex-1 py-2 font-bold text-xs md:text-sm text-muted-foreground hover:bg-muted rounded-xl transition-colors border border-border cursor-pointer disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer"
+                  disabled={isSaving}
+                  className="flex-1 py-2 font-bold text-xs md:text-sm bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                 >
-                  Salvar
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    "Salvar"
+                  )}
                 </button>
               </div>
             </form>
