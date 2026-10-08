@@ -43,3 +43,7 @@ export function isPlatformAdmin(email?: string | null): boolean {
   if (!email) return false;
   return email.trim().toLowerCase() === PLATFORM_ADMIN_EMAIL;
 }
+
+// Re-export das informações de versão do sistema
+export { APP_VERSION, APP_VERSION_CODE, APP_VERSION_DATE, APP_VERSION_TITLE, VERSION_HISTORY } from './version';
+

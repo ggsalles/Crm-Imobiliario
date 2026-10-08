@@ -30,12 +30,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { isPlatformAdmin, DEFAULT_TENANT_NAME } from "@/lib/constants";
+import { isPlatformAdmin, DEFAULT_TENANT_NAME, APP_VERSION } from "@/lib/constants";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { subscribeToTotalUnreadMessages, getTenants, updateUserProfile } from "@/lib/db";
 import { toast } from "sonner";
 import { safeGetItem, safeSetItem } from "@/lib/safe-storage";
+import { VersionModal } from "@/components/VersionModal";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -160,6 +161,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [isSwitchingTenantId, setIsSwitchingTenantId] = useState<string | null>(null);
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
   const { billingStatus, billingSuspensionDate, dueDay, diffDays } = useAuth();
 
   const navRef = useRef<HTMLElement>(null);
@@ -653,15 +655,38 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
 
         <div className="px-1.5 pb-2 pt-1">
           {!isCollapsed ? (
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors w-full rounded-lg"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              Sair
-            </button>
+            <>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors w-full rounded-lg"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sair
+              </button>
+
+              {/* Indicador de Versão com Acesso às Notas */}
+              <div className="mt-1 pt-1.5 border-t border-border/50">
+                <button
+                  type="button"
+                  onClick={() => setIsVersionModalOpen(true)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-muted/40 hover:bg-muted text-[11px] text-muted-foreground hover:text-foreground border border-border/40 transition-all group"
+                  title="Clique para ver detalhes e notas de atualização desta versão"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-semibold text-foreground/90">SalesScore</span>
+                    <span className="font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">
+                      {APP_VERSION}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-primary group-hover:underline font-medium">
+                    Notas &rarr;
+                  </span>
+                </button>
+              </div>
+            </>
           ) : (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center gap-1">
               <button 
                 onClick={handleLogout}
                 className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -669,10 +694,27 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
+
+              {/* Botão de Versão no Modo Recolhido */}
+              <button
+                type="button"
+                onClick={() => setIsVersionModalOpen(true)}
+                className="w-8 h-8 flex flex-col items-center justify-center rounded-lg bg-muted/40 hover:bg-muted border border-border/40 text-[9px] font-bold text-primary transition-all hover:scale-105"
+                title={`SalesScore ${APP_VERSION} (Ativa) - Clique para ver notas da versão`}
+              >
+                <span>{APP_VERSION.replace('v', '')}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Modal com Notas da Versão e Histórico Completo */}
+      <VersionModal 
+        isOpen={isVersionModalOpen} 
+        onClose={() => setIsVersionModalOpen(false)} 
+      />
     </div>
   );
 }

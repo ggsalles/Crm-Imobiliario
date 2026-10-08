@@ -38,6 +38,8 @@ import { supabase } from "@/lib/supabase";
 import { updateUserProfile } from "@/lib/db";
 import { DataImportSection } from "@/components/settings/DataImportSection";
 import Image from "next/image";
+import { APP_VERSION, APP_VERSION_DATE, APP_VERSION_TITLE, VERSION_HISTORY } from "@/lib/version";
+import { VersionModal } from "@/components/VersionModal";
 
 interface ColorOption {
   name: string;
@@ -88,6 +90,7 @@ export default function SettingsPage() {
   // Security Keyword for Instant Password Recovery
   const [securityKeywordInput, setSecurityKeywordInput] = useState("");
   const [isSavingKeyword, setIsSavingKeyword] = useState(false);
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
 
   useEffect(() => {
     if (profile?.securityKeyword) {
@@ -774,8 +777,79 @@ export default function SettingsPage() {
 
             {/* SEÇÃO 8: IMPORTAÇÃO DE DADOS EM LOTE (EXCLUSIVO GGSALLES) */}
             <DataImportSection />
+
+            {/* SEÇÃO 9: SOBRE O SISTEMA & VERSÃO ATIVA */}
+            <section className="bg-card rounded-2xl border border-border p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-foreground">Versão do Sistema</h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary text-primary-foreground font-mono shadow-sm">
+                        {APP_VERSION}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Compilação Ativa
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Última atualização em {APP_VERSION_DATE} • {APP_VERSION_TITLE}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsVersionModalOpen(true)}
+                  className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 self-start md:self-auto cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  Ver Notas de Atualização
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Versão Atual
+                  </span>
+                  <div className="text-sm font-bold text-foreground font-mono flex items-center gap-1.5">
+                    {APP_VERSION}
+                    <span className="text-[10px] text-emerald-500 font-sans font-medium">● Estável</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Data da Release
+                  </span>
+                  <div className="text-sm font-bold text-foreground">
+                    {APP_VERSION_DATE}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                    Ambiente & Banco
+                  </span>
+                  <div className="text-sm font-bold text-foreground">
+                    Supabase Cloud • Next.js
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
+
+        {/* Modal com Notas da Versão e Histórico Completo */}
+        <VersionModal 
+          isOpen={isVersionModalOpen} 
+          onClose={() => setIsVersionModalOpen(false)} 
+        />
       </main>
     </div>
   );
