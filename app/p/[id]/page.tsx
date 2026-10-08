@@ -303,7 +303,7 @@ export default function PublicPropertyCapturePage() {
               {/* Badges Overlay */}
               <div className="absolute top-6 left-6 flex flex-wrap gap-2 items-center">
                 {(property.referenceCode || property.reference_code) && (
-                  <span className="py-1 px-3.5 bg-amber-400 text-amber-950 rounded-xl text-xs sm:text-sm font-black font-mono tracking-wider uppercase shadow-xl border-2 border-white ring-2 ring-black/40 flex items-center gap-1.5">
+                  <span className="py-1 px-3.5 bg-amber-400 text-amber-950 rounded-xl text-xs sm:text-sm font-black font-mono tracking-wider uppercase shadow-xl border-2 border-yellow-200 ring-2 ring-black/40 flex items-center gap-1.5">
                     #{property.referenceCode || property.reference_code}
                   </span>
                 )}
@@ -372,7 +372,7 @@ export default function PublicPropertyCapturePage() {
               {/* Title & Price Bottom Overlay */}
               <div className="absolute bottom-6 left-6 right-6 text-white text-left">
                 <div className="flex flex-col gap-1">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-mono font-black text-xs sm:text-sm uppercase tracking-wider w-fit shadow-md mb-1 border border-white">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-400 text-amber-950 font-mono font-black text-xs sm:text-sm uppercase tracking-wider w-fit shadow-md mb-1 border border-yellow-200">
                     <span>🏷️ REF:</span>
                     <span>#{property.referenceCode || property.reference_code || property.id.slice(0, 8).toUpperCase()}</span>
                   </span>

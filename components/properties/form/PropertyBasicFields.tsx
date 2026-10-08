@@ -120,10 +120,10 @@ export function PropertyBasicFields({
         <div className="space-y-3">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 h-5 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Hash className="w-3 h-3 text-primary" />
+              <Hash className="w-3 h-3 text-amber-500" />
               Código de Referência
             </span>
-            <span className="text-[9px] font-semibold text-primary/80">auto-gerado</span>
+            <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">auto-gerado</span>
           </label>
           <div className="relative flex items-center">
             <input
@@ -132,14 +132,14 @@ export function PropertyBasicFields({
               onChange={(e) => onReferenceCodeChange?.(e.target.value.toUpperCase())}
               placeholder="Ex: AP0001"
               maxLength={20}
-              className="w-full pl-6 pr-12 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-black tracking-wider uppercase focus:ring-2 focus:ring-primary/20 transition-all outline-none text-primary placeholder:text-muted-foreground font-mono"
+              className="w-full pl-6 pr-12 py-4 bg-amber-500/5 border-2 border-amber-400/40 rounded-2xl text-sm font-black tracking-wider uppercase focus:ring-2 focus:ring-amber-500/30 transition-all outline-none text-amber-700 dark:text-amber-300 placeholder:text-muted-foreground font-mono"
             />
             {onAutoGenerateRef && !editingProperty && (
               <button
                 type="button"
                 onClick={onAutoGenerateRef}
                 disabled={isGeneratingRef}
-                className="absolute right-3 p-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                className="absolute right-3 p-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-800 dark:text-amber-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
                 title="Recalcular próximo código sequencial deste tipo"
               >
                 {isGeneratingRef ? "..." : "🔄"}

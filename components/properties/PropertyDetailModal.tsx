@@ -224,7 +224,7 @@ export function PropertyDetailModal({
               {/* Status and Type Pills Overlay */}
               <div className="absolute top-3 left-3 right-14 flex flex-wrap gap-1.5 z-10 items-center">
                 {(activeProperty.referenceCode || (activeProperty as any).reference_code) && (
-                  <span className="px-3.5 py-1.5 bg-amber-400 text-amber-950 border-2 border-white rounded-xl text-xs sm:text-sm md:text-base font-mono font-black uppercase tracking-wider shadow-xl ring-2 ring-black/40 flex items-center gap-1.5">
+                  <span className="px-3.5 py-1.5 bg-amber-400 text-amber-950 border-2 border-yellow-200 rounded-xl text-xs sm:text-sm md:text-base font-mono font-black uppercase tracking-wider shadow-xl ring-2 ring-black/40 flex items-center gap-1.5">
                     <span>#{activeProperty.referenceCode || (activeProperty as any).reference_code}</span>
                   </span>
                 )}
@@ -319,7 +319,7 @@ export function PropertyDetailModal({
             <div>
               {(activeProperty.referenceCode || (activeProperty as any).reference_code) && (
                 <div className="mb-2.5">
-                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-2 border-amber-500/40 rounded-xl text-sm sm:text-base font-mono font-black uppercase tracking-wider shadow-xs">
+                  <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/15 text-amber-950 dark:text-amber-300 border-2 border-amber-400/50 rounded-xl text-sm sm:text-base font-mono font-black uppercase tracking-wider shadow-xs">
                     <span className="text-base sm:text-lg">🏷️</span>
                     <span>CÓDIGO DE REFERÊNCIA: #{activeProperty.referenceCode || (activeProperty as any).reference_code}</span>
                   </span>

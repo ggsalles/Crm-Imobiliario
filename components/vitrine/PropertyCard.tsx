@@ -100,7 +100,7 @@ export function ShowcasePropertyCard({
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {(property.referenceCode || property.reference_code) && (
-              <span className="px-3 py-1 rounded-xl bg-amber-400 text-amber-950 text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-xl border-2 border-white ring-2 ring-black/40 flex items-center gap-1">
+              <span className="px-3 py-1 rounded-xl bg-amber-400 text-amber-950 border-2 border-yellow-200 text-xs sm:text-sm font-mono font-black uppercase tracking-wider shadow-xl flex items-center gap-1">
                 #{property.referenceCode || property.reference_code}
               </span>
             )}
@@ -178,17 +178,17 @@ export function ShowcasePropertyCard({
       <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1.5">
           {(property.referenceCode || property.reference_code) && (
-            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2.5 rounded-xl bg-amber-500/15 border-2 border-amber-500/30">
+            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2.5 rounded-xl bg-amber-500/15 border-2 border-amber-400/50">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-black tracking-wider text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded-md">
+                <span className="text-[10px] uppercase font-black tracking-wider text-amber-950 bg-amber-400 px-1.5 py-0.5 rounded-md">
                   REF
                 </span>
-                <span className="text-sm sm:text-base font-mono font-black text-amber-300 tracking-wider">
+                <span className="text-sm sm:text-base font-mono font-black text-amber-700 dark:text-amber-400 tracking-wider">
                   #{property.referenceCode || property.reference_code}
                 </span>
               </div>
               {property.buildingName && (
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-400 truncate max-w-[50%]">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 truncate max-w-[50%]">
                   🏢 {property.buildingName}
                 </span>
               )}

@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 export default function GlobalError({
   error,
   reset,
@@ -25,12 +23,13 @@ export default function GlobalError({
             >
               Tentar Novamente
             </button>
-            <Link
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a
               href="/"
               className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 transition-all text-slate-200 rounded-xl font-medium text-sm block"
             >
               Voltar ao Início
-            </Link>
+            </a>
           </div>
         </div>
       </body>
