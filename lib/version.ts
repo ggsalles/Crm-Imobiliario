@@ -15,12 +15,31 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.41";
-export const APP_VERSION_CODE = 241;
+export const APP_VERSION = "v2.42";
+export const APP_VERSION_CODE = 242;
 export const APP_VERSION_DATE = "08/10/2026";
-export const APP_VERSION_TITLE = "Aprimoramento de Layout & Opacidade Sólida do Modal";
+export const APP_VERSION_TITLE = "Otimização de Performance e Blindagem Multi-Tenant do Funil (Deals)";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.42",
+    releaseDate: "08/10/2026",
+    title: "Otimização de Performance e Blindagem Multi-Tenant do Funil (Deals)",
+    type: "minor",
+    highlights: [
+      "Eliminação de SELECT * com projeção cirúrgica de colunas no funil de vendas (redução de egress)",
+      "Cache de alta performance em memória no servidor (60s) com invalidação atômica instantânea",
+      "Blindagem estrita de isolamento multi-tenant (verificação de tenant_id no servidor em POST, PATCH e DELETE)",
+      "Sincronização imediata e atualização otimista na interface ao movimentar e editar negócios"
+    ],
+    improvements: [
+      "Suporte a campos enriquecidos (prioridade, probabilidade, data prevista e status) no pipeline",
+      "Prevenção contra requisições vazias ou duplicadas no backend"
+    ],
+    fixes: [
+      "Bloqueio de edição cruzada de oportunidades entre organizações através de validação de tenant no servidor"
+    ]
+  },
   {
     version: "v2.41",
     releaseDate: "08/10/2026",

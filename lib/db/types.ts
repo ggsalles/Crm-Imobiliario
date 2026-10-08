@@ -67,6 +67,7 @@ export interface Property {
 
 export interface Deal {
   id: string;
+  tenantId?: string;
   title: string;
   value: number;
   stage: string;
@@ -75,6 +76,9 @@ export interface Deal {
   propertyId?: string;
   probability?: number;
   status?: string;
+  statusReason?: string;
+  lostReason?: string;
+  lostNotes?: string;
   expectedCloseDate?: string;
   priority?: string;
   ownerId: string;

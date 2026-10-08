@@ -124,21 +124,32 @@ export async function createDeal(data: any) {
 
   const sanitizeId = (val: any) => (val && val !== 'undefined' && val !== 'null') ? val : null;
 
-  const dealData = {
+  const dealData: any = {
     title: data.title,
     value: Number(data.value) || 0,
     stage: data.stage || 'lead',
-    company_id: sanitizeId(data.companyId),
-    contact_id: sanitizeId(data.contactId),
-    property_id: sanitizeId(data.propertyId),
-    owner_id: sanitizeId(data.ownerId) || user.id
+    company_id: sanitizeId(data.companyId || data.company_id),
+    contact_id: sanitizeId(data.contactId || data.contact_id),
+    property_id: sanitizeId(data.propertyId || data.property_id),
+    owner_id: sanitizeId(data.ownerId || data.owner_id) || user.id
   };
+
+  if (data.priority !== undefined) dealData.priority = data.priority;
+  if (data.status !== undefined) dealData.status = data.status;
+  if (data.probability !== undefined && data.probability !== null) dealData.probability = Number(data.probability);
+  if (data.expectedCloseDate !== undefined || data.expected_close_date !== undefined) {
+    dealData.expected_close_date = data.expectedCloseDate || data.expected_close_date;
+  }
 
   try {
     const result = await apiFetch('/api/deals', {
       method: "POST",
       body: JSON.stringify(dealData)
     });
+
+    invalidateApiCache('/api/deals');
+    forceDataResync();
+
     return result.id;
   } catch (err) {
     console.error("[lib/db/deals] createDeal FATAL:", err);
@@ -158,16 +169,50 @@ export async function updateDeal(id: string, data: any) {
   if (data.title !== undefined) updateData.title = data.title;
   if (data.value !== undefined) updateData.value = Number(data.value) || 0;
   if (data.stage !== undefined) updateData.stage = data.stage;
-  if (data.companyId !== undefined) updateData.company_id = sanitizeId(data.companyId);
-  if (data.contactId !== undefined) updateData.contact_id = sanitizeId(data.contactId);
-  if (data.propertyId !== undefined) updateData.property_id = sanitizeId(data.propertyId);
-  if (data.ownerId !== undefined) updateData.owner_id = sanitizeId(data.ownerId);
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.probability !== undefined && data.probability !== null) updateData.probability = Number(data.probability);
+  if (data.expectedCloseDate !== undefined || data.expected_close_date !== undefined) {
+    updateData.expected_close_date = data.expectedCloseDate || data.expected_close_date;
+  }
+  if (data.companyId !== undefined || data.company_id !== undefined) {
+    updateData.company_id = sanitizeId(data.companyId || data.company_id);
+  }
+  if (data.contactId !== undefined || data.contact_id !== undefined) {
+    updateData.contact_id = sanitizeId(data.contactId || data.contact_id);
+  }
+  if (data.propertyId !== undefined || data.property_id !== undefined) {
+    updateData.property_id = sanitizeId(data.propertyId || data.property_id);
+  }
+  if (data.ownerId !== undefined || data.owner_id !== undefined) {
+    updateData.owner_id = sanitizeId(data.ownerId || data.owner_id);
+  }
+
+  // Atualização otimista no cache local em memória
+  for (const k of Object.keys(dataCache)) {
+    if (k.startsWith('deals:') && Array.isArray(dataCache[k])) {
+      dataCache[k] = dataCache[k].map((d: any) => {
+        if (d.id === id) {
+          return {
+            ...d,
+            ...data,
+            value: data.value !== undefined ? Number(data.value) || 0 : d.value,
+            updatedAt: updateData.updated_at
+          };
+        }
+        return d;
+      });
+    }
+  }
 
   try {
     await apiFetch(`/api/deals?id=${id}`, {
       method: "PATCH",
       body: JSON.stringify(updateData)
     });
+
+    invalidateApiCache('/api/deals');
+    forceDataResync();
   } catch (err) {
     console.error("[lib/db/deals] updateDeal FATAL:", err);
     throw err;
