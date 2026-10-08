@@ -99,4 +99,45 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Barra de rolagem discreta e elegante para temas escuros */
+  .discrete-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  }
+  .discrete-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .discrete-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .discrete-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.22);
+    border-radius: 9999px;
+  }
+  .discrete-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.45);
+  }
 }
+
+/* Suporte global a scrollbar discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+

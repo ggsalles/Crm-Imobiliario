@@ -15,12 +15,32 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.47";
-export const APP_VERSION_CODE = 247;
+export const APP_VERSION = "v2.49";
+export const APP_VERSION_CODE = 249;
 export const APP_VERSION_DATE = "08/10/2026";
-export const APP_VERSION_TITLE = "Prevenção de Fechamento Acidental ao Teclar Enter na Edição de Imóveis";
+export const APP_VERSION_TITLE = "Eliminação do Scroll Horizontal e Barra de Rolagem Discreta nas Modais";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.49",
+    releaseDate: "08/10/2026",
+    title: "Eliminação do Scroll Horizontal e Barra de Rolagem Discreta nas Modais",
+    type: "patch",
+    highlights: [
+      "Eliminação completa da barra de rolagem horizontal nas modais de Clientes e Imóveis com table-fixed e larguras percentuais precisas",
+      "Novo visual refinado para a barra de rolagem vertical: espessura ultrafina (6px), fundo transparente e indicador translúcido discreto",
+      "Ajuste responsivo das colunas com quebra/reticências inteligentes evitando estouro de largura",
+      "Botão Selecionar integrado organicamente sem necessidade de pinçamento artificial"
+    ],
+    improvements: [
+      "Aparência limpa e moderna compatível com o tema dark do CRM em sistemas Windows e Linux",
+      "Otimização visual nos cabeçalhos e células das tabelas de busca"
+    ],
+    fixes: [
+      "Remoção da barra de rolagem horizontal indesejada no grid de pesquisa de clientes e imóveis",
+      "Substituição das barras de rolagem cinza grossas nativas do navegador por visual discreto e moderno"
+    ]
+  },
   {
     version: "v2.47",
     releaseDate: "08/10/2026",
