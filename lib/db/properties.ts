@@ -34,16 +34,17 @@ export function getCachedProperties(ownerId?: string): Property[] | null {
   return null;
 }
 
-export async function getProperties(ownerId?: string, limit?: number): Promise<Property[]> {
+export async function getProperties(ownerId?: string, limit?: number, forceRefresh = false): Promise<Property[]> {
   const startTime = Date.now();
   const cacheKey = `properties:${ownerId || 'all'}`;
   console.log("[lib/db/properties] getProperties: Buscando imóveis via API Proxy...");
   
   try {
-    let url = `/api/properties?limit=${limit || 10000}&_t=${Date.now()}`;
+    let url = `/api/properties?limit=${limit || 10000}`;
     if (ownerId) url += `&ownerId=${ownerId}`;
+    if (forceRefresh) url += `&nocache=true&_t=${Date.now()}`;
     
-    const data = await apiFetch(url, { bypassCache: true, noCache: true });
+    const data = await apiFetch(url, { bypassCache: forceRefresh, noCache: forceRefresh });
     if (Array.isArray(data)) {
       dataCache[cacheKey] = data;
       safePersistSnapshot(cacheKey, data);
@@ -101,13 +102,14 @@ export function subscribeToShowcaseProperties(
     callback(dataCache[cacheKey]);
   }
 
-  const fetchShowcase = async () => {
+  const fetchShowcase = async (force = false) => {
     try {
-      let url = `/api/properties?public=true&limit=10000&_t=${Date.now()}`;
+      let url = `/api/properties?public=true&limit=10000`;
       if (tenantId) url += `&tenantId=${encodeURIComponent(tenantId)}`;
       if (ownerId) url += `&brokerId=${encodeURIComponent(ownerId)}`;
+      if (force) url += `&nocache=true&_t=${Date.now()}`;
 
-      const data = await apiFetch(url, { bypassCache: true, noCache: true });
+      const data = await apiFetch(url, { bypassCache: force, noCache: force });
       if (Array.isArray(data)) {
         dataCache[cacheKey] = data as Property[];
         callback(data as Property[]);
@@ -121,8 +123,9 @@ export function subscribeToShowcaseProperties(
   };
 
   fetchShowcase();
-  const subscription = createRealtimeChannel('properties', fetchShowcase);
-  const poll = createVisibilityAwarePoll(fetchShowcase, 15000);
+  const subscription = createRealtimeChannel('properties', () => fetchShowcase(true));
+  // Polling de segurança a cada 5 minutos (o Supabase Realtime já notifica instantaneamente)
+  const poll = createVisibilityAwarePoll(() => fetchShowcase(false), 300000);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -232,7 +235,23 @@ export async function createProperty(data: any, bypassUserId?: string) {
       body: JSON.stringify(insertData)
     });
     console.log("[lib/db/properties] createProperty Proxy: SUCESSO. Novo ID:", result.id);
-    clearPropertiesCache();
+    const newPropertyObj: Property = {
+      id: result.id,
+      ...sanitized,
+      imageUrls: cleanImageUrls,
+      tags: sanitized.tags || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } as any;
+
+    for (const k of Object.keys(dataCache)) {
+      if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
+        dataCache[k] = [newPropertyObj, ...dataCache[k]];
+        safePersistSnapshot(k, dataCache[k]);
+      }
+    }
+
+    invalidateApiCache('/api/properties');
     forceDataResync();
     return result.id;
   } catch (err) {
@@ -283,10 +302,11 @@ export async function updateProperty(id: string, data: any, bypassUserId?: strin
     for (const k of Object.keys(dataCache)) {
       if (k.startsWith('properties:') && Array.isArray(dataCache[k])) {
         dataCache[k] = dataCache[k].map((p: any) => p.id === id ? { ...p, ...data, ...updateData } : p);
+        safePersistSnapshot(k, dataCache[k]);
       }
     }
     
-    clearPropertiesCache();
+    invalidateApiCache('/api/properties');
     forceDataResync();
     return id;
   } catch (err) {

@@ -74,7 +74,7 @@ export function ShowcasePropertyCard({
     ? property.imageUrls[0]
     : 'https://picsum.photos/seed/vitrineimovel/800/600';
 
-  const totalPhotos = property.imageUrls?.length || 0;
+  const totalPhotos = (property as any).photoCount || property.imageUrls?.length || 0;
 
   return (
     <div

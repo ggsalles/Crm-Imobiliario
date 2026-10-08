@@ -52,7 +52,7 @@ export async function getSafeSession() {
   }
 }
 
-export const POLL_INTERVAL = 90000;
+export const POLL_INTERVAL = 180000;
 export const RESYNC_EVENT = 'db-force-resync';
 
 export function createVisibilityAwarePoll(callback: () => void, intervalMs = POLL_INTERVAL) {
@@ -144,10 +144,16 @@ export function clearLocalCache() {
 }
 
 if (typeof window !== 'undefined') {
+  let lastWakeUpSync = 0;
   const onWakeUp = () => {
     if (document.visibilityState === 'visible') {
-      console.log("[lib/db] Tab active, triggering global resync...");
-      forceDataResync();
+      const now = Date.now();
+      // Limita resync ao trocar de abas para no máximo 1 vez a cada 3 minutos
+      if (now - lastWakeUpSync > 180000) {
+        lastWakeUpSync = now;
+        console.log("[lib/db] Tab ativa após intervalo, sincronizando dados...");
+        forceDataResync();
+      }
     }
   };
   window.addEventListener('visibilitychange', onWakeUp);

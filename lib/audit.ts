@@ -115,9 +115,12 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
       }
     };
 
-    await apiClient.post('/api/audit', clientPayload, { keepalive: true });
+    // Fire-and-forget: do not block UI user actions waiting for audit persistence
+    apiClient.post('/api/audit', clientPayload, { keepalive: true }).catch((err) => {
+      console.warn('[Audit] Falha assíncrona ao despachar auditoria:', err);
+    });
   } catch (err) {
-    console.warn('[Audit] Falha ao despachar auditoria:', err);
+    console.warn('[Audit] Falha ao preparar auditoria:', err);
   }
 }
 

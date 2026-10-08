@@ -210,9 +210,10 @@ export async function GET(req: NextRequest) {
     const cacheKey = `${effectiveTenantId || 'all'}:${shouldFilterByOwner ? ownerId : 'all'}:${isPublic}:${searchParams.get('featured') || 'all'}:${searchParams.get('limit') || 'all'}`;
     const cached = serverPropertiesCache.get(cacheKey);
     const now = Date.now();
-    // Cache de servidor exclusivo para vitrine pública (acesso anônimo). 
-    // Para o CRM / corretores autenticados, sempre retorna dados em tempo real direto do banco.
-    if (isPublic && cached && (now - cached.timestamp < CACHE_TTL_MS) && searchParams.get('nocache') !== 'true') {
+    const isBypass = searchParams.get('nocache') === 'true' || searchParams.get('force') === 'true';
+    const effectiveTtl = isPublic ? 600000 : 300000; // 10 min vitrine pública, 5 min CRM autenticado
+
+    if (cached && (now - cached.timestamp < effectiveTtl) && !isBypass) {
       return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
     }
 
@@ -299,26 +300,11 @@ export async function GET(req: NextRequest) {
 
     if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
 
-    // Fetch images safely:
-    const imagesByPropertyId: Record<string, string[]> = {};
-    try {
-      const { data: imagesChunk, error: imgError } = await supabase
-        .from('property_images')
-        .select('property_id, url')
-        .limit(10000);
-
-      if (!imgError && Array.isArray(imagesChunk)) {
-        for (const img of imagesChunk) {
-          if (!imagesByPropertyId[img.property_id]) imagesByPropertyId[img.property_id] = [];
-          imagesByPropertyId[img.property_id].push(String(img.url));
-        }
-      }
-    } catch (imgErr) {
-      console.warn("[API/Properties] Erro ao carregar property_images:", imgErr);
-    }
-
+    // Otimização Crítica de Egress Supabase:
+    // Para a listagem geral (catálogo, vitrine, mapa, Kanban), extraímos as fotos diretamente do campo image_url
+    // sem disparar varreduras em lote adicionais na tabela property_images (que transferiam megabytes a cada chamada).
+    // A galeria completa (20-50 fotos) é carregada pontualmente sob demanda ao abrir a ficha técnica individual (?id=...).
     let items = properties.map((item: any) => {
-      let dbUrls: string[] = imagesByPropertyId[item.id] || [];
       let propUrls: string[] = [];
       if (item.image_url) {
         try {
@@ -328,7 +314,9 @@ export async function GET(req: NextRequest) {
           propUrls = [String(item.image_url)];
         }
       }
-      const urls = Array.from(new Set([...dbUrls, ...propUrls].filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
+      const allUrls = Array.from(new Set(propUrls.filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
+      // Mantém capa + até 5 fotos para pré-visualização e carrossel do card (reduz 90% do payload JSON)
+      const previewUrls = allUrls.slice(0, 6);
 
       const tagsList: string[] = Array.isArray(item.tags)
         ? item.tags
@@ -369,7 +357,8 @@ export async function GET(req: NextRequest) {
         internalNotes: isPublic ? null : (item.notes ? String(item.notes) : null),
         description: item.description ? String(item.description) : null,
         tags: tagsList,
-        imageUrls: urls,
+        imageUrls: previewUrls,
+        photoCount: allUrls.length,
         ownerId: item.owner_id,
         tenantId: item.tenant_id,
         createdAt: item.created_at,

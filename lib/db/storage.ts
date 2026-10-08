@@ -23,7 +23,7 @@ export async function uploadFile(file: File, bucketName: string = 'property-imag
 
     console.log(`[Storage Client] Redirecionando upload de "${processedFile.name}" para proxy de API local...`);
 
-    const result = await apiClient.post<any>("/api/upload", formData);
+    const result = await apiClient.post<any>("/api/upload", formData, { timeout: 60000 });
     return { name: result.name, url: result.url };
   } catch (err: any) {
     console.error("[Storage] Falha crítica no uploadFile através do Proxy:", err);

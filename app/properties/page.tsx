@@ -212,7 +212,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     setLoading(true);
     setFetchTimeoutReached(false);
     clearPropertiesCache();
-    getProperties(undefined, 10000).then(data => {
+    getProperties(undefined, 10000, true).then(data => {
       if (Array.isArray(data)) {
         setProperties(data);
       }

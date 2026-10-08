@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .from(bucketName)
       .upload(filePath, buffer, {
         upsert: true,
-        cacheControl: '3600',
+        cacheControl: '31536000, public, immutable',
         contentType: file.type || 'image/jpeg'
       });
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             .from('images')
             .upload(filePath, buffer, {
               upsert: true,
-              cacheControl: '3600',
+              cacheControl: '31536000, public, immutable',
               contentType: file.type || 'image/jpeg'
             });
 

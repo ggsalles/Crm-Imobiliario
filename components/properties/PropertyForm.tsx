@@ -11,7 +11,8 @@ import {
   uploadFile, 
   createDeal, 
   createTimelineEvent,
-  subscribeToCompanies
+  subscribeToCompanies,
+  getProperty
 } from "@/lib/db";
 import { 
   cn, 
@@ -156,6 +157,9 @@ export function PropertyForm({
   const [watermarkCompany, setWatermarkCompany] = useState("Chiarelli");
   const [watermarkPosition, setWatermarkPosition] = useState<'center' | 'bottom-right' | 'bottom-left' | 'top-right'>('center');
 
+  const [notesInput, setNotesInput] = useState("");
+  const [descriptionInput, setDescriptionInput] = useState("");
+
   // Initialize form when editingProperty changes
   useEffect(() => {
     if (editingProperty) {
@@ -172,12 +176,31 @@ export function PropertyForm({
       setAreaInput(editingProperty.area ? String(editingProperty.area) : "");
       setSelectedTags(editingProperty.tags || []);
       setIsFeatured(Boolean(editingProperty.isFeatured));
+      setNotesInput(editingProperty.notes || editingProperty.internalNotes || (editingProperty as any).notes || "");
+      setDescriptionInput(editingProperty.description || "");
       setAddressData({
         street: editingProperty.street || "",
         neighborhood: editingProperty.neighborhood || "",
         city: editingProperty.city || "",
         state: editingProperty.state || "",
       });
+
+      // Busca dados completos (todas as fotos e notas completas) sob demanda
+      if (editingProperty.id) {
+        getProperty(editingProperty.id).then((full) => {
+          if (full) {
+            if (full.imageUrls && full.imageUrls.length > 0) {
+              setImageUrls(full.imageUrls);
+            }
+            if (full.notes || (full as any).internalNotes) {
+              setNotesInput(full.notes || (full as any).internalNotes || "");
+            }
+            if (full.description) {
+              setDescriptionInput(full.description);
+            }
+          }
+        }).catch(() => {});
+      }
     } else {
       setTitle("");
       setBuildingName("");
@@ -192,6 +215,8 @@ export function PropertyForm({
       setAreaInput("");
       setSelectedTags([]);
       setIsFeatured(false);
+      setNotesInput("");
+      setDescriptionInput("");
       setAddressData({ street: "", neighborhood: "", city: "", state: "" });
     }
     setCustomTagInput("");
@@ -335,8 +360,6 @@ export function PropertyForm({
           }
 
           try {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-
             if (file.size === 0) {
               toast.error(`Arquivo "${file.name}" está vazio.`, { duration: 3000 });
               continue;
@@ -511,8 +534,8 @@ export function PropertyForm({
         parkingSpots: Number(formData.get("parkingSpots") || 0),
         acceptsFinancing: formData.get("acceptsFinancing") === "on",
         isFeatured: formData.get("isFeatured") === "on" || isFeatured,
-        notes: String(formData.get("notes") || "").substring(0, 2000),
-        description: String(formData.get("description") || "").substring(0, 5000),
+        notes: String(notesInput || formData.get("notes") || "").substring(0, 5000),
+        description: String(descriptionInput || formData.get("description") || "").substring(0, 5000),
         tags: selectedTags,
         imageUrls: cleanUrls,
       };
@@ -809,7 +832,8 @@ export function PropertyForm({
                   </div>
                   <textarea
                     name="description"
-                    defaultValue={editingProperty?.description}
+                    value={descriptionInput}
+                    onChange={(e) => setDescriptionInput(e.target.value)}
                     rows={4}
                     placeholder="Descreva os pontos fortes do imóvel, vista, acabamento, etc."
                     className="w-full px-6 py-4 bg-muted/30 border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none outline-none text-foreground placeholder:text-muted-foreground"
@@ -828,7 +852,8 @@ export function PropertyForm({
                   </div>
                   <textarea
                     name="notes"
-                    defaultValue={editingProperty?.notes || editingProperty?.internalNotes || ""}
+                    value={notesInput}
+                    onChange={(e) => setNotesInput(e.target.value)}
                     rows={3}
                     placeholder="Anotações confidenciais da equipe, comissão combinada com o proprietário, contato direto, código da chave na portaria, restrições de horários de visitas, etc."
                     className="w-full px-5 py-3.5 bg-background/90 border border-amber-500/30 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 transition-all resize-none outline-none text-foreground placeholder:text-muted-foreground/60"

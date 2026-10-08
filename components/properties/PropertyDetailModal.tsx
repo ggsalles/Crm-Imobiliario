@@ -23,7 +23,7 @@ import {
   Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Property } from "@/lib/db";
+import { Property, getProperty } from "@/lib/db";
 import { cn, formatCurrencyBRL } from "@/lib/utils";
 
 interface PropertyDetailModalProps {
@@ -53,34 +53,47 @@ export function PropertyDetailModal({
 }: PropertyDetailModalProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
+  const [fullProperty, setFullProperty] = useState<Property | null>(null);
+
+  // Busca detalhes completos e todas as fotos pontualmente ao abrir a ficha
+  useEffect(() => {
+    if (isOpen && property?.id) {
+      setFullProperty(null);
+      getProperty(property.id).then((full) => {
+        if (full) setFullProperty(full);
+      }).catch(() => {});
+    }
+  }, [isOpen, property?.id]);
+
+  const activeProperty = fullProperty || property;
 
   // Sempre reseta para a primeira foto (índice 0) ao abrir a ficha técnica ou trocar de imóvel
   useEffect(() => {
     setActiveImageIndex(0);
     setImgError(false);
-  }, [property?.id, isOpen]);
+  }, [activeProperty?.id, isOpen]);
 
   // Safely extract and normalize images array from any input format
   const images = useMemo(() => {
-    if (!property) return [FALLBACK_IMAGE];
+    if (!activeProperty) return [FALLBACK_IMAGE];
     let rawList: any[] = [];
-    if (Array.isArray(property.imageUrls)) {
-      rawList = property.imageUrls;
-    } else if (typeof property.imageUrls === 'string') {
+    if (Array.isArray(activeProperty.imageUrls)) {
+      rawList = activeProperty.imageUrls;
+    } else if (typeof activeProperty.imageUrls === 'string') {
       try {
-        const parsed = JSON.parse(property.imageUrls);
-        rawList = Array.isArray(parsed) ? parsed : [property.imageUrls];
+        const parsed = JSON.parse(activeProperty.imageUrls);
+        rawList = Array.isArray(parsed) ? parsed : [activeProperty.imageUrls];
       } catch {
-        rawList = [property.imageUrls];
+        rawList = [activeProperty.imageUrls];
       }
-    } else if (property.image_url) {
+    } else if (activeProperty.image_url) {
       try {
-        const parsed = typeof property.image_url === 'string' && property.image_url.startsWith('[')
-          ? JSON.parse(property.image_url)
-          : [property.image_url];
-        rawList = Array.isArray(parsed) ? parsed : [property.image_url];
+        const parsed = typeof activeProperty.image_url === 'string' && activeProperty.image_url.startsWith('[')
+          ? JSON.parse(activeProperty.image_url)
+          : [activeProperty.image_url];
+        rawList = Array.isArray(parsed) ? parsed : [activeProperty.image_url];
       } catch {
-        rawList = [property.image_url];
+        rawList = [activeProperty.image_url];
       }
     }
 
@@ -89,26 +102,26 @@ export function PropertyDetailModal({
       .map(u => u.trim());
 
     return cleaned.length > 0 ? cleaned : [FALLBACK_IMAGE];
-  }, [property]);
+  }, [activeProperty]);
 
   // Safely extract tags array
   const safeTags = useMemo(() => {
-    if (!property) return [];
+    if (!activeProperty) return [];
     let list: string[] = [];
-    if (Array.isArray(property.tags)) list = property.tags;
-    else if (typeof property.tags === 'string') {
+    if (Array.isArray(activeProperty.tags)) list = activeProperty.tags;
+    else if (typeof activeProperty.tags === 'string') {
       try {
-        const parsed = JSON.parse(property.tags);
+        const parsed = JSON.parse(activeProperty.tags);
         if (Array.isArray(parsed)) list = parsed;
       } catch {}
-      if (list.length === 0) list = property.tags.split(',').map(t => t.trim()).filter(Boolean);
+      if (list.length === 0) list = activeProperty.tags.split(',').map(t => t.trim()).filter(Boolean);
     }
     return list.filter(
       (tag) => !tag.toLowerCase().startsWith('ref:') && !tag.toLowerCase().startsWith('ref ') && !tag.toLowerCase().startsWith('cód:') && !tag.toLowerCase().startsWith('cod:')
     );
-  }, [property]);
+  }, [activeProperty]);
 
-  if (!isOpen || !property) return null;
+  if (!isOpen || !activeProperty) return null;
 
   const currentImageIdx = Math.min(activeImageIndex, Math.max(0, images.length - 1));
 
@@ -123,15 +136,15 @@ export function PropertyDetailModal({
   };
 
   const formattedAddress = [
-    property.street ? `${property.street}${property.number ? `, ${property.number}` : ''}` : '',
-    property.complement,
-    property.neighborhood,
-    property.city ? `${property.city}${property.state ? ` - ${property.state}` : ''}` : '',
-    property.cep ? `CEP: ${property.cep}` : ''
+    activeProperty.street ? `${activeProperty.street}${activeProperty.number ? `, ${activeProperty.number}` : ''}` : '',
+    activeProperty.complement,
+    activeProperty.neighborhood,
+    activeProperty.city ? `${activeProperty.city}${activeProperty.state ? ` - ${activeProperty.state}` : ''}` : '',
+    activeProperty.cep ? `CEP: ${activeProperty.cep}` : ''
   ].filter(Boolean).join(" • ");
 
-  const numPrice = Number(property.price) || 0;
-  const numArea = Number(property.area) || 0;
+  const numPrice = Number(activeProperty.price) || 0;
+  const numArea = Number(activeProperty.area) || 0;
   const pricePerM2 = (numPrice > 0 && numArea > 0) ? Math.round(numPrice / numArea) : null;
 
   return (
@@ -150,7 +163,7 @@ export function PropertyDetailModal({
             </span>
             <span className="text-border">•</span>
             <span className="text-xs font-bold text-foreground truncate max-w-xs sm:max-w-md">
-              {property.title}
+              {activeProperty.title}
             </span>
           </div>
 
@@ -161,13 +174,13 @@ export function PropertyDetailModal({
                 onClick={onToggleFeatured}
                 className={cn(
                   "p-1.5 rounded-lg border transition-all cursor-pointer",
-                  property.isFeatured 
+                  activeProperty.isFeatured 
                     ? "bg-amber-500 text-white border-amber-600 shadow-xs" 
                     : "bg-card text-muted-foreground hover:text-amber-500 border-border"
                 )}
-                title={property.isFeatured ? "Remover dos Destaques" : "Marcar como Destaque"}
+                title={activeProperty.isFeatured ? "Remover dos Destaques" : "Marcar como Destaque"}
               >
-                <Star className={cn("w-4 h-4", property.isFeatured && "fill-current")} />
+                <Star className={cn("w-4 h-4", activeProperty.isFeatured && "fill-current")} />
               </button>
             )}
 
@@ -198,7 +211,7 @@ export function PropertyDetailModal({
                 >
                   <Image
                     src={imgError ? FALLBACK_IMAGE : (images[currentImageIdx] || FALLBACK_IMAGE)}
-                    alt={property.title || "Imóvel"}
+                    alt={activeProperty.title || "Imóvel"}
                     fill
                     className="object-cover"
                     referrerPolicy="no-referrer"
@@ -210,32 +223,32 @@ export function PropertyDetailModal({
 
               {/* Status and Type Pills Overlay */}
               <div className="absolute top-3 left-3 right-14 flex flex-wrap gap-1.5 z-10 items-center">
-                {(property.referenceCode || (property as any).reference_code) && (
+                {(activeProperty.referenceCode || (activeProperty as any).reference_code) && (
                   <span className="px-3.5 py-1.5 bg-amber-400 text-amber-950 border-2 border-white rounded-xl text-xs sm:text-sm md:text-base font-mono font-black uppercase tracking-wider shadow-xl ring-2 ring-black/40 flex items-center gap-1.5">
-                    <span>#{property.referenceCode || (property as any).reference_code}</span>
+                    <span>#{activeProperty.referenceCode || (activeProperty as any).reference_code}</span>
                   </span>
                 )}
                 <span className={cn(
                   "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md border",
-                  property.status === 'disponível' ? "bg-emerald-500/90 text-white border-emerald-400" :
-                  property.status === 'reservado' ? "bg-amber-500/90 text-white border-amber-400" :
-                  property.status === 'inativo' ? "bg-zinc-700/95 text-zinc-100 border-zinc-500" :
+                  activeProperty.status === 'disponível' ? "bg-emerald-500/90 text-white border-emerald-400" :
+                  activeProperty.status === 'reservado' ? "bg-amber-500/90 text-white border-amber-400" :
+                  activeProperty.status === 'inativo' ? "bg-zinc-700/95 text-zinc-100 border-zinc-500" :
                   "bg-slate-800/90 text-white border-slate-700"
                 )}>
-                  {property.status === 'inativo' ? 'Inativo (Pausado)' : property.status}
+                  {activeProperty.status === 'inativo' ? 'Inativo (Pausado)' : activeProperty.status}
                 </span>
 
                 <span className="px-2.5 py-1 bg-background/90 backdrop-blur-md text-foreground border border-border/40 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm">
-                  {property.type}
+                  {activeProperty.type}
                 </span>
 
-                {property.isFeatured && (
+                {activeProperty.isFeatured && (
                   <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-500/30">
                     <Sparkles className="w-3 h-3 fill-white" /> Destaque
                   </span>
                 )}
 
-                {property.acceptsFinancing && (
+                {activeProperty.acceptsFinancing && (
                   <span className="px-2.5 py-1 bg-primary text-primary-foreground rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
                     <TrendingUp className="w-3 h-3" /> Aceita Financiamento
                   </span>
@@ -304,26 +317,26 @@ export function PropertyDetailModal({
           {/* 2. Title, Building & Financial Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-muted/30 border border-border/80 rounded-2xl">
             <div>
-              {(property.referenceCode || (property as any).reference_code) && (
+              {(activeProperty.referenceCode || (activeProperty as any).reference_code) && (
                 <div className="mb-2.5">
                   <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-2 border-amber-500/40 rounded-xl text-sm sm:text-base font-mono font-black uppercase tracking-wider shadow-xs">
                     <span className="text-base sm:text-lg">🏷️</span>
-                    <span>CÓDIGO DE REFERÊNCIA: #{property.referenceCode || (property as any).reference_code}</span>
+                    <span>CÓDIGO DE REFERÊNCIA: #{activeProperty.referenceCode || (activeProperty as any).reference_code}</span>
                   </span>
                 </div>
               )}
               <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                {property.title}
+                {activeProperty.title}
               </h2>
-              {property.buildingName && (
+              {activeProperty.buildingName && (
                 <div className="flex items-center gap-1.5 text-xs font-bold text-primary mt-1">
                   <Building2 className="w-4 h-4" />
-                  <span>Edifício / Condomínio: {property.buildingName}</span>
+                  <span>Edifício / Condomínio: {activeProperty.buildingName}</span>
                 </div>
               )}
               <div className="flex items-center gap-1 text-muted-foreground text-xs mt-1">
                 <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span>{property.location || "Endereço sob consulta"}</span>
+                <span>{activeProperty.location || "Endereço sob consulta"}</span>
               </div>
             </div>
 
@@ -360,7 +373,7 @@ export function PropertyDetailModal({
               <div className="p-3.5 bg-card border border-border rounded-xl shadow-xs text-center">
                 <Bed className="w-5 h-5 mx-auto text-primary mb-1" />
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block">Dormitórios</span>
-                <span className="text-sm font-black text-foreground">{property.bedrooms || 0}</span>
+                <span className="text-sm font-black text-foreground">{activeProperty.bedrooms || 0}</span>
               </div>
 
               {/* Suítes (DESTAQUE) */}
@@ -370,31 +383,31 @@ export function PropertyDetailModal({
                 </div>
                 <Crown className="w-5 h-5 mx-auto text-primary mb-1" />
                 <span className="text-[10px] font-black text-primary uppercase block">Suítes</span>
-                <span className="text-sm font-black text-foreground">{property.suites ?? 0}</span>
+                <span className="text-sm font-black text-foreground">{activeProperty.suites ?? 0}</span>
               </div>
 
               {/* Banheiros */}
               <div className="p-3.5 bg-card border border-border rounded-xl shadow-xs text-center">
                 <Bath className="w-5 h-5 mx-auto text-primary mb-1" />
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block">Banheiros</span>
-                <span className="text-sm font-black text-foreground">{property.bathrooms || 0}</span>
+                <span className="text-sm font-black text-foreground">{activeProperty.bathrooms || 0}</span>
               </div>
 
               {/* Vagas */}
               <div className="p-3.5 bg-card border border-border rounded-xl shadow-xs text-center">
                 <Car className="w-5 h-5 mx-auto text-primary mb-1" />
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block">Vagas</span>
-                <span className="text-sm font-black text-foreground">{property.parkingSpots || 0}</span>
+                <span className="text-sm font-black text-foreground">{activeProperty.parkingSpots || 0}</span>
               </div>
 
               {/* Encargos / Condomínio */}
               <div className="p-3.5 bg-card border border-border rounded-xl shadow-xs text-center">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase block mt-1">Condomínio</span>
                 <span className="text-xs font-black text-foreground block truncate">
-                  {property.condoFee ? formatCurrencyBRL(property.condoFee) : "Isento"}
+                  {activeProperty.condoFee ? formatCurrencyBRL(activeProperty.condoFee) : "Isento"}
                 </span>
                 <span className="text-[9px] text-muted-foreground block truncate">
-                  IPTU: {property.iptu ? formatCurrencyBRL(property.iptu) : "Isento"}
+                  IPTU: {activeProperty.iptu ? formatCurrencyBRL(activeProperty.iptu) : "Isento"}
                 </span>
               </div>
             </div>
@@ -425,7 +438,7 @@ export function PropertyDetailModal({
               Descrição Comercial do Imóvel
             </h3>
             <div className="p-4 bg-muted/20 border border-border rounded-2xl text-xs sm:text-sm text-foreground/90 whitespace-pre-line leading-relaxed font-normal">
-              {property.description || "Nenhuma descrição comercial cadastrada para este imóvel."}
+              {activeProperty.description || "Nenhuma descrição comercial cadastrada para este imóvel."}
             </div>
           </div>
 
@@ -439,9 +452,9 @@ export function PropertyDetailModal({
                 Confidencial • Não visível na Vitrine
               </span>
             </div>
-            {(property.notes || property.internalNotes) ? (
+            {(activeProperty.notes || activeProperty.internalNotes) ? (
               <div className="p-4 bg-amber-500/5 border border-amber-500/30 rounded-2xl text-xs sm:text-sm text-foreground whitespace-pre-line leading-relaxed font-normal">
-                {property.notes || property.internalNotes}
+                {activeProperty.notes || activeProperty.internalNotes}
               </div>
             ) : (
               <div className="p-3.5 bg-muted/10 border border-dashed border-border rounded-2xl text-xs text-muted-foreground italic flex items-center justify-between">
@@ -464,7 +477,7 @@ export function PropertyDetailModal({
                 Localização & Endereço
               </span>
               <p className="text-xs font-semibold text-foreground">
-                {formattedAddress || property.location || "Endereço sob consulta com o corretor."}
+                {formattedAddress || activeProperty.location || "Endereço sob consulta com o corretor."}
               </p>
             </div>
 
