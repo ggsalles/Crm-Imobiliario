@@ -35,6 +35,19 @@
   --radius: 1rem;
 }
 
+.dark {
+  --background: 222 47% 4%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 7%;
+  --card-foreground: 210 40% 98%;
+  --border: 217 33% 17%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --input: 217 33% 17%;
+  --accent: 217 33% 17%;
+  --accent-foreground: 210 40% 98%;
+}
+
 @layer base {
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary h-full overflow-x-hidden;

@@ -15,12 +15,30 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.40";
-export const APP_VERSION_CODE = 240;
+export const APP_VERSION = "v2.41";
+export const APP_VERSION_CODE = 241;
 export const APP_VERSION_DATE = "08/10/2026";
-export const APP_VERSION_TITLE = "Estabilidade Multi-Tenant & Sincronização em Tempo Real";
+export const APP_VERSION_TITLE = "Aprimoramento de Layout & Opacidade Sólida do Modal";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.41",
+    releaseDate: "08/10/2026",
+    title: "Aprimoramento de Layout & Opacidade Sólida do Modal",
+    type: "patch",
+    highlights: [
+      "Eliminação total da transparência no modal de versão com fundo sólido de alto contraste",
+      "Isolamento visual absoluto para evitar vazamento de textos e métricas da tela de fundo",
+      "Novo acabamento visual nos cards de changelog para leitura clara no modo claro e escuro"
+    ],
+    improvements: [
+      "Definição de variáveis de fallback para dark mode no CSS global",
+      "Aumento do escurecimento do backdrop para focar a atenção do usuário no conteúdo do modal"
+    ],
+    fixes: [
+      "Correção do problema de transparência (bleed-through) que exibia métricas do dashboard atrás do texto do modal"
+    ]
+  },
   {
     version: "v2.40",
     releaseDate: "08/10/2026",
