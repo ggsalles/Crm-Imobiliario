@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Deal, Company, Contact, Property, UserProfile } from "@/lib/db";
 import { PIPELINE_STAGES } from "@/lib/constants";
-import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
+import { ContactLookupModal } from "./ContactLookupModal";
+import { PropertyLookupModal } from "./PropertyLookupModal";
 
 export interface DealModalProps {
   isOpen: boolean;
@@ -31,29 +33,61 @@ export function DealModal({
   profile,
 }: DealModalProps) {
   const [displayValue, setDisplayValue] = useState("");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [selectedContactId, setSelectedContactId] = useState<string>("");
+  const [isContactLookupOpen, setIsContactLookupOpen] = useState(false);
+  const [isPropertyLookupOpen, setIsPropertyLookupOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (editingDeal?.value !== undefined && editingDeal?.value !== null) {
-      setDisplayValue(formatCurrencyBRL(editingDeal.value));
+    if (editingDeal) {
+      if (editingDeal.value !== undefined && editingDeal.value !== null && editingDeal.value > 0) {
+        setDisplayValue(formatCurrencyBRL(editingDeal.value));
+      } else {
+        setDisplayValue("");
+      }
+      setSelectedPropertyId(editingDeal.propertyId || "");
+      setSelectedContactId(editingDeal.contactId || "");
     } else {
       setDisplayValue("");
+      setSelectedPropertyId("");
+      setSelectedContactId("");
     }
-  }, [editingDeal]);
+  }, [editingDeal, isOpen]);
+
+  // Fecha modais de busca quando o DealModal fecha
+  useEffect(() => {
+    if (!isOpen) {
+      setIsContactLookupOpen(false);
+      setIsPropertyLookupOpen(false);
+    }
+  }, [isOpen]);
+
+  const handleSelectProperty = (prop: Property) => {
+    setSelectedPropertyId(prop.id);
+    if (prop.price && (!displayValue || displayValue === "R$ 0,00")) {
+      setDisplayValue(formatCurrencyBRL(prop.price));
+    }
+  };
+
+  const handleSelectContact = (contact: Contact) => {
+    setSelectedContactId(contact.id);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const selectedPropId = (formData.get("propertyId") as string) || undefined;
+    const selectedPropId = selectedPropertyId || (formData.get("propertyId") as string) || undefined;
+    const selectedContId = selectedContactId || (formData.get("contactId") as string) || undefined;
     const selectedProp = properties.find((p) => p.id === selectedPropId);
     const autoCompanyId = selectedProp?.companyId || editingDeal?.companyId || undefined;
 
     const data: Partial<Deal> = {
       title: formData.get("title") as string,
-      value: parseCurrencyBRLToNumber(formData.get("value") as string),
+      value: parseCurrencyBRLToNumber(displayValue || (formData.get("value") as string)),
       stage: formData.get("stage") as string,
       companyId: autoCompanyId,
-      contactId: (formData.get("contactId") as string) || undefined,
+      contactId: selectedContId,
       propertyId: selectedPropId,
       ownerId: (formData.get("ownerId") as string) || undefined,
     };
@@ -68,7 +102,8 @@ export function DealModal({
   };
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           {/* Backdrop: clicking outside does NOT close accidentally to prevent data loss */}
@@ -85,7 +120,7 @@ export function DealModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 15 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-card rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 w-full max-w-lg relative shadow-2xl border border-border z-10 flex flex-col max-h-[min(92vh,640px)] my-auto"
+            className="bg-card rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 w-full max-w-lg relative shadow-2xl border border-border z-10 flex flex-col max-h-[min(94vh,720px)] my-auto"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-3.5 mb-3 border-b border-border/60 shrink-0">
@@ -110,7 +145,15 @@ export function DealModal({
             </div>
 
             {/* Scrollable Form Body */}
-            <form onSubmit={handleSubmit} className="overflow-y-auto pr-1 -mr-1 space-y-3 font-medium text-start flex-1">
+            <form
+              onSubmit={handleSubmit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+                  e.preventDefault();
+                }
+              }}
+              className="overflow-y-auto pr-1 -mr-1 space-y-3 font-medium text-start flex-1"
+            >
               {/* Título */}
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 ml-0.5 block">
@@ -136,7 +179,14 @@ export function DealModal({
                     type="text"
                     required
                     value={displayValue}
-                    onChange={(e) => setDisplayValue(formatCurrencyBRL(e.target.value))}
+                    onChange={(e) => setDisplayValue(formatCurrencyInput(e.target.value))}
+                    onFocus={(e) => {
+                      if (!displayValue || displayValue === "R$ 0,00") {
+                        setDisplayValue("");
+                      } else {
+                        e.target.select();
+                      }
+                    }}
                     placeholder="R$ 0,00"
                     className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/60"
                   />
@@ -160,46 +210,128 @@ export function DealModal({
                 </div>
               </div>
 
-              {/* Cliente (Contato) */}
+              {/* Cliente (Contato) com Lupa e Modal Grid */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 ml-0.5 block">
-                  Cliente (Contato)
-                </label>
-                <select
-                  name="contactId"
-                  defaultValue={editingDeal?.contactId || ""}
-                  className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                >
-                  <option value="" className="bg-card text-foreground">
-                    Selecione um cliente (opcional)
-                  </option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-card text-foreground">
-                      {c.name} {c.phone ? `(${c.phone})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1 ml-0.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Cliente (Contato)
+                  </label>
+                  {contacts.find((c) => c.id === selectedContactId) && (
+                    <span className="text-[10px] text-primary font-semibold">Cliente vinculado</span>
+                  )}
+                </div>
+                <div className="relative flex items-center gap-1.5">
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsContactLookupOpen(true);
+                    }}
+                    className="relative flex-1 cursor-pointer group"
+                  >
+                    <input
+                      type="text"
+                      readOnly
+                      value={(() => {
+                        const c = contacts.find((item) => item.id === selectedContactId);
+                        if (!c) return selectedContactId ? `Cliente ID: ${selectedContactId}` : "";
+                        return `${c.name || "Sem nome"}${c.phone ? ` - ${c.phone}` : ""}`;
+                      })()}
+                      placeholder="Clique na lupa para pesquisar cliente..."
+                      className="w-full pl-3.5 pr-8 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/60 font-medium group-hover:border-primary/40"
+                    />
+                    {selectedContactId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedContactId("");
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                        title="Desvincular cliente"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsContactLookupOpen(true);
+                    }}
+                    className="px-3 py-2 sm:py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-all cursor-pointer shrink-0 active:scale-95"
+                    title="Abrir pesquisa de clientes no grid"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span className="hidden sm:inline">Buscar</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Imóvel de Interesse */}
+              {/* Imóvel de Interesse com Lupa e Modal Grid */}
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 ml-0.5 block">
-                  Imóvel de Interesse
-                </label>
-                <select
-                  name="propertyId"
-                  defaultValue={editingDeal?.propertyId || ""}
-                  className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                >
-                  <option value="" className="bg-card text-foreground">
-                    Selecione um imóvel (opcional)
-                  </option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-card text-foreground">
-                      {p.title} {p.price ? `- ${formatCurrencyBRL(p.price)}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1 ml-0.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Imóvel de Interesse
+                  </label>
+                  {properties.find((p) => p.id === selectedPropertyId) && (
+                    <span className="text-[10px] text-primary font-semibold">Imóvel vinculado</span>
+                  )}
+                </div>
+                <div className="relative flex items-center gap-1.5">
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsPropertyLookupOpen(true);
+                    }}
+                    className="relative flex-1 cursor-pointer group"
+                  >
+                    <input
+                      type="text"
+                      readOnly
+                      value={(() => {
+                        const p = properties.find((item) => item.id === selectedPropertyId);
+                        if (!p) return "";
+                        const ref = p.referenceCode || p.reference_code ? `[${p.referenceCode || p.reference_code}] ` : "";
+                        const price = p.price ? ` - ${formatCurrencyBRL(p.price)}` : "";
+                        return `${ref}${p.title}${price}`;
+                      })()}
+                      placeholder="Clique na lupa para pesquisar imóvel..."
+                      className="w-full pl-3.5 pr-8 py-2 sm:py-2.5 rounded-xl border border-border bg-muted/30 text-foreground text-xs sm:text-sm cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/60 font-medium group-hover:border-primary/40"
+                    />
+                    {selectedPropertyId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedPropertyId("");
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                        title="Desvincular imóvel"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsPropertyLookupOpen(true);
+                    }}
+                    className="px-3 py-2 sm:py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 flex items-center gap-1.5 text-xs sm:text-sm font-bold transition-all cursor-pointer shrink-0 active:scale-95"
+                    title="Abrir pesquisa de imóveis no grid"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span className="hidden sm:inline">Buscar</span>
+                  </button>
+                </div>
               </div>
 
               {/* Corretor Responsável (Disponível para Admin) */}
@@ -247,5 +379,23 @@ export function DealModal({
         </div>
       )}
     </AnimatePresence>
+
+      {/* Modais de Pesquisa com Grid & Lupa */}
+      <ContactLookupModal
+        isOpen={isContactLookupOpen}
+        onClose={() => setIsContactLookupOpen(false)}
+        contacts={contacts}
+        selectedContactId={selectedContactId}
+        onSelect={handleSelectContact}
+      />
+
+      <PropertyLookupModal
+        isOpen={isPropertyLookupOpen}
+        onClose={() => setIsPropertyLookupOpen(false)}
+        properties={properties}
+        selectedPropertyId={selectedPropertyId}
+        onSelect={handleSelectProperty}
+      />
+    </>
   );
 }

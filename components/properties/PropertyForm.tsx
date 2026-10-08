@@ -661,6 +661,13 @@ export function PropertyForm({
             noValidate
             key={editingProperty?.id || "new-property"}
             onSubmit={handleCreateOrUpdate}
+            onKeyDown={(e) => {
+              // Previne o envio acidental ou fechamento da tela ao teclar Enter em inputs/combos
+              // Permite Enter somente em textareas para quebra de linha normal
+              if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+                e.preventDefault();
+              }
+            }}
             className={cn(
               "bg-card border border-border rounded-[40px] shadow-2xl overflow-hidden pb-12 transition-opacity",
               (isSaving || isUploading) && "opacity-80 cursor-wait"
