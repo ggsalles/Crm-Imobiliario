@@ -30,6 +30,7 @@ interface PropertyCardProps {
   onToggleFeatured: () => void;
   onCreateDeal?: () => void;
   onViewDetails?: () => void;
+  isHighlighted?: boolean;
 }
 
 export function PropertyCard({ 
@@ -40,7 +41,8 @@ export function PropertyCard({
   onShare, 
   onToggleFeatured,
   onCreateDeal,
-  onViewDetails
+  onViewDetails,
+  isHighlighted = false
 }: PropertyCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
@@ -70,7 +72,11 @@ export function PropertyCard({
       onClick={() => {
         if (onViewDetails) onViewDetails();
       }}
-      className="bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col cursor-pointer"
+      id={`property-card-${property.id}`}
+      className={cn(
+        "bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col cursor-pointer relative",
+        isHighlighted && "ring-4 ring-amber-400 border-amber-400 shadow-2xl shadow-amber-500/30 scale-[1.01] transition-transform duration-500"
+      )}
     >
       <div className="h-40 sm:h-44 relative overflow-hidden shrink-0 group/img">
         <AnimatePresence mode="wait">

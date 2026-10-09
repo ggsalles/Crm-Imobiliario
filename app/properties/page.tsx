@@ -73,6 +73,7 @@ export default function PropertiesPage() {
   const [isVitrineModalOpen, setIsVitrineModalOpen] = useState(false);
   const [propertyForNewDeal, setPropertyForNewDeal] = useState<Property | null>(null);
   const [viewingProperty, setViewingProperty] = useState<Property | null>(null);
+  const [highlightedPropertyId, setHighlightedPropertyId] = useState<string | null>(null);
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -669,6 +670,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                       <PropertyCard 
                         key={property.id} 
                         property={property} 
+                        isHighlighted={property.id === highlightedPropertyId}
                         onViewDetails={() => setViewingProperty(property)}
                         onEdit={() => handleEdit(property)}
                         onDelete={() => setPropertyToDelete(property)}
@@ -746,7 +748,15 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
               properties={properties}
               contacts={contacts}
               user={user}
-              onCancel={() => setView('list')}
+              onCancel={() => {
+                setView('list');
+                setEditingProperty(null);
+                requestAnimationFrame(() => {
+                  if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                });
+              }}
               onSuccess={(savedProperty?: Property) => {
                 if (savedProperty) {
                   setProperties((prev) => {
@@ -756,9 +766,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                     }
                     return [savedProperty, ...prev];
                   });
+                  setHighlightedPropertyId(savedProperty.id);
+                  setTimeout(() => setHighlightedPropertyId(null), 4000);
                 }
                 setEditingProperty(null);
                 setView('list');
+
+                // Reseta a rolagem imediatamente para o topo para garantir visualização do 1º imóvel
+                requestAnimationFrame(() => {
+                  if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                });
               }}
             />
           )}

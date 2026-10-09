@@ -13,9 +13,11 @@ const NO_CACHE_HEADERS = {
 interface CacheEntry {
   data: any[];
   timestamp: number;
+  lastModifiedAt: string | null;
+  etag: string;
 }
 const serverPropertiesCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 120000; // 2 minutes server-side cache to save 99% Supabase egress
+const CACHE_TTL_MS = 300000; // 5 minutes server-side cache
 
 export function invalidateServerPropertiesCache() {
   serverPropertiesCache.clear();
@@ -231,33 +233,54 @@ export async function GET(req: NextRequest) {
     const now = Date.now();
     const isBypass = searchParams.get('nocache') === 'true' || searchParams.get('force') === 'true';
     const effectiveTtl = isPublic ? 600000 : 300000; // 10 min vitrine pública, 5 min CRM autenticado
+    const clientIfNoneMatch = req.headers.get('if-none-match');
+
+    // 1. Verificação ultrarrápida de modificação (Checksum Guard):
+    // Em vez de puxar milhares de imóveis (10MB+ de egress), consulta apenas 1 registro com updated_at (~40 bytes).
+    let lastModifiedAt: string | null = null;
+    try {
+      let checkQuery = supabase
+        .from('properties')
+        .select('updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
+        checkQuery = checkQuery.eq('tenant_id', effectiveTenantId);
+      }
+      const { data: latestRows } = await checkQuery;
+      if (latestRows && latestRows.length > 0 && latestRows[0]?.updated_at) {
+        lastModifiedAt = latestRows[0].updated_at;
+      }
+    } catch (checkErr) {
+      console.warn("[API/Properties] Checksum guard warning:", checkErr);
+    }
+
+    // Se temos cache e o banco não sofreu nenhuma alteração recente:
+    if (cached && !isBypass && lastModifiedAt && cached.lastModifiedAt === lastModifiedAt) {
+      if (clientIfNoneMatch && clientIfNoneMatch === cached.etag) {
+        return new NextResponse(null, { 
+          status: 304, 
+          headers: { 
+            'ETag': cached.etag, 
+            'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600' 
+          } 
+        });
+      }
+      return NextResponse.json(cached.data, {
+        headers: {
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'ETag': cached.etag,
+        }
+      });
+    }
 
     if (cached && (now - cached.timestamp < effectiveTtl) && !isBypass) {
-      return NextResponse.json(cached.data, { headers: NO_CACHE_HEADERS });
-    }
-
-    let query = supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    // Strict tenant isolation: no fallback to tenant_id.is.null
-    if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
-      query = query.eq('tenant_id', effectiveTenantId);
-    }
-
-    if (isPublic) {
-      // Vitrine pública: estritamente imóveis disponíveis para venda ou locação.
-      // Imóveis reservados, vendidos ou alugados são automaticamente removidos da vitrine pública.
-      query = query.in('status', ['disponível', 'disponivel', 'available']);
-    }
-
-    if (shouldFilterByOwner) {
-      query = query.eq('owner_id', ownerId);
-    }
-
-    if (searchParams.get('featured') === 'true') {
-      query = query.eq('is_featured', true);
+      return NextResponse.json(cached.data, { 
+        headers: {
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'ETag': cached.etag || `"${cached.timestamp}"`,
+        }
+      });
     }
 
     const rawLimit = searchParams.get('limit');
@@ -267,12 +290,10 @@ export async function GET(req: NextRequest) {
     } else if (rawLimit && rawLimit !== '500' && rawLimit !== '150') {
       limitParam = Math.max(1, Number(rawLimit) || 10000);
     } else {
-      // Default to 10,000 for both CRM inventory and Public Vitrine so large imported portfolios (e.g. 2,742 units) are never truncated
       limitParam = 10000;
     }
 
     // PostgREST limits single queries to 1,000 rows.
-    // Batch fetch in ranges of 1,000 to retrieve full portfolios (e.g. 2,742 items).
     const MAX_POSTGREST_PAGE = 1000;
     const targetMax = limitParam !== null ? limitParam : 20000;
     let allProperties: any[] = [];
@@ -280,9 +301,11 @@ export async function GET(req: NextRequest) {
 
     while (allProperties.length < targetMax) {
       const currentBatchSize = Math.min(MAX_POSTGREST_PAGE, targetMax - allProperties.length);
+      // Otimização Crítica: remove 'description' e 'notes' (campos de texto massivo) da listagem geral.
+      // Esses campos são carregados sob demanda na abertura da ficha individual (?id=...).
       let batchQuery = supabase
         .from('properties')
-        .select('id, reference_code, title, type, status, price, area, bedrooms, suites, bathrooms, parking_spots, location, neighborhood, city, state, street, number, complement, cep, image_url, tags, is_featured, accepts_financing, building_name, condo_fee, iptu, company_id, owner_id, tenant_id, notes, description, created_at, updated_at')
+        .select('id, reference_code, title, type, status, price, area, bedrooms, suites, bathrooms, parking_spots, location, neighborhood, city, state, street, number, complement, cep, image_url, tags, is_featured, accepts_financing, building_name, condo_fee, iptu, company_id, owner_id, tenant_id, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (effectiveTenantId && effectiveTenantId !== 'undefined' && effectiveTenantId !== 'all') {
@@ -310,19 +333,18 @@ export async function GET(req: NextRequest) {
       if (!batch || batch.length === 0) break;
       allProperties.push(...batch);
 
-      // If fewer items than requested were returned, we have reached the end of the table
       if (batch.length < currentBatchSize) break;
       offset += batch.length;
     }
 
     const properties = allProperties;
 
-    if (!properties || properties.length === 0) return NextResponse.json([], { headers: NO_CACHE_HEADERS });
+    if (!properties || properties.length === 0) {
+      return NextResponse.json([], { 
+        headers: { 'Cache-Control': 'public, max-age=30, s-maxage=60' } 
+      });
+    }
 
-    // Otimização Crítica de Egress Supabase:
-    // Para a listagem geral (catálogo, vitrine, mapa, Kanban), extraímos as fotos diretamente do campo image_url
-    // sem disparar varreduras em lote adicionais na tabela property_images (que transferiam megabytes a cada chamada).
-    // A galeria completa (20-50 fotos) é carregada pontualmente sob demanda ao abrir a ficha técnica individual (?id=...).
     let items = properties.map((item: any) => formatPropertyDbRow(item, undefined, isPublic));
 
     if (isPublic) {
@@ -332,9 +354,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    serverPropertiesCache.set(cacheKey, { data: items, timestamp: Date.now() });
+    const generatedEtag = `W/"p-${lastModifiedAt || Date.now()}"`;
+    serverPropertiesCache.set(cacheKey, { 
+      data: items, 
+      timestamp: Date.now(), 
+      lastModifiedAt, 
+      etag: generatedEtag 
+    });
 
-    return NextResponse.json(items, { headers: NO_CACHE_HEADERS });
+    return NextResponse.json(items, { 
+      headers: {
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+        'ETag': generatedEtag,
+      } 
+    });
   } catch (error: any) {
     console.error("[API/Properties] GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

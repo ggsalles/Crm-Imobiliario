@@ -73,8 +73,8 @@ export function subscribeToConversations(category: 'client' | 'team', callback: 
 
   fetchConversations();
   const subscription = createRealtimeChannel('conversations', fetchConversations);
-  // Polling de segurança de 30 segundos (o canal Realtime WebSocket já notifica em tempo real)
-  const poll = createVisibilityAwarePoll(fetchConversations, 30000);
+  // Polling de segurança de 2 minutos (o canal Realtime WebSocket já notifica em tempo real)
+  const poll = createVisibilityAwarePoll(fetchConversations, 120000);
 
   return () => {
     supabase.removeChannel(subscription);
@@ -116,8 +116,8 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
 
   fetchMessages();
   const subscription = createRealtimeChannel('messages', fetchMessages, `conversation_id=eq.${conversationId}`);
-  // Polling de segurança de 15 segundos (Realtime já entrega novas mensagens instantaneamente)
-  const poll = createVisibilityAwarePoll(fetchMessages, 15000);
+  // Polling de segurança de 1 minuto (Realtime já entrega novas mensagens instantaneamente)
+  const poll = createVisibilityAwarePoll(fetchMessages, 60000);
 
   return () => {
     supabase.removeChannel(subscription);

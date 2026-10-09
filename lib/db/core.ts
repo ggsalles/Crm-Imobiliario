@@ -52,7 +52,7 @@ export async function getSafeSession() {
   }
 }
 
-export const POLL_INTERVAL = 180000;
+export const POLL_INTERVAL = 600000; // 10 minutos (Realtime WebSocket já notifica alterações instantaneamente)
 export const RESYNC_EVENT = 'db-force-resync';
 
 export function createVisibilityAwarePoll(callback: () => void, intervalMs = POLL_INTERVAL) {
@@ -148,8 +148,8 @@ if (typeof window !== 'undefined') {
   const onWakeUp = () => {
     if (document.visibilityState === 'visible') {
       const now = Date.now();
-      // Limita resync ao trocar de abas para no máximo 1 vez a cada 3 minutos
-      if (now - lastWakeUpSync > 180000) {
+      // Limita resync ao trocar de abas para no máximo 1 vez a cada 10 minutos
+      if (now - lastWakeUpSync > 600000) {
         lastWakeUpSync = now;
         console.log("[lib/db] Tab ativa após intervalo, sincronizando dados...");
         forceDataResync();
@@ -224,7 +224,7 @@ if (typeof window !== 'undefined') {
 
 const inFlightRequests = new Map<string, Promise<any>>();
 const apiGetCache = new Map<string, { data: any; timestamp: number }>();
-const API_GET_CACHE_TTL = 4000;
+const API_GET_CACHE_TTL = 30000; // 30 segundos de cache em memória no cliente para eliminar requisições simultâneas repetidas
 
 export function invalidateApiCache(pattern?: string) {
   if (!pattern) {

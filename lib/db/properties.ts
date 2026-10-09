@@ -34,31 +34,41 @@ export function getCachedProperties(ownerId?: string): Property[] | null {
   return null;
 }
 
+const inFlightPropertyFetches = new Map<string, Promise<Property[]>>();
+
 export async function getProperties(ownerId?: string, limit?: number, forceRefresh = false): Promise<Property[]> {
-  const startTime = Date.now();
   const cacheKey = `properties:${ownerId || 'all'}`;
-  console.log("[lib/db/properties] getProperties: Buscando imóveis via API Proxy...");
   
-  try {
-    let url = `/api/properties?limit=${limit || 10000}`;
-    if (ownerId) url += `&ownerId=${ownerId}`;
-    if (forceRefresh) url += `&nocache=true&_t=${Date.now()}`;
-    
-    const data = await apiFetch(url, { bypassCache: forceRefresh, noCache: forceRefresh });
-    if (Array.isArray(data)) {
-      dataCache[cacheKey] = data;
-      safePersistSnapshot(cacheKey, data);
-    }
-    console.log(`[lib/db/properties] getProperties concluído em ${Date.now() - startTime}ms (${data?.length || 0} imóveis carregados)`);
-    return (data || []) as Property[];
-  } catch (err: any) {
-    console.warn("[lib/db/properties] getProperties aviso ao buscar imóveis:", err?.message || err);
-    if (dataCache[cacheKey] && Array.isArray(dataCache[cacheKey]) && dataCache[cacheKey].length > 0) {
-      console.log("[lib/db/properties] getProperties: Retornando dados em cache.");
-      return dataCache[cacheKey] as Property[];
-    }
-    return [];
+  if (!forceRefresh && inFlightPropertyFetches.has(cacheKey)) {
+    return inFlightPropertyFetches.get(cacheKey)!;
   }
+
+  const fetchPromise = (async () => {
+    const startTime = Date.now();
+    try {
+      let url = `/api/properties?limit=${limit || 10000}`;
+      if (ownerId) url += `&ownerId=${ownerId}`;
+      if (forceRefresh) url += `&nocache=true&_t=${Date.now()}`;
+      
+      const data = await apiFetch(url, { bypassCache: forceRefresh, noCache: forceRefresh });
+      if (Array.isArray(data)) {
+        dataCache[cacheKey] = data;
+        safePersistSnapshot(cacheKey, data);
+      }
+      return (data || []) as Property[];
+    } catch (err: any) {
+      console.warn("[lib/db/properties] getProperties aviso ao buscar imóveis:", err?.message || err);
+      if (dataCache[cacheKey] && Array.isArray(dataCache[cacheKey]) && dataCache[cacheKey].length > 0) {
+        return dataCache[cacheKey] as Property[];
+      }
+      return [];
+    } finally {
+      inFlightPropertyFetches.delete(cacheKey);
+    }
+  })();
+
+  inFlightPropertyFetches.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 export async function getProperty(id: string): Promise<Property | null> {
@@ -179,7 +189,7 @@ export function subscribeToProperties(callback: (properties: Property[]) => void
 
   fetchProperties();
   const subscription = createRealtimeChannel('properties', () => fetchProperties(true));
-  const poll = createVisibilityAwarePoll(() => fetchProperties(true), POLL_INTERVAL);
+  const poll = createVisibilityAwarePoll(() => fetchProperties(false), POLL_INTERVAL);
 
   return () => {
     propertySubscribers.delete(callback);
