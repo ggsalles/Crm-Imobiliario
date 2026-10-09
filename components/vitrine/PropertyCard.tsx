@@ -178,17 +178,17 @@ export function ShowcasePropertyCard({
       <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1.5">
           {(property.referenceCode || property.reference_code) && (
-            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2.5 rounded-xl bg-amber-500/15 border-2 border-amber-400/50">
+            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2 rounded-xl bg-amber-500/10 border-2 border-amber-400/60 shadow-xs">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-black tracking-wider text-amber-950 bg-amber-400 px-1.5 py-0.5 rounded-md shadow-xs">
-                  REF
-                </span>
-                <span className="text-sm sm:text-base font-mono font-black text-amber-400 tracking-wider">
-                  #{property.referenceCode || property.reference_code}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 font-mono font-black text-xs sm:text-sm tracking-wider shadow-xs border border-yellow-200">
+                  <span className="text-[9px] uppercase font-black bg-amber-950/20 px-1 py-0.5 rounded tracking-wider">
+                    REF
+                  </span>
+                  <span>#{property.referenceCode || property.reference_code}</span>
                 </span>
               </div>
               {property.buildingName && (
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400 truncate max-w-[50%]">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-300 truncate max-w-[50%]">
                   🏢 {property.buildingName}
                 </span>
               )}

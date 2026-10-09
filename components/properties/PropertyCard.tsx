@@ -182,17 +182,17 @@ export function PropertyCard({
       <div className="p-3.5 sm:p-4 flex flex-col flex-1">
         <div className="mb-2.5">
           {(property.referenceCode || property.reference_code) && (
-            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2.5 rounded-xl bg-amber-500/15 border-2 border-amber-400/50">
+            <div className="flex items-center justify-between gap-2 mb-2 p-1.5 px-2 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 border-2 border-amber-400/60 dark:border-amber-400/50 shadow-xs">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-black tracking-wider text-amber-950 bg-amber-400 px-1.5 py-0.5 rounded-md shadow-xs">
-                  REF
-                </span>
-                <span className="text-sm sm:text-base font-mono font-black text-amber-400 tracking-wider">
-                  #{property.referenceCode || property.reference_code}
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 font-mono font-black text-xs sm:text-sm tracking-wider shadow-xs border border-yellow-200">
+                  <span className="text-[9px] uppercase font-black bg-amber-950/20 px-1 py-0.5 rounded tracking-wider">
+                    REF
+                  </span>
+                  <span>#{property.referenceCode || property.reference_code}</span>
                 </span>
               </div>
               {property.buildingName && (
-                <span className="text-xs font-bold text-amber-400 truncate flex items-center gap-1 max-w-[50%]">
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-300 truncate flex items-center gap-1 max-w-[50%]">
                   <span>🏢</span>
                   <span className="truncate">{property.buildingName}</span>
                 </span>
