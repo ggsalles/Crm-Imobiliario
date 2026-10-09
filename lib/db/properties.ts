@@ -12,24 +12,32 @@ import {
   POLL_INTERVAL 
 } from './core';
 
+function getClientActiveTenant(): string {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const raw = sessionStorage.getItem('active-tenant-id');
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw;
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith('active-tenant-id:')) {
+        const val = sessionStorage.getItem(k);
+        if (val && val !== 'undefined' && val !== 'null') return val;
+      }
+    }
+  } catch {}
+  return 'default';
+}
+
 export function getCachedProperties(ownerId?: string): Property[] | null {
-  const specificKey = `properties:${ownerId || 'all'}`;
+  const tenant = getClientActiveTenant();
+  const specificKey = `properties:${tenant}:${ownerId || 'all'}`;
   if (dataCache[specificKey] && Array.isArray(dataCache[specificKey]) && dataCache[specificKey].length > 0) {
     return dataCache[specificKey];
   }
-  const restored = safeRestoreSnapshot(specificKey) || safeRestoreSnapshot('properties:all');
+  const restored = safeRestoreSnapshot(specificKey);
   if (restored) {
     dataCache[specificKey] = restored;
     return restored;
-  }
-  const allKey = 'properties:all';
-  if (dataCache[allKey] && Array.isArray(dataCache[allKey]) && dataCache[allKey].length > 0) {
-    return dataCache[allKey];
-  }
-  for (const k of Object.keys(dataCache)) {
-    if (k.startsWith('properties:') && Array.isArray(dataCache[k]) && dataCache[k].length > 0) {
-      return dataCache[k];
-    }
   }
   return null;
 }
@@ -37,7 +45,8 @@ export function getCachedProperties(ownerId?: string): Property[] | null {
 const inFlightPropertyFetches = new Map<string, Promise<Property[]>>();
 
 export async function getProperties(ownerId?: string, limit?: number, forceRefresh = false): Promise<Property[]> {
-  const cacheKey = `properties:${ownerId || 'all'}`;
+  const tenant = getClientActiveTenant();
+  const cacheKey = `properties:${tenant}:${ownerId || 'all'}`;
   
   if (!forceRefresh && inFlightPropertyFetches.has(cacheKey)) {
     return inFlightPropertyFetches.get(cacheKey)!;
@@ -159,7 +168,8 @@ export function notifyPropertiesUpdated(updatedList: Property[]) {
 }
 
 export function subscribeToProperties(callback: (properties: Property[]) => void, ownerId?: string) {
-  const cacheKey = `properties:${ownerId || 'all'}`;
+  const tenant = getClientActiveTenant();
+  const cacheKey = `properties:${tenant}:${ownerId || 'all'}`;
   propertySubscribers.add(callback);
 
   const initialData = getCachedProperties(ownerId);

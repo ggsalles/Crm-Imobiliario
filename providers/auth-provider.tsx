@@ -60,7 +60,6 @@ if (typeof window !== "undefined") {
       (msg.includes("failed to fetch") && (msg.includes("/login") || msg.includes("rsc") || isPageUnloading))
     ) {
       event.preventDefault();
-      console.warn("[AuthProvider] Silenciado fallback de navegação RSC do Next.js:", reason);
       return;
     }
 
@@ -71,7 +70,7 @@ if (typeof window !== "undefined") {
       (reason && typeof reason === "object" && ("isTrusted" in reason || !("message" in reason)))
     ) {
       event.preventDefault();
-      console.warn("[AuthProvider] Silenciado evento assíncrono não capturado:", reason);
+      return;
     }
   });
 
@@ -89,7 +88,6 @@ if (typeof window !== "undefined") {
       msg.includes("refresh_token_not_found")
     ) {
       event.preventDefault();
-      console.warn("[AuthProvider] Silenciado erro de refresh token em window.onerror:", error);
       try {
         window.sessionStorage.removeItem('crm-imob-session-v5');
         window.localStorage.removeItem('crm-imob-session-v4');
@@ -104,7 +102,6 @@ if (typeof window !== "undefined") {
       (msg.includes("failed to fetch") && (msg.includes("/login") || msg.includes("rsc") || isPageUnloading))
     ) {
       event.preventDefault();
-      console.warn("[AuthProvider] Silenciado fallback de navegação RSC em window.onerror:", error);
       return;
     }
 

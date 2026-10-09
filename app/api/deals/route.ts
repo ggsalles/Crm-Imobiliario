@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         .select(DEAL_SELECT_COLUMNS)
         .eq('id', id);
 
-      if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+      if (activeTenantId) {
         singleQuery = singleQuery.eq('tenant_id', activeTenantId);
       }
       const { data: item, error } = await singleQuery.maybeSingle();
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
       .select(DEAL_SELECT_COLUMNS)
       .order('created_at', { ascending: false });
     
-    if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+    if (activeTenantId) {
       query = query.eq('tenant_id', activeTenantId);
     }
     
@@ -198,7 +198,7 @@ export async function PATCH(req: NextRequest) {
 
     // Validação de isolamento: verificar se o negócio existe e pertence ao tenant ativo
     let checkQuery = supabase.from('deals').select('id, tenant_id').eq('id', id);
-    if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+    if (activeTenantId) {
       checkQuery = checkQuery.eq('tenant_id', activeTenantId);
     }
     const { data: existingDeal, error: checkError } = await checkQuery.maybeSingle();
@@ -237,7 +237,7 @@ export async function PATCH(req: NextRequest) {
       .update(updatePayload)
       .eq('id', id);
 
-    if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+    if (activeTenantId) {
       updateQuery = updateQuery.eq('tenant_id', activeTenantId);
     }
 
@@ -279,7 +279,7 @@ export async function DELETE(req: NextRequest) {
 
     // Validação de isolamento antes do delete
     let checkQuery = supabase.from('deals').select('id, tenant_id').eq('id', id);
-    if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+    if (activeTenantId) {
       checkQuery = checkQuery.eq('tenant_id', activeTenantId);
     }
     const { data: existingDeal, error: checkError } = await checkQuery.maybeSingle();
@@ -292,7 +292,7 @@ export async function DELETE(req: NextRequest) {
       .delete()
       .eq('id', id);
 
-    if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+    if (activeTenantId) {
       deleteQuery = deleteQuery.eq('tenant_id', activeTenantId);
     }
 

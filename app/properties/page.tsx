@@ -171,9 +171,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
 
     if (!user || !profile) return;
     
+    // Limpa imediatamente lista em memória ao alternar de imobiliária
+    if (profile.tenantId) {
+      setProperties((prev) => prev.filter(p => p.tenantId === profile.tenantId));
+    }
+
     // Todos os corretores da imobiliária acessam o inventário unificado da empresa
     const unsubscribe = subscribeToProperties((data) => {
-      setProperties(data);
+      const activeTid = profile.tenantId;
+      const isolated = activeTid
+        ? data.filter(p => p.tenantId === activeTid || (!p.tenantId && activeTid === '11111111-1111-1111-1111-111111111111'))
+        : data;
+      setProperties(isolated);
       setLoading(false);
     });
 

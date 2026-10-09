@@ -30,6 +30,19 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
+                var origError = console.error;
+                console.error = function() {
+                  var first = arguments[0];
+                  if (typeof first === 'string' && (
+                    first.indexOf('Failed to fetch RSC payload') !== -1 ||
+                    first.indexOf('Falling back to browser navigation') !== -1
+                  )) {
+                    if (console.debug) console.debug.apply(console, arguments);
+                    return;
+                  }
+                  return origError.apply(console, arguments);
+                };
+
                 function checkAndRecover(msg, src) {
                   msg = msg || '';
                   src = src || '';
@@ -48,6 +61,11 @@ export default function RootLayout({
                   return false;
                 }
                 window.addEventListener('error', function(e) {
+                  var m = (e && e.message) || '';
+                  if (m.indexOf('Failed to fetch RSC payload') !== -1 || m.indexOf('Falling back to browser navigation') !== -1) {
+                    if (e.preventDefault) e.preventDefault();
+                    return;
+                  }
                   if (checkAndRecover(e && e.message, e && e.filename)) {
                     if (e.preventDefault) e.preventDefault();
                   }
@@ -55,6 +73,10 @@ export default function RootLayout({
                 window.addEventListener('unhandledrejection', function(e) {
                   var r = e && e.reason;
                   var msg = (r && (r.message || r.name)) || String(r || '');
+                  if (msg.indexOf('Failed to fetch RSC payload') !== -1 || msg.indexOf('Falling back to browser navigation') !== -1) {
+                    if (e.preventDefault) e.preventDefault();
+                    return;
+                  }
                   if (checkAndRecover(msg, '')) {
                     if (e.preventDefault) e.preventDefault();
                   }

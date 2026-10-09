@@ -137,9 +137,22 @@ export function forceDataResync() {
 }
 
 export function clearLocalCache() {
-  console.log("[lib/db] Clearing global dataCache object...");
+  console.log("[lib/db] Clearing global dataCache and sessionStorage snapshots...");
   for (const key in dataCache) {
     delete dataCache[key];
+  }
+  apiGetCache.clear();
+  if (typeof window !== 'undefined') {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && (k.startsWith('db-cache:') || k.startsWith('api-cache:'))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => sessionStorage.removeItem(k));
+    } catch {}
   }
 }
 

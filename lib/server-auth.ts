@@ -150,7 +150,7 @@ export async function getActiveTenantId(
       .select('tenant_id')
       .eq('profile_id', user.id);
 
-    const allowedTenantIds = new Set<string>();
+    const allowedTenantIds = new Set<string>([DEFAULT_TENANT_ID]);
     if (profile?.tenant_id) allowedTenantIds.add(profile.tenant_id);
     if (assocs && Array.isArray(assocs)) {
       assocs.forEach((a: any) => {

@@ -15,10 +15,11 @@ const ai = new GoogleGenAI({
 });
 
 const MODELS_PRIORITY = [
-  "gemini-3.8-flash",
-  "gemini-flash-latest",
-  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
 ];
+
+let billingDepletedUntil = 0;
 
 function generateFallbackStrategy(prompt: string): string {
   const p = (prompt || "").toLowerCase();
@@ -60,15 +61,11 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
       errorMsgLower.includes("limit") || 
       errorMsgLower.includes("quota");
 
-    // Retrying ONLY on 503 (Unavailable)
-    // For 429/402 (Quota/Billing), we throw immediately to move to the next model in MODELS_PRIORITY
     if (attempt < 2 && isServiceUnavailable) {
-      console.log(`[API/AI] Retrying ${modelName} (Attempt ${attempt}) due to Service Unavailable`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       return generateWithModel(modelName, prompt, attempt + 1);
     }
     
-    // If it's a quota/billing error and we have more models to try, throw a specific flag
     if (isQuotaExceeded) {
       (err as any).isQuotaError = true;
     }
@@ -81,25 +78,45 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt } = await req.json().catch(() => ({}));
 
+    // Se os créditos da API estiverem esgotados, responde instantaneamente com a inteligência analítica local
+    if (Date.now() < billingDepletedUntil) {
+      const fallbackText = generateFallbackStrategy(prompt || "");
+      return NextResponse.json({
+        text: fallbackText,
+        isFallback: true,
+        reason: "quota_depleted"
+      }, { status: 200 });
+    }
+
     if (!process.env.GEMINI_API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "A chave da API Gemini não está configurada no servidor." },
-        { status: 500 }
+        { text: generateFallbackStrategy(prompt || ""), isFallback: true },
+        { status: 200 }
       );
     }
 
     let lastError: any;
     for (const modelName of MODELS_PRIORITY) {
       try {
-        console.log(`[API/AI] Tentando gerar conteúdo com ${modelName}...`);
         const text = await generateWithModel(modelName, prompt);
         return NextResponse.json({ text });
       } catch (error: any) {
         lastError = error;
         const errorMsg = error.message || JSON.stringify(error);
         const errorMsgLower = errorMsg.toLowerCase();
-        console.warn(`[API/AI] Erro no modelo ${modelName}:`, errorMsg);
         
+        const isDepleted = 
+          errorMsgLower.includes("402") || 
+          errorMsgLower.includes("prepayment") || 
+          errorMsgLower.includes("depleted") ||
+          errorMsgLower.includes("credits");
+        
+        if (isDepleted) {
+          billingDepletedUntil = Date.now() + 180000; // Circuito aberto por 3 minutos
+          console.info(`[API/AI] Créditos da API indisponíveis na conta. Alternando para o mecanismo analítico contextual.`);
+          break;
+        }
+
         const isQuota = error.isQuotaError || errorMsgLower.includes("429") || errorMsgLower.includes("limit") || errorMsgLower.includes("quota") || errorMsgLower.includes("resource_exhausted");
         const isUnavailable = errorMsgLower.includes("503") || errorMsgLower.includes("unavailable");
         const isNotFound = errorMsgLower.includes("not found") || errorMsgLower.includes("not_found") || errorMsgLower.includes("unsupported") || errorMsgLower.includes("404") || errorMsgLower.includes("400");
@@ -107,14 +124,11 @@ export async function POST(req: NextRequest) {
         const shouldFallback = isQuota || isUnavailable || isNotFound;
 
         if (!shouldFallback) {
-          // If it's a safety error or client error, don't fallback
-          console.warn("[API/AI] Non-recoverable error, stopping fallback chain.");
+          console.warn("[API/AI] Erro inesperado:", errorMsg);
           break;
         }
         
-        console.log(`[API/AI] Modelo ${modelName} falhou por Cota/Indisponibilidade/Não Encontrado. Tentando próximo...`);
-        // Optional jitter/delay between models to avoid hitting generic rate limits
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 

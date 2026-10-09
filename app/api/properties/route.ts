@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
 
       // Access control for authenticated CRM view
       if (!isPublic && !isMaster && user?.id && property.tenant_id) {
-        if (activeTenantId && activeTenantId !== property.tenant_id && activeTenantId !== DEFAULT_TENANT_ID) {
+        if (activeTenantId && activeTenantId !== property.tenant_id) {
           const { data: assoc } = await supabase
             .from('profile_tenants')
             .select('tenant_id')
@@ -189,7 +189,7 @@ export async function GET(req: NextRequest) {
     // For public showcase queries, allow target showcase tenantParam or activeTenantId.
     let effectiveTenantId = isPublic
       ? (tenantParam || activeTenantId)
-      : (activeTenantId || tenantParam);
+      : (activeTenantId || tenantParam || DEFAULT_TENANT_ID);
 
     // If tenantParam was omitted in a public link, but a broker or owner is specified:
     // Automatically resolve the broker's company tenant_id so the agency's catalog is loaded!
@@ -213,12 +213,8 @@ export async function GET(req: NextRequest) {
 
     if (isMaster && tenantParam === 'all') {
       effectiveTenantId = null;
-    } else if (!effectiveTenantId || effectiveTenantId === DEFAULT_TENANT_ID) {
-      if (activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
-        effectiveTenantId = activeTenantId;
-      } else {
-        effectiveTenantId = 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f';
-      }
+    } else if (isPublic && !effectiveTenantId) {
+      effectiveTenantId = 'c177f8cd-71b6-4bdc-a26d-4d26af076b4f';
     }
 
     // Vitrine pública compartilhada por corretor (ex: link de Vivi da Nando Imobiliária):
@@ -596,7 +592,7 @@ export async function PATCH(req: NextRequest) {
         hasTenantAssoc = !!assoc;
       }
 
-      if (!isOwner && !isTenantMatch && !hasTenantAssoc && propTenant && activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+      if (!isOwner && !isTenantMatch && !hasTenantAssoc && propTenant && activeTenantId) {
         console.warn(`[API/Properties] PATCH ID ${id}: Acesso negado para o tenant ${propTenant}`);
         return NextResponse.json({ error: "Permissão insuficiente para alterar imóvel desta imobiliária." }, { status: 403 });
       }
@@ -794,7 +790,7 @@ export async function DELETE(req: NextRequest) {
     if (!isMaster && user?.id) {
       const isOwner = existingProp.owner_id === user.id;
       const isTenantMatch = activeTenantId && activeTenantId === existingProp.tenant_id;
-      if (!isOwner && !isTenantMatch && existingProp.tenant_id && activeTenantId && activeTenantId !== DEFAULT_TENANT_ID) {
+      if (!isOwner && !isTenantMatch && existingProp.tenant_id && activeTenantId) {
         const { data: assoc } = await supabase
           .from('profile_tenants')
           .select('tenant_id')
