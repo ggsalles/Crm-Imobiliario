@@ -8,7 +8,8 @@ import {
   createRealtimeChannel, 
   createVisibilityAwarePoll, 
   getSafeSession, 
-  POLL_INTERVAL 
+  POLL_INTERVAL,
+  invalidateApiCache 
 } from './core';
 
 export function getCachedActivities(ownerId?: string): Activity[] | null {

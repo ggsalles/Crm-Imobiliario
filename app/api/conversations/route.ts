@@ -23,6 +23,29 @@ export function invalidateServerConversationsCache() {
   serverConvCache.clear();
 }
 
+function toDbUnreadCount(val: any): number {
+  if (typeof val === 'number') return Math.max(0, Math.floor(val));
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    const values = Object.values(val) as any[];
+    return values.reduce((sum, v) => sum + (Number(v) || 0), 0);
+  }
+  return 0;
+}
+
+function parseUnreadCount(val: any, participants?: string[]): Record<string, number> {
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    return val;
+  }
+  const count = typeof val === 'number' ? val : (parseInt(val, 10) || 0);
+  const result: Record<string, number> = {};
+  if (Array.isArray(participants) && participants.length > 0) {
+    participants.forEach((pId) => {
+      result[pId] = count;
+    });
+  }
+  return result;
+}
+
 function formatConversationDbRow(item: any) {
   if (!item) return null;
   const participants = Array.isArray(item.participants) 
@@ -36,6 +59,8 @@ function formatConversationDbRow(item: any) {
     }
   } : {});
 
+  const unreadCountMap = parseUnreadCount(item.unread_count, participants);
+
   return {
     id: item.id,
     participants,
@@ -48,8 +73,8 @@ function formatConversationDbRow(item: any) {
     lastMessage: item.last_message,
     last_message_at: item.last_message_at,
     lastMessageAt: item.last_message_at,
-    unread_count: item.unread_count || {},
-    unreadCount: item.unread_count || {},
+    unread_count: unreadCountMap,
+    unreadCount: unreadCountMap,
     type: item.type || (participants.length > 2 ? 'group' : 'direct'),
     category: item.category || 'client',
     owner_id: item.owner_id,
@@ -158,6 +183,10 @@ export async function POST(req: NextRequest) {
       data.last_message_at = new Date().toISOString();
     }
 
+    // Ensure unread_count is integer for Postgres table compatibility
+    data.unread_count = toDbUnreadCount(data.unread_count ?? data.unreadCount);
+    delete data.unreadCount;
+
     const { data: result, error } = await supabase
       .from('conversations')
       .insert([data])
@@ -186,6 +215,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data = await req.json().catch(() => ({}));
+
+    // Ensure unread_count is integer for Postgres table compatibility if provided
+    if (data.unread_count !== undefined || data.unreadCount !== undefined) {
+      data.unread_count = toDbUnreadCount(data.unread_count ?? data.unreadCount);
+      delete data.unreadCount;
+    }
 
     // Secure multi-tenant check (zero HTTP auth roundtrip)
     const user = getAuthenticatedUser(req);

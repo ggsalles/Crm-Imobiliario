@@ -66,27 +66,33 @@ export async function safeAiCall(prompt: string, fallbackText: string): Promise<
 
     return {
       text: data.text,
-      isError: false
+      isError: false,
+      errorType: data.isFallback ? 'quota' : undefined
     };
   } catch (error: any) {
-    console.error("Gemini Safe Call Error:", error);
-    
     const errorMessage = (error?.message || "").toLowerCase();
     
     const isQuotaError = 
       errorMessage.includes("quota") || 
       errorMessage.includes("cota") ||
       errorMessage.includes("429") || 
+      errorMessage.includes("402") || 
+      errorMessage.includes("prepayment") || 
+      errorMessage.includes("credits") || 
+      errorMessage.includes("depleted") || 
       errorMessage.includes("limite") ||
       errorMessage.includes("resource_exhausted");
 
     if (isQuotaError) {
+      console.info("[AI Safe Call] Modo de contingência analítica ativado:", error?.message || error);
       return {
         text: fallbackText || "A inteligência analítica compilou as diretrizes estratégicas com base nos números atuais do seu funil.",
-        isError: true,
+        isError: false,
         errorType: 'quota'
       };
     }
+
+    console.warn("[AI Safe Call] Alerta de contingência:", error?.message || error);
 
     const isMissingKey = 
       errorMessage.includes("missing") || 

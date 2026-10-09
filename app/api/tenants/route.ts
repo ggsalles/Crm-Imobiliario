@@ -4,12 +4,13 @@ import { getBlockedTenantIds, setTenantBlocked, setTenantUnlocked, getSaaSConfig
 import { DEFAULT_TENANT_ID, DEFAULT_TENANT_NAME, DEFAULT_USER_LIMIT_PER_TENANT, isPlatformAdmin } from '@/lib/constants';
 import { getAuthenticatedUser } from '@/lib/server-auth';
 import { tenantUpdateSchema, validateData } from '@/lib/validations';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/supabase-config';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
+const supabaseServiceKey = SUPABASE_SERVICE_ROLE_KEY;
 
 function getSupabase(req: NextRequest) {
   // Se houver a chave de serviço administrativa do Supabase, priorizar o seu uso no backend

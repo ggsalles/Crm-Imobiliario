@@ -305,24 +305,28 @@ export default function ActivitiesPage() {
 
     try {
       await deleteActivity(id);
-      recordAuditEvent({
-        action: 'DELETE_ACTIVITY',
-        title: 'Exclusão de Atividade',
-        content: `Atividade "${targetActivity?.title || id}" foi excluída.`,
-        severity: 'high',
-        category: 'deletion',
-        relatedId: id,
-        entityType: 'activity',
-        metadata: {
-          title: targetActivity?.title,
-          type: targetActivity?.type
-        }
-      });
+      try {
+        recordAuditEvent({
+          action: 'DELETE_ACTIVITY',
+          title: 'Exclusão de Atividade',
+          content: `Atividade "${targetActivity?.title || id}" foi excluída.`,
+          severity: 'high',
+          category: 'deletion',
+          relatedId: id,
+          entityType: 'activity',
+          metadata: {
+            title: targetActivity?.title,
+            type: targetActivity?.type
+          }
+        });
+      } catch (auditErr) {
+        console.warn("[ActivitiesPage] Erro ao registrar auditoria de exclusão:", auditErr);
+      }
+
       toast.success("Atividade excluída com sucesso!", { id: toastId });
       setActivityToDelete(null);
-      if (isAddModalOpen && editingActivity?.id === id) {
-        setIsAddModalOpen(false);
-      }
+      setIsAddModalOpen(false);
+      setEditingActivity(null);
     } catch (err: any) {
       console.error("[ActivitiesPage] Erro ao excluir atividade:", err);
       setActivities(prev => [...prev, targetActivity]);
@@ -330,9 +334,10 @@ export default function ActivitiesPage() {
     } finally {
       setIsDeletingActivity(false);
     }
-  }, [activityToDelete, editingActivity, isAddModalOpen]);
+  }, [activityToDelete]);
 
   const handleDeleteClick = useCallback((activity: Activity) => {
+    setIsAddModalOpen(false);
     setActivityToDelete(activity);
   }, []);
 

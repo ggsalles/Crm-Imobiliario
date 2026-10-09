@@ -3,10 +3,11 @@ import { getSupabase, getAuthenticatedUser } from '@/lib/server-auth';
 import { isPlatformAdmin } from '@/lib/constants';
 import { safeJsonParse } from '@/lib/safe-storage';
 import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/supabase-config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || '';
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
+const supabaseServiceKey = SUPABASE_SERVICE_ROLE_KEY;
 
 export const dynamic = 'force-dynamic';
 
@@ -117,40 +118,6 @@ export async function GET(req: NextRequest) {
       filteredLogs = filteredLogs.filter((log: any) => log.metadata?.severity === severityFilter);
     }
 
-    // Dynamic enrichment: Ensure any log where author_name is an email displays the user's real display name
-    try {
-      const { data: profilesList } = await supabase
-        .from('profiles')
-        .select('id, email, display_name');
-      if (profilesList && Array.isArray(profilesList)) {
-        const nameById = new Map<string, string>();
-        const nameByEmail = new Map<string, string>();
-        for (const p of profilesList) {
-          if (p.display_name) {
-            if (p.id) nameById.set(p.id, p.display_name);
-            if (p.email) nameByEmail.set(p.email.toLowerCase().trim(), p.display_name);
-          }
-        }
-        filteredLogs = filteredLogs.map((log: any) => {
-          let author = log.author_name;
-          const userEmail = (log.metadata?.userEmail || (author?.includes('@') ? author : '')).toLowerCase().trim();
-          if (author?.includes('@') || !author || author === 'Usuário') {
-            if (log.created_by && nameById.has(log.created_by)) {
-              author = nameById.get(log.created_by)!;
-            } else if (userEmail && nameByEmail.has(userEmail)) {
-              author = nameByEmail.get(userEmail)!;
-            }
-          }
-          return {
-            ...log,
-            author_name: author || 'Sistema'
-          };
-        });
-      }
-    } catch (enrichErr) {
-      console.warn('[API/Audit] Erro ao enriquecer nomes de perfil nos logs:', enrichErr);
-    }
-
     return NextResponse.json({
       logs: filteredLogs,
       isMaster,
@@ -219,9 +186,8 @@ export async function POST(req: NextRequest) {
 
     let userId = authUser?.id || body.userId;
     let tenantId = body.tenantId;
-    let userDisplayName: string | null = null;
 
-    if (userId) {
+    if (!tenantId && userId) {
       const { data: p } = await supabase
         .from('profiles')
         .select('tenant_id, display_name, email')
@@ -230,13 +196,12 @@ export async function POST(req: NextRequest) {
       if (p?.email && isPlatformAdmin(p.email)) {
         return NextResponse.json({ success: true, ghostMode: true, message: 'Ghost mode ativo para o usuário Master.' });
       }
-      if (!tenantId) tenantId = p?.tenant_id;
-      if (p?.display_name) userDisplayName = p.display_name;
+      tenantId = p?.tenant_id;
     }
 
-    // Resilient fallback by email if tenantId, userId or userDisplayName is still undefined
+    // Resilient fallback by email if tenantId or userId is still undefined
     const emailToLookup = (authUser?.email || body.userEmail || '').trim().toLowerCase();
-    if ((!tenantId || !userId || !userDisplayName) && emailToLookup) {
+    if ((!tenantId || !userId) && emailToLookup) {
       const { data: pByEmail } = await supabase
         .from('profiles')
         .select('id, tenant_id, display_name')
@@ -245,7 +210,6 @@ export async function POST(req: NextRequest) {
       if (pByEmail) {
         if (!userId) userId = pByEmail.id;
         if (!tenantId) tenantId = pByEmail.tenant_id;
-        if (!userDisplayName && pByEmail.display_name) userDisplayName = pByEmail.display_name;
       }
     }
 
@@ -253,18 +217,15 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       const { data: adminProfile } = await supabase
         .from('profiles')
-        .select('id, display_name')
+        .select('id')
         .eq('email', 'ggsalles@gmail.com')
         .maybeSingle();
       if (adminProfile?.id) {
         userId = adminProfile.id;
-        if (!userDisplayName && adminProfile.display_name) userDisplayName = adminProfile.display_name;
       }
     }
 
-    // Prioritize friendly Display Name: Never fallback to email if display_name exists in the system
-    const rawUserName = body.userName && !body.userName.includes('@') ? body.userName : null;
-    const authorName = rawUserName || userDisplayName || authUser?.email || body.userEmail || 'Sistema';
+    const authorName = body.userName || authUser?.email || body.userEmail || 'Sistema';
 
     const insertPayload = {
       type: 'system',

@@ -22,6 +22,22 @@ export function invalidateServerActivitiesCache() {
   serverActivitiesCache.clear();
 }
 
+function toDbStatus(status?: string): string {
+  if (!status) return 'pendente';
+  const s = status.toLowerCase().trim();
+  if (s === 'completed' || s === 'concluida' || s === 'concluída') return 'concluida';
+  if (s === 'cancelled' || s === 'cancelada') return 'cancelada';
+  return 'pendente';
+}
+
+function toAppStatus(status?: string): 'pending' | 'completed' | 'cancelled' {
+  if (!status) return 'pending';
+  const s = status.toLowerCase().trim();
+  if (s === 'concluida' || s === 'concluída' || s === 'completed') return 'completed';
+  if (s === 'cancelada' || s === 'cancelled') return 'cancelled';
+  return 'pending';
+}
+
 function formatActivityDbRow(item: any) {
   return {
     id: item.id,
@@ -29,7 +45,7 @@ function formatActivityDbRow(item: any) {
     description: item.description || undefined,
     date: item.date,
     type: item.type || 'task',
-    status: item.status || 'pending',
+    status: toAppStatus(item.status),
     contactId: item.contact_id || undefined,
     dealId: item.deal_id || undefined,
     ownerId: item.owner_id,
@@ -95,8 +111,23 @@ export async function POST(req: NextRequest) {
       data.tenant_id = activeTenantId;
     }
 
+    if (!data.owner_id && user?.id) {
+      data.owner_id = user.id;
+    }
+
+    // Convert frontend status ('pending', 'completed', 'cancelled') to DB allowed values ('pendente', 'concluida', 'cancelada')
+    data.status = toDbStatus(data.status);
+
+    // Sanitize optional UUID relations to avoid empty-string uuid violations
+    if (data.contact_id === "" || data.contactId === "") data.contact_id = null;
+    if (data.deal_id === "" || data.dealId === "") data.deal_id = null;
+    if (data.contactId && !data.contact_id) data.contact_id = data.contactId;
+    if (data.dealId && !data.deal_id) data.deal_id = data.dealId;
+    delete data.contactId;
+    delete data.dealId;
+
     // Safeguard 1: Prevent scheduling new pending appointments in the past
-    if (data.date && data.status !== 'completed') {
+    if (data.date && data.status === 'pendente') {
       const activityTime = new Date(data.date).getTime();
       const nowWithGrace = Date.now() - 2 * 60 * 1000; // 2 min grace period for clock drift
       if (activityTime < nowWithGrace) {
@@ -156,6 +187,16 @@ export async function PATCH(req: NextRequest) {
 
     const data = await req.json().catch(() => ({}));
     data.updated_at = new Date().toISOString();
+
+    if (data.status !== undefined) {
+      data.status = toDbStatus(data.status);
+    }
+    if (data.contact_id === "" || data.contactId === "") data.contact_id = null;
+    if (data.deal_id === "" || data.dealId === "") data.deal_id = null;
+    if (data.contactId && !data.contact_id) data.contact_id = data.contactId;
+    if (data.dealId && !data.deal_id) data.deal_id = data.dealId;
+    delete data.contactId;
+    delete data.dealId;
 
     const { data: updated, error } = await supabase
       .from('activities')

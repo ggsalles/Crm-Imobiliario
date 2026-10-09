@@ -281,7 +281,7 @@ export async function createConversation(participants: string[], category: 'clie
     category,
     owner_id: user.id,
     last_message_at: new Date().toISOString(),
-    unread_count: {}
+    unread_count: 0
   };
 
   try {

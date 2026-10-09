@@ -20,6 +20,23 @@ const MODELS_PRIORITY = [
   "gemini-3.1-flash-lite",
 ];
 
+function generateFallbackStrategy(prompt: string): string {
+  const p = (prompt || "").toLowerCase();
+  if (p.includes("dicas") || p.includes("insight") || p.includes("três") || p.includes("tarefas")) {
+    return "Foque nos contatos com proposta em análise; Confirme visitas com 24h de antecedência; Reative negociações paradas há mais de 7 dias.";
+  }
+  if (p.includes("imóvel") || p.includes("imoveis") || p.includes("match")) {
+    return "Excelente oportunidade com alto potencial de valorização e compatibilidade com o perfil do comprador.";
+  }
+  if (p.includes("mensagem") || p.includes("whatsapp") || p.includes("draft")) {
+    return "Olá! Selecionamos uma excelente oportunidade de imóvel que se encaixa no seu perfil. Podemos agendar uma visita esta semana?";
+  }
+  if (p.includes("plano") || p.includes("meta") || p.includes("venda")) {
+    return "Concentre esforços em clientes de alta intenção e aumente o volume de follow-ups nos primeiros 3 dias.";
+  }
+  return "Priorize o contato ativo com leads quentes e mantenha a agenda de visitas sempre atualizada.";
+}
+
 async function generateWithModel(modelName: string, prompt: string, attempt = 1): Promise<string> {
   try {
     const response = await ai.models.generateContent({
@@ -34,19 +51,24 @@ async function generateWithModel(modelName: string, prompt: string, attempt = 1)
     const isServiceUnavailable = errorMsgLower.includes("503") || errorMsgLower.includes("unavailable");
     const isQuotaExceeded = 
       errorMsgLower.includes("429") || 
+      errorMsgLower.includes("402") ||
       errorMsgLower.includes("resource_exhausted") || 
+      errorMsgLower.includes("prepayment") ||
+      errorMsgLower.includes("credits") ||
+      errorMsgLower.includes("depleted") ||
+      errorMsgLower.includes("billing") ||
       errorMsgLower.includes("limit") || 
       errorMsgLower.includes("quota");
 
     // Retrying ONLY on 503 (Unavailable)
-    // For 429 (Quota), we throw immediately to move to the next model in MODELS_PRIORITY
+    // For 429/402 (Quota/Billing), we throw immediately to move to the next model in MODELS_PRIORITY
     if (attempt < 2 && isServiceUnavailable) {
       console.log(`[API/AI] Retrying ${modelName} (Attempt ${attempt}) due to Service Unavailable`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       return generateWithModel(modelName, prompt, attempt + 1);
     }
     
-    // If it's a quota error and we have more models to try, throw a specific flag
+    // If it's a quota/billing error and we have more models to try, throw a specific flag
     if (isQuotaExceeded) {
       (err as any).isQuotaError = true;
     }
@@ -96,32 +118,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If we reached here, interpret the last error
+    // If we reached here, all AI models failed (e.g. quota, prepayment credits, billing)
     const finalErrorMsg = (lastError?.message || JSON.stringify(lastError) || "").toLowerCase();
-    if (finalErrorMsg.includes("429") || finalErrorMsg.includes("resource_exhausted") || finalErrorMsg.includes("quota")) {
-      return NextResponse.json(
-        { error: "Limite de cota da IA atingido em todos os modelos disponíveis. Por favor, tente novamente em alguns minutos." },
-        { status: 429 }
-      );
-    }
-    
-    throw lastError;
+    const isCreditOrQuota = 
+      finalErrorMsg.includes("429") || 
+      finalErrorMsg.includes("402") || 
+      finalErrorMsg.includes("resource_exhausted") || 
+      finalErrorMsg.includes("prepayment") ||
+      finalErrorMsg.includes("quota") ||
+      finalErrorMsg.includes("depleted") ||
+      finalErrorMsg.includes("billing");
+
+    console.info(`[API/AI] Usando estratégia analítica contextual local (${isCreditOrQuota ? 'Cota/Créditos' : 'Offline'}).`);
+    const fallbackText = generateFallbackStrategy(prompt || "");
+    return NextResponse.json({
+      text: fallbackText,
+      isFallback: true,
+      reason: isCreditOrQuota ? "quota_depleted" : "fallback"
+    }, { status: 200 });
   } catch (error: any) {
     console.error("[API/AI] Final Error:", error);
     
-    // Extract error details if it's an ApiError or similar
-    let message = error.message || "Internal server error";
-    let status = 500;
-
-    if (error.status) {
-      status = error.status;
-    } else if (message.includes("503") || message.includes("UNAVAILABLE")) {
-      status = 503;
-    }
-
-    return NextResponse.json(
-      { error: message },
-      { status: status }
-    );
+    const fallbackText = generateFallbackStrategy("");
+    return NextResponse.json({
+      text: fallbackText,
+      isFallback: true,
+      reason: "error_fallback"
+    }, { status: 200 });
   }
 }

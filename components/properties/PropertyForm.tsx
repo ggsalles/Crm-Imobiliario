@@ -93,7 +93,7 @@ export function PropertyForm({
     try {
       const res = await fetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (data?.nextCode) {
           setReferenceCode(data.nextCode);
         }
@@ -240,9 +240,9 @@ export function PropertyForm({
     setIsFetchingCep(true);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${rawCep}/json/`);
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
-      if (!data.erro) {
+      if (data && !data.erro) {
         setAddressData({
           street: data.logradouro || "",
           neighborhood: data.bairro || "",
@@ -326,7 +326,10 @@ export function PropertyForm({
         throw new Error(errData.error || "Falha na estimativa de valor.");
       }
 
-      const data: ValuationResult = await res.json();
+      const data: ValuationResult = (await res.json().catch(() => ({}))) as ValuationResult;
+      if (!data || !data.suggestedPrice) {
+        throw new Error("Resposta da avaliação inválida.");
+      }
       data.portfolioAvgM2 = portfolioAvgM2;
       data.matchingPropertiesCount = similarInPortfolio.length;
 

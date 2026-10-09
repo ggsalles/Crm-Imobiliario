@@ -36,9 +36,11 @@ export function invalidateServerProfilesCache() {
   serverProfilesCache.clear();
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || "";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/supabase-config';
+
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
+const supabaseServiceKey = SUPABASE_SERVICE_ROLE_KEY;
 
 if (typeof process !== 'undefined' && process.env) {
   const envKeys = Object.keys(process.env).filter(key => key.includes("SUPABASE") || key.includes("SERVICE"));
