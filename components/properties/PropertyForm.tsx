@@ -558,6 +558,7 @@ export function PropertyForm({
       toastId = toast.loading(isEditing ? "Atualizando registro..." : "Salvando novo imóvel...");
 
       let savedPropObj: Property | undefined = undefined;
+      const authorDisplayName = user?.displayName || user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.name;
 
       if (isEditing && currentPropertyId) {
         const confirmedProp = await updateProperty(currentPropertyId, data, user.id);
@@ -570,6 +571,9 @@ export function PropertyForm({
           category: "modification",
           relatedId: currentPropertyId,
           entityType: "property",
+          userId: user?.id,
+          userEmail: user?.email,
+          userName: authorDisplayName,
           metadata: {
             title: confirmedProp.title || data.title,
             price: confirmedProp.price || data.price,
@@ -589,6 +593,9 @@ export function PropertyForm({
           category: "modification",
           relatedId: confirmedProp.id,
           entityType: "property",
+          userId: user?.id,
+          userEmail: user?.email,
+          userName: authorDisplayName,
           metadata: {
             title: confirmedProp.title || data.title,
             price: confirmedProp.price || data.price,

@@ -70,19 +70,43 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
     let token = event.token || null;
     let sessionUserEmail: string | undefined = undefined;
     let sessionUserId: string | undefined = undefined;
+    let sessionUserName: string | undefined = undefined;
 
     if (!token) {
       const rawSession = safeGetItem('crm-imob-session-v5', 'sessionStorage') || 
                          safeGetItem('crm-imob-session-v4', 'sessionStorage') ||
                          safeGetItem('crm-imob-session-v4', 'localStorage');
       if (rawSession) {
-        const parsed = safeJsonParse<{ access_token?: string; user?: { email?: string; id?: string } }>(rawSession);
+        const parsed = safeJsonParse<{ 
+          access_token?: string; 
+          user?: { 
+            email?: string; 
+            id?: string;
+            user_metadata?: { display_name?: string; full_name?: string; name?: string };
+          } 
+        }>(rawSession);
         if (parsed?.access_token) {
           token = parsed.access_token;
         }
         if (parsed?.user) {
           sessionUserEmail = parsed.user.email;
           sessionUserId = parsed.user.id;
+          sessionUserName = parsed.user.user_metadata?.display_name || 
+                            parsed.user.user_metadata?.full_name || 
+                            parsed.user.user_metadata?.name;
+        }
+      }
+    }
+
+    // Try resolving display name from cached local profile if still not found
+    if (!sessionUserName && (event.userId || sessionUserId)) {
+      const targetUid = event.userId || sessionUserId;
+      const cachedProfileRaw = safeGetItem(`local-profile:${targetUid}`, 'sessionStorage') || 
+                               safeGetItem(`local-profile:${targetUid}`, 'localStorage');
+      if (cachedProfileRaw) {
+        const cachedProfile = safeJsonParse<{ displayName?: string; name?: string }>(cachedProfileRaw);
+        if (cachedProfile?.displayName || cachedProfile?.name) {
+          sessionUserName = cachedProfile.displayName || cachedProfile.name;
         }
       }
     }
@@ -107,6 +131,7 @@ export async function recordAuditEvent(event: AuditEventPayload): Promise<void> 
       tenantId: resolvedTenantId,
       userId: event.userId || sessionUserId,
       userEmail: event.userEmail || sessionUserEmail,
+      userName: (event.userName && !event.userName.includes('@')) ? event.userName : sessionUserName,
       metadata: {
         ...(event.metadata || {}),
         userAgent,
