@@ -16,7 +16,8 @@ import {
   Briefcase, 
   ChevronLeft, 
   ChevronRight,
-  Eye
+  Eye,
+  Check
 } from "lucide-react";
 import { Property } from "@/lib/db";
 import { cn, formatCurrencyBRL } from "@/lib/utils";
@@ -31,6 +32,8 @@ interface PropertyCardProps {
   onCreateDeal?: () => void;
   onViewDetails?: () => void;
   isHighlighted?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
 }
 
 export function PropertyCard({ 
@@ -42,7 +45,9 @@ export function PropertyCard({
   onToggleFeatured,
   onCreateDeal,
   onViewDetails,
-  isHighlighted = false
+  isHighlighted = false,
+  isSelected = false,
+  onToggleSelect
 }: PropertyCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imgError, setImgError] = useState(false);
@@ -75,7 +80,8 @@ export function PropertyCard({
       id={`property-card-${property.id}`}
       className={cn(
         "bg-card rounded-2xl border border-border overflow-hidden group hover:shadow-lg hover:shadow-primary/5 transition-all flex flex-col cursor-pointer relative",
-        isHighlighted && "ring-4 ring-amber-400 border-amber-400 shadow-2xl shadow-amber-500/30 scale-[1.01] transition-transform duration-500"
+        isHighlighted && "ring-4 ring-amber-400 border-amber-400 shadow-2xl shadow-amber-500/30 scale-[1.01] transition-transform duration-500",
+        isSelected && "ring-2 ring-primary border-primary bg-primary/5 shadow-md shadow-primary/10"
       )}
     >
       <div className="h-40 sm:h-44 relative overflow-hidden shrink-0 group/img">
@@ -132,6 +138,31 @@ export function PropertyCard({
               </button>
             </div>
           </>
+        )}
+
+        {/* Checkbox de Seleção Rápida para Vitrine VIP */}
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSelect(e);
+            }}
+            className={cn(
+              "absolute top-2.5 right-12 z-20 w-8 h-8 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md cursor-pointer",
+              isSelected
+                ? "bg-primary text-primary-foreground shadow-primary/40 ring-2 ring-white/60 scale-105"
+                : "bg-black/50 text-white/70 hover:text-white hover:bg-black/75 hover:scale-105 border border-white/20"
+            )}
+            title={isSelected ? "Desmarcar este imóvel" : "Selecionar para Vitrine Personalizada"}
+          >
+            {isSelected ? (
+              <Check className="w-4 h-4 stroke-[3]" />
+            ) : (
+              <div className="w-3.5 h-3.5 rounded-xs border-2 border-white/70" />
+            )}
+          </button>
         )}
 
         {/* Botão de Destaque Rápido */}

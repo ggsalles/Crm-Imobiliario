@@ -10,9 +10,10 @@ import {
   RotateCcw, 
   Home, 
   Loader2,
-  AlertCircle 
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
-import { AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
 import { useAuth } from "@/providers/auth-provider";
 import { useRouter } from "next/navigation";
@@ -44,6 +45,7 @@ import { PropertyShareModal } from "@/components/properties/PropertyShareModal";
 import { VitrineShareModal } from "@/components/properties/VitrineShareModal";
 import { CreateDealFromPropertyModal } from "@/components/properties/CreateDealFromPropertyModal";
 import { PropertyDetailModal } from "@/components/properties/PropertyDetailModal";
+import { CustomShowcaseModal } from "@/components/properties/CustomShowcaseModal";
 
 export default function PropertiesPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -74,6 +76,16 @@ export default function PropertiesPage() {
   const [propertyForNewDeal, setPropertyForNewDeal] = useState<Property | null>(null);
   const [viewingProperty, setViewingProperty] = useState<Property | null>(null);
   const [highlightedPropertyId, setHighlightedPropertyId] = useState<string | null>(null);
+
+  // Curated VIP Showcase Selection State
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  const [isCustomShowcaseModalOpen, setIsCustomShowcaseModalOpen] = useState(false);
+
+  const handleToggleSelectProperty = (propertyId: string) => {
+    setSelectedPropertyIds((prev) =>
+      prev.includes(propertyId) ? prev.filter((id) => id !== propertyId) : [...prev, propertyId]
+    );
+  };
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -242,6 +254,10 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [properties]);
+
+  const selectedPropertiesList = useMemo(() => {
+    return properties.filter((p) => selectedPropertyIds.includes(p.id));
+  }, [properties, selectedPropertyIds]);
 
   // Filtered Properties Memo
   const filteredProperties = useMemo(() => {
@@ -565,6 +581,18 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                   <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
                   <span className="text-[9px] font-bold uppercase tracking-tight hidden sm:inline">Ao Vivo</span>
                 </div>
+                {selectedPropertyIds.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => setIsCustomShowcaseModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/25 active:scale-[0.98] transition-all cursor-pointer"
+                    title="Gerar Vitrine VIP para Cliente com os imóveis selecionados"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
+                    <span className="hidden sm:inline">Vitrine VIP ({selectedPropertyIds.length})</span>
+                    <span className="sm:hidden">VIP ({selectedPropertyIds.length})</span>
+                  </button>
+                )}
                 <button 
                   type="button"
                   onClick={() => setIsVitrineModalOpen(true)}
@@ -597,7 +625,13 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
           </div>
         </header>
 
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5">
+        <div 
+          ref={scrollContainerRef} 
+          className={cn(
+            "flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 bg-muted/5",
+            selectedPropertyIds.length > 0 && "pb-32 sm:pb-28"
+          )}
+        >
           {view === 'list' ? (
             <div className="max-w-7xl mx-auto space-y-4 md:space-y-5">
               {/* Universal Filter and Search Bar Component */}
@@ -680,6 +714,8 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
                         key={property.id} 
                         property={property} 
                         isHighlighted={property.id === highlightedPropertyId}
+                        isSelected={selectedPropertyIds.includes(property.id)}
+                        onToggleSelect={() => handleToggleSelectProperty(property.id)}
                         onViewDetails={() => setViewingProperty(property)}
                         onEdit={() => handleEdit(property)}
                         onDelete={() => setPropertyToDelete(property)}
@@ -866,6 +902,57 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         itemName={propertyToDelete ? `${propertyToDelete.title} - ${propertyToDelete.location}` : undefined}
         itemType="imóvel do catálogo"
         isDeleting={isDeletingProperty}
+      />
+
+      {/* Floating Curated Selection Action Dock */}
+      <AnimatePresence>
+        {selectedPropertyIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 right-4 sm:right-6 md:right-8 z-40 bg-zinc-950/95 dark:bg-zinc-950/95 backdrop-blur-md text-white border-2 border-amber-500/50 rounded-2xl p-2.5 px-4 shadow-2xl shadow-black/60 flex items-center gap-3 sm:gap-4 ring-2 ring-amber-500/20"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 font-black text-xs flex items-center justify-center shadow-xs">
+                {selectedPropertyIds.length}
+              </span>
+              <span className="text-xs sm:text-sm font-bold text-zinc-100">
+                {selectedPropertyIds.length === 1 ? '1 imóvel selecionado' : `${selectedPropertyIds.length} imóveis selecionados`}
+              </span>
+            </div>
+
+            <div className="h-5 w-px bg-zinc-800" />
+
+            <button
+              type="button"
+              onClick={() => setIsCustomShowcaseModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-amber-500/25 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 fill-zinc-950" />
+              <span>Gerar Vitrine VIP</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedPropertyIds([])}
+              className="text-xs text-zinc-400 hover:text-white px-2 py-1 transition-colors cursor-pointer"
+              title="Limpar seleção"
+            >
+              Limpar
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Curated Showcase Modal */}
+      <CustomShowcaseModal
+        isOpen={isCustomShowcaseModalOpen}
+        onClose={() => setIsCustomShowcaseModalOpen(false)}
+        selectedProperties={selectedPropertiesList}
+        onRemoveProperty={(id) => setSelectedPropertyIds((prev) => prev.filter((pId) => pId !== id))}
+        profile={profile}
       />
     </div>
   );

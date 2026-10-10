@@ -62,6 +62,15 @@ function VitrineContent() {
 
   const tenantParam = searchParams.get('tenant') || searchParams.get('tenantId') || (showSidebar ? (profile?.tenantId || '') : '');
   const brokerParam = searchParams.get('broker') || searchParams.get('brokerId') || searchParams.get('ownerId') || '';
+  const idsParam = searchParams.get('ids') || searchParams.get('imoveis') || '';
+  const clientNameParam = searchParams.get('cliente') || searchParams.get('client') || '';
+
+  const targetIds = useMemo(() => {
+    if (!idsParam) return [];
+    return idsParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  }, [idsParam]);
+
+  const isCuratedShowcase = targetIds.length > 0;
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
@@ -251,6 +260,15 @@ function VitrineContent() {
   // Filtered & Sorted properties
   const filteredProperties = useMemo(() => {
     let result = properties.filter((p) => {
+      // Curadoria VIP: se o link veio com imóveis específicos selecionados
+      if (isCuratedShowcase) {
+        const id = String(p.id).toLowerCase();
+        const ref = String(p.referenceCode || (p as any).reference_code || '').toLowerCase();
+        if (!targetIds.includes(id) && !targetIds.includes(ref)) {
+          return false;
+        }
+      }
+
       // Search term
       if (searchTerm.trim()) {
         const fullTarget = [
@@ -343,7 +361,7 @@ function VitrineContent() {
     });
 
     return result;
-  }, [properties, searchTerm, selectedType, minBedrooms, minSuites, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
+  }, [properties, isCuratedShowcase, targetIds, searchTerm, selectedType, minBedrooms, minSuites, minParking, minPrice, maxPrice, selectedTags, onlyFeatured, sortBy]);
 
   // Clear filters
   const resetFilters = () => {
@@ -431,8 +449,10 @@ function VitrineContent() {
     const rawPhone = broker?.phone || tenant?.phone || '';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     const agencyName = tenant?.name || 'Imobiliária';
+    const ref = prop.referenceCode || (prop as any).reference_code;
+    const clientIntro = clientNameParam.trim() ? `Olá! Sou *${clientNameParam.trim()}*. ` : 'Olá! ';
     const text = encodeURIComponent(
-      `Olá! Vi o imóvel *${prop.title}* (${formatPrice(prop.price)}) na vitrine da *${agencyName}* e gostaria de agendar uma visita e tirar dúvidas.`
+      `${clientIntro}Estou vendo o imóvel *${prop.title}*${ref ? ` (#${ref})` : ''} (${formatPrice(prop.price)}) da seleção que recebi na vitrine da *${agencyName}* e gostaria de agendar uma visita e tirar dúvidas.`
     );
     const waUrl = cleanPhone 
       ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${text}`
@@ -554,18 +574,58 @@ function VitrineContent() {
       {/* Hero Showcase Banner Dark */}
       <section className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 border-b border-slate-800/80 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Catálogo Oficial de Imóveis</span>
-          </div>
+          {isCuratedShowcase ? (
+            <>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-primary/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/10">
+                <Sparkles className="w-4 h-4 fill-amber-400" />
+                <span>{clientNameParam ? `Seleção Exclusiva para ${clientNameParam}` : 'Curadoria Exclusiva de Imóveis'}</span>
+              </div>
 
-          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
-            Encontre o Imóvel Perfeito para Você
-          </h2>
+              <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+                {clientNameParam ? `Imóveis Selecionados para ${clientNameParam}` : 'Seleção Personalizada de Imóveis'}
+              </h2>
 
-          <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
-            Explore nossa seleção completa de casas, apartamentos e lançamentos atualizados em tempo real com fotos de alta qualidade e atendimento direto.
-          </p>
+              <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto">
+                {broker?.displayName
+                  ? `Curadoria especial preparada por ${broker.displayName} da ${tenant?.name || 'nossa equipe'} com as oportunidades mais compatíveis com o seu perfil.`
+                  : 'Reunimos aqui as melhores oportunidades selecionadas a dedo para atender às suas preferências e estilo de vida.'}
+              </p>
+
+              <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newParams = new URLSearchParams(searchParams.toString());
+                    newParams.delete('ids');
+                    newParams.delete('imoveis');
+                    newParams.delete('cliente');
+                    newParams.delete('client');
+                    router.push(`/vitrine?${newParams.toString()}`);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  title="Ver todo o catálogo da imobiliária"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                  Ver Todo o Catálogo ({properties.length} imóveis)
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Catálogo Oficial de Imóveis</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white">
+                Encontre o Imóvel Perfeito para Você
+              </h2>
+
+              <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
+                Explore nossa seleção completa de casas, apartamentos e lançamentos atualizados em tempo real com fotos de alta qualidade e atendimento direto.
+              </p>
+            </>
+          )}
 
           {/* Search bar inside Hero */}
           <div className="pt-4 max-w-2xl mx-auto">
