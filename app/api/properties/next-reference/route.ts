@@ -34,7 +34,7 @@ export function getPropertyPrefix(type?: string | null): string {
 export async function calculateNextReferenceCode(supabase: any, type: string, activeTenantId?: string | null): Promise<string> {
   const prefix = getPropertyPrefix(type);
 
-  // 1. Consulta inicial otimizada buscando os códigos mais recentes com ordenação decrescente
+  // 1. Consulta inicial dos códigos mais recentes ordenados decrescente
   let orderQuery = supabase
     .from('properties')
     .select('reference_code')
@@ -63,40 +63,58 @@ export async function calculateNextReferenceCode(supabase: any, type: string, ac
     }
   }
 
-  // 2. Varredura paginada completa (ranges de 1000) para garantir precisão absoluta
-  let from = 0;
-  const pageSize = 1000;
-  while (true) {
-    let pageQuery = supabase
-      .from('properties')
-      .select('reference_code')
-      .ilike('reference_code', `${prefix}%`)
-      .range(from, from + pageSize - 1);
+  // 2. Verifica a contagem total de imóveis para este prefixo
+  let countQuery = supabase
+    .from('properties')
+    .select('*', { count: 'exact', head: true })
+    .ilike('reference_code', `${prefix}%`);
 
-    if (activeTenantId) {
-      pageQuery = pageQuery.eq('tenant_id', activeTenantId);
+  if (activeTenantId) {
+    countQuery = countQuery.eq('tenant_id', activeTenantId);
+  }
+
+  const { count: totalCount } = await countQuery;
+
+  // Se houver mais de 200 registros, executa varredura em paralelo (blocos de 1000)
+  // para garantir que nenhuma numeração escape (ex: ordenação alfabética com dígitos diferentes)
+  if (totalCount && totalCount > 200) {
+    const pageSize = 1000;
+    const pageCount = Math.ceil(totalCount / pageSize);
+    const pageQueries = [];
+
+    for (let i = 0; i < pageCount; i++) {
+      let pq = supabase
+        .from('properties')
+        .select('reference_code')
+        .ilike('reference_code', `${prefix}%`)
+        .range(i * pageSize, (i + 1) * pageSize - 1);
+
+      if (activeTenantId) {
+        pq = pq.eq('tenant_id', activeTenantId);
+      }
+      pageQueries.push(pq);
     }
 
-    const { data: pageRows, error: pageErr } = await pageQuery;
-    if (pageErr || !pageRows || pageRows.length === 0) break;
-
-    for (const p of pageRows) {
-      if (p.reference_code) {
-        const match = p.reference_code.match(/^[A-Za-z]+(\d+)$/);
-        if (match) {
-          const parsed = parseInt(match[1], 10);
-          if (!isNaN(parsed) && parsed > maxNum) {
-            maxNum = parsed;
+    const pageResults = await Promise.all(pageQueries);
+    for (const res of pageResults) {
+      if (res.data && Array.isArray(res.data)) {
+        for (const p of res.data) {
+          if (p.reference_code) {
+            const match = p.reference_code.match(/^[A-Za-z]+(\d+)$/);
+            if (match) {
+              const parsed = parseInt(match[1], 10);
+              if (!isNaN(parsed) && parsed > maxNum) {
+                maxNum = parsed;
+              }
+            }
           }
         }
       }
     }
-
-    if (pageRows.length < pageSize) break;
-    from += pageSize;
   }
 
-  // 3. Incrementa e garante que o código gerado não colida com nenhum existente
+  // 3. Incrementa e garante que o código gerado não colida com nenhum registro existente
+  // CRÍTICO: Usa .limit(1) ao invés de .maybeSingle() para evitar erro PGRST116 se houver duplicidade
   let candidateNum = maxNum + 1;
   let nextCode = `${prefix}${String(candidateNum).padStart(4, '0')}`;
 
@@ -104,14 +122,15 @@ export async function calculateNextReferenceCode(supabase: any, type: string, ac
     let checkQuery = supabase
       .from('properties')
       .select('id')
-      .eq('reference_code', nextCode);
+      .eq('reference_code', nextCode)
+      .limit(1);
 
     if (activeTenantId) {
       checkQuery = checkQuery.eq('tenant_id', activeTenantId);
     }
 
-    const { data: collision } = await checkQuery.maybeSingle();
-    if (!collision) {
+    const { data: collisions } = await checkQuery;
+    if (!collisions || collisions.length === 0) {
       break;
     }
     candidateNum++;

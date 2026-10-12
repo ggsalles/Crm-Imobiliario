@@ -441,15 +441,20 @@ export async function POST(req: NextRequest) {
     if (!finalRefCode) {
       finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);
     } else {
-      // Verifica se o código informado já existe neste tenant
-      const { data: existingRef } = await supabase
+      // Verifica se o código informado já existe neste tenant usando .limit(1)
+      let checkExisting = supabase
         .from('properties')
         .select('id')
         .eq('reference_code', finalRefCode)
-        .eq('tenant_id', resolvedTenantId)
-        .maybeSingle();
+        .limit(1);
 
-      if (existingRef) {
+      if (resolvedTenantId) {
+        checkExisting = checkExisting.eq('tenant_id', resolvedTenantId);
+      }
+
+      const { data: existingRows } = await checkExisting;
+
+      if (existingRows && existingRows.length > 0) {
         // Se já existe e colide, calcula o próximo disponível com incremento correto
         console.warn(`[API/Properties] POST: Código ${finalRefCode} já existente no tenant ${resolvedTenantId}. Gerando próximo sequencial único.`);
         finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);

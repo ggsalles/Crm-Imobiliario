@@ -1,8 +1,9 @@
 "use client";
 
-import { Building2, Hash } from "lucide-react";
+import { Building2, Hash, RefreshCw } from "lucide-react";
 import { Property, Company } from "@/lib/db";
 import { PROPERTY_TYPES_LIST } from "@/lib/property-types";
+import { cn } from "@/lib/utils";
 
 export interface PropertyBasicFieldsProps {
   editingProperty: Property | null;
@@ -130,7 +131,7 @@ export function PropertyBasicFields({
               name="referenceCode"
               value={referenceCode}
               onChange={(e) => onReferenceCodeChange?.(e.target.value.toUpperCase())}
-              placeholder="Ex: AP0001"
+              placeholder={isGeneratingRef ? "Calculando..." : "Ex: AP0001"}
               maxLength={20}
               className="w-full pl-6 pr-12 py-4 bg-amber-500/5 border-2 border-amber-400/40 rounded-2xl text-sm font-black tracking-wider uppercase focus:ring-2 focus:ring-amber-500/30 transition-all outline-none text-amber-700 dark:text-amber-300 placeholder:text-muted-foreground font-mono"
             />
@@ -139,10 +140,10 @@ export function PropertyBasicFields({
                 type="button"
                 onClick={onAutoGenerateRef}
                 disabled={isGeneratingRef}
-                className="absolute right-3 p-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-800 dark:text-amber-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                className="absolute right-3 p-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-800 dark:text-amber-300 transition-all cursor-pointer disabled:opacity-50"
                 title="Recalcular próximo código sequencial deste tipo"
               >
-                {isGeneratingRef ? "..." : "🔄"}
+                <RefreshCw className={cn("w-4 h-4", isGeneratingRef && "animate-spin text-amber-600")} />
               </button>
             )}
           </div>
