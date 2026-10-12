@@ -12,7 +12,8 @@ import {
   createDeal, 
   createTimelineEvent,
   subscribeToCompanies,
-  getProperty
+  getProperty,
+  apiFetch
 } from "@/lib/db";
 import { 
   cn, 
@@ -91,12 +92,11 @@ export function PropertyForm({
   const fetchNextRef = useCallback(async (typeToUse: string) => {
     setIsGeneratingRef(true);
     try {
-      const res = await fetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}`);
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data?.nextCode) {
-          setReferenceCode(data.nextCode);
-        }
+      const data = await apiFetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}&t=${Date.now()}`, {
+        bypassCache: true
+      });
+      if (data?.nextCode) {
+        setReferenceCode(data.nextCode);
       }
     } catch (err) {
       console.warn("Erro ao buscar próxima referência:", err);

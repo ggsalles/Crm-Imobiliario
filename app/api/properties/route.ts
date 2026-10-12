@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
 import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
+import { calculateNextReferenceCode } from '@/app/api/properties/next-reference/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -435,7 +436,28 @@ export async function POST(req: NextRequest) {
       delete sanitized.ownerId;
     }
 
-    console.log("[API/Properties] POST: Inserindo na tabela 'properties'...");
+    // Validação e auto-resolução de colisão do Código de Referência (garante unicidade absoluta)
+    let finalRefCode = (sanitized.reference_code ? String(sanitized.reference_code).trim().toUpperCase() : '');
+    if (!finalRefCode) {
+      finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);
+    } else {
+      // Verifica se o código informado já existe neste tenant
+      const { data: existingRef } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('reference_code', finalRefCode)
+        .eq('tenant_id', resolvedTenantId)
+        .maybeSingle();
+
+      if (existingRef) {
+        // Se já existe e colide, calcula o próximo disponível com incremento correto
+        console.warn(`[API/Properties] POST: Código ${finalRefCode} já existente no tenant ${resolvedTenantId}. Gerando próximo sequencial único.`);
+        finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);
+      }
+    }
+    sanitized.reference_code = finalRefCode;
+
+    console.log("[API/Properties] POST: Inserindo na tabela 'properties' com código de referência:", finalRefCode);
     let { data: result, error } = await supabase
       .from('properties')
       .insert([sanitized])
