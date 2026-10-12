@@ -2,12 +2,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeJsonParse } from './safe-storage';
 
+import * as os from 'os';
+
 export interface SecurityKeywordsStore {
   keywordsByUserId: Record<string, string>;
   keywordsByEmail: Record<string, string>;
 }
 
-const KEYWORDS_STORE_PATH = path.join(process.cwd(), 'security_keywords.json');
+function getKeywordsStoreFilePath(): string {
+  try {
+    const cwdPath = path.join(process.cwd(), 'security_keywords.json');
+    if (fs.existsSync(cwdPath)) return cwdPath;
+  } catch {
+    // ignore
+  }
+  return path.join(os.tmpdir(), 'security_keywords.json');
+}
 
 const DEFAULT_STORE: SecurityKeywordsStore = {
   keywordsByUserId: {},
@@ -16,8 +26,9 @@ const DEFAULT_STORE: SecurityKeywordsStore = {
 
 export function getSecurityKeywordsStore(): SecurityKeywordsStore {
   try {
-    if (fs.existsSync(KEYWORDS_STORE_PATH)) {
-      const content = fs.readFileSync(KEYWORDS_STORE_PATH, 'utf-8');
+    const filePath = getKeywordsStoreFilePath();
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
       const parsed = safeJsonParse<any>(content);
       if (parsed) {
         return {
@@ -26,17 +37,18 @@ export function getSecurityKeywordsStore(): SecurityKeywordsStore {
         };
       }
     }
-  } catch (err) {
-    console.error('[SecurityKeywords] Error reading security_keywords.json:', err);
+  } catch {
+    // Non-fatal
   }
   return { ...DEFAULT_STORE };
 }
 
 export function saveSecurityKeywordsStore(store: SecurityKeywordsStore): void {
   try {
-    fs.writeFileSync(KEYWORDS_STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('[SecurityKeywords] Error writing security_keywords.json:', err);
+    const tmpPath = path.join(os.tmpdir(), 'security_keywords.json');
+    fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2), 'utf-8');
+  } catch {
+    // Non-fatal in read-only lambdas
   }
 }
 

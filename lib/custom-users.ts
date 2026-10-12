@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeJsonParse } from './safe-storage';
 
+import * as os from 'os';
+
 export interface CustomUserProfile {
   id: string;
   display_name: string;
@@ -20,28 +22,38 @@ export interface CustomUserProfile {
   updated_at: string;
 }
 
-const CUSTOM_USERS_FILE = path.join(process.cwd(), 'custom_users.json');
+function getCustomUsersFilePath(): string {
+  try {
+    const cwdPath = path.join(process.cwd(), 'custom_users.json');
+    if (fs.existsSync(cwdPath)) return cwdPath;
+  } catch {
+    // ignore
+  }
+  return path.join(os.tmpdir(), 'custom_users.json');
+}
 
 export function getCustomUsersStore(): CustomUserProfile[] {
   try {
-    if (fs.existsSync(CUSTOM_USERS_FILE)) {
-      const content = fs.readFileSync(CUSTOM_USERS_FILE, 'utf-8');
+    const filePath = getCustomUsersFilePath();
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
       const parsed = safeJsonParse<any>(content);
       if (Array.isArray(parsed)) {
         return parsed;
       }
     }
-  } catch (err) {
-    console.error('[CustomUsers] Error reading custom_users.json:', err);
+  } catch {
+    // Non-fatal
   }
   return [];
 }
 
 export function saveCustomUsersStore(users: CustomUserProfile[]): void {
   try {
-    fs.writeFileSync(CUSTOM_USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('[CustomUsers] Error writing custom_users.json:', err);
+    const tmpPath = path.join(os.tmpdir(), 'custom_users.json');
+    fs.writeFileSync(tmpPath, JSON.stringify(users, null, 2), 'utf-8');
+  } catch {
+    // Non-fatal in read-only lambdas
   }
 }
 

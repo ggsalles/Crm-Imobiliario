@@ -18,12 +18,23 @@ function getSupabaseAdmin() {
   });
 }
 
+import * as os from 'os';
+
 export * from './billing-types';
 import { SaaSAdminConfig } from './billing-types';
 import { safeJsonParse } from './safe-storage';
 
 const RESERVED_CONFIG_TENANT_ID = '99999999-9999-9999-9999-999999999999';
-const CACHE_FILE_PATH = path.join(process.cwd(), 'blocked_tenants.json');
+
+function getCacheFilePath(): string {
+  try {
+    const cwdPath = path.join(process.cwd(), 'blocked_tenants.json');
+    if (fs.existsSync(cwdPath)) return cwdPath;
+  } catch {
+    // ignore
+  }
+  return path.join(os.tmpdir(), 'blocked_tenants.json');
+}
 
 // Default initial config
 const DEFAULT_CONFIG: SaaSAdminConfig = {
@@ -40,8 +51,9 @@ const DEFAULT_CONFIG: SaaSAdminConfig = {
 // Safe filesystem read
 function readConfigFromFile(): SaaSAdminConfig {
   try {
-    if (fs.existsSync(CACHE_FILE_PATH)) {
-      const txt = fs.readFileSync(CACHE_FILE_PATH, 'utf-8');
+    const filePath = getCacheFilePath();
+    if (fs.existsSync(filePath)) {
+      const txt = fs.readFileSync(filePath, 'utf-8');
       const data = safeJsonParse(txt);
       if (data && Array.isArray(data.blockedTenantIds)) {
         if (!Array.isArray(data.unlockedTenantIds)) {
@@ -58,18 +70,19 @@ function readConfigFromFile(): SaaSAdminConfig {
         };
       }
     }
-  } catch (err) {
-    console.error('[Billing UI] Error reading file config:', err);
+  } catch {
+    // In serverless environments, file reading might fail silently
   }
   return { ...DEFAULT_CONFIG };
 }
 
-// Safe filesystem write
+// Safe filesystem write (never crashes on serverless read-only filesystems)
 function writeConfigToFile(config: SaaSAdminConfig) {
   try {
-    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(config, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('[Billing UI] Error writing file config:', err);
+    const tmpPath = path.join(os.tmpdir(), 'blocked_tenants.json');
+    fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2), 'utf-8');
+  } catch {
+    // In read-only serverless lambdas (e.g. Vercel), disk writes are strictly non-fatal
   }
 }
 

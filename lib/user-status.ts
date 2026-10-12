@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { safeJsonParse } from './safe-storage';
 
+import * as os from 'os';
+
 export interface InactiveUserDetails {
   inactive: boolean;
   reason?: string;
@@ -14,7 +16,15 @@ export interface InactiveUsersStore {
   details: Record<string, InactiveUserDetails>;
 }
 
-const INACTIVE_STORE_PATH = path.join(process.cwd(), 'inactive_users.json');
+function getInactiveStoreFilePath(): string {
+  try {
+    const cwdPath = path.join(process.cwd(), 'inactive_users.json');
+    if (fs.existsSync(cwdPath)) return cwdPath;
+  } catch {
+    // ignore
+  }
+  return path.join(os.tmpdir(), 'inactive_users.json');
+}
 
 const DEFAULT_STORE: InactiveUsersStore = {
   inactiveUserIds: [],
@@ -23,8 +33,9 @@ const DEFAULT_STORE: InactiveUsersStore = {
 
 export function getInactiveUsersStore(): InactiveUsersStore {
   try {
-    if (fs.existsSync(INACTIVE_STORE_PATH)) {
-      const content = fs.readFileSync(INACTIVE_STORE_PATH, 'utf-8');
+    const filePath = getInactiveStoreFilePath();
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8');
       const parsed = safeJsonParse<any>(content);
       if (parsed && Array.isArray(parsed.inactiveUserIds)) {
         return {
@@ -33,17 +44,18 @@ export function getInactiveUsersStore(): InactiveUsersStore {
         };
       }
     }
-  } catch (err) {
-    console.error('[UserStatus] Error reading inactive_users.json:', err);
+  } catch {
+    // Non-fatal
   }
   return { ...DEFAULT_STORE };
 }
 
 export function saveInactiveUsersStore(store: InactiveUsersStore): void {
   try {
-    fs.writeFileSync(INACTIVE_STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('[UserStatus] Error writing inactive_users.json:', err);
+    const tmpPath = path.join(os.tmpdir(), 'inactive_users.json');
+    fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2), 'utf-8');
+  } catch {
+    // Non-fatal in read-only lambdas
   }
 }
 
