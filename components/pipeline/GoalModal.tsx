@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, memo } from "react";
 import { X, Sparkles, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PIPELINE_STAGES } from "@/lib/constants";
-import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
 
 export interface GoalModalProps {
   isOpen: boolean;
@@ -133,9 +133,16 @@ export const GoalModal = memo(function GoalModal({
                     onChange={(e) =>
                       setDisplayGoals((prev) => ({
                         ...prev,
-                        [stage.id]: formatCurrencyBRL(e.target.value),
+                        [stage.id]: formatCurrencyInput(e.target.value),
                       }))
                     }
+                    onFocus={(e) => {
+                      if (!displayGoals[stage.id] || displayGoals[stage.id] === "R$ 0,00") {
+                        setDisplayGoals((prev) => ({ ...prev, [stage.id]: "" }));
+                      } else {
+                        e.target.select();
+                      }
+                    }}
                     placeholder="R$ 0,00"
                     className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />

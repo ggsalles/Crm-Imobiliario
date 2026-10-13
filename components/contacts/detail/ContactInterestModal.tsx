@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "motion/react";
 import { Compass, X, Check, Loader2 } from "lucide-react";
-import { formatCurrencyBRL } from "@/lib/utils";
+import { formatCurrencyBRL, formatCurrencyInput } from "@/lib/utils";
 import { PROPERTY_TYPES_LIST } from "@/lib/property-types";
 
 interface ContactInterestModalProps {
@@ -71,7 +71,14 @@ export function ContactInterestModal({
                   type="text"
                   placeholder="R$ 0,00"
                   value={formMaxPrice}
-                  onChange={(e) => setFormMaxPrice(formatCurrencyBRL(e.target.value))}
+                  onChange={(e) => setFormMaxPrice(formatCurrencyInput(e.target.value))}
+                  onFocus={(e) => {
+                    if (!formMaxPrice || formMaxPrice === "R$ 0,00") {
+                      setFormMaxPrice("");
+                    } else {
+                      e.target.select();
+                    }
+                  }}
                   className="w-full px-5 py-4 rounded-2xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-sm font-bold"
                 />
               </div>

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Property, Contact, createDeal } from "@/lib/db";
 import { STAGES } from "@/lib/constants";
-import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -256,7 +256,14 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
                   required
                   type="text"
                   value={dealValueDisplay}
-                  onChange={(e) => setDealValueDisplay(e.target.value)}
+                  onChange={(e) => setDealValueDisplay(formatCurrencyInput(e.target.value))}
+                  onFocus={(e) => {
+                    if (!dealValueDisplay || dealValueDisplay === "R$ 0,00") {
+                      setDealValueDisplay("");
+                    } else {
+                      e.target.select();
+                    }
+                  }}
                   placeholder="R$ 0,00"
                   className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none font-mono transition-all"
                 />

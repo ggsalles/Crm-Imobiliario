@@ -15,12 +15,32 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.57";
-export const APP_VERSION_CODE = 257;
-export const APP_VERSION_DATE = "08/10/2026";
-export const APP_VERSION_TITLE = "Auditoria & Blindagem da Central de Mensagens & Chat (Módulo 7 - CRUD 100% Confiável & Otimização de Egress Supabase)";
+export const APP_VERSION = "v2.58";
+export const APP_VERSION_CODE = 258;
+export const APP_VERSION_DATE = "13/10/2026";
+export const APP_VERSION_TITLE = "Correção da Máscara e Digitação de Valores Monetários nos Modais e Filtros";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.58",
+    releaseDate: "13/10/2026",
+    title: "Correção da Máscara e Digitação de Valores Monetários nos Modais e Filtros",
+    type: "patch",
+    highlights: [
+      "Substituição de formatações estáticas por formatCurrencyInput dinâmica com máscara fluida nos campos de moeda",
+      "Suporte a seleção completa de texto ao focar (e.target.select()), permitindo apagar ou reescrever valores de uma vez",
+      "Correção definitiva no modal de Filtros de Perfil de Interesse do cliente (Orçamento Máximo)",
+      "Correção unificada nos modais de Metas de Venda, Simulador de Metas e Proposta Rápida a partir de Imóvel"
+    ],
+    improvements: [
+      "Fluidez e precisão no preenchimento de orçamentos e propostas comerciais em R$",
+      "Limpeza automática de valores zerados no foco para evitar digitação com zeros à esquerda"
+    ],
+    fixes: [
+      "Correção do bug que impedia o usuário de digitar ou alterar o valor no modal 'Filtros de Perfil de Interesse' (Orçamento Máximo)",
+      "Correção do bloqueio de digitação no modal de Metas e Simulador de Metas do Pipeline"
+    ]
+  },
   {
     version: "v2.57",
     releaseDate: "08/10/2026",

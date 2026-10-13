@@ -391,6 +391,13 @@ export function PropertyFilterBar({
                       placeholder="Valor mínimo (R$)"
                       value={displayMinPrice}
                       onChange={(e) => setDisplayMinPrice(formatCurrencyInput(e.target.value))}
+                      onFocus={(e) => {
+                        if (!displayMinPrice || displayMinPrice === "R$ 0,00") {
+                          setDisplayMinPrice("");
+                        } else {
+                          e.target.select();
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                     />
                     <input
@@ -398,6 +405,13 @@ export function PropertyFilterBar({
                       placeholder="Valor máximo (R$)"
                       value={displayMaxPrice}
                       onChange={(e) => setDisplayMaxPrice(formatCurrencyInput(e.target.value))}
+                      onFocus={(e) => {
+                        if (!displayMaxPrice || displayMaxPrice === "R$ 0,00") {
+                          setDisplayMaxPrice("");
+                        } else {
+                          e.target.select();
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-background border border-border rounded-xl text-xs font-bold text-foreground placeholder:font-normal focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                     />
                   </div>

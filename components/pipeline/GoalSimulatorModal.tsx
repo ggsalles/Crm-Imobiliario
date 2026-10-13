@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PIPELINE_STAGES } from "@/lib/constants";
-import { formatCurrencyBRL, parseCurrencyBRLToNumber } from "@/lib/utils";
+import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
 import { safeSetJson, saveTenantPipelineProbabilities } from "@/lib/safe-storage";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -308,7 +308,14 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                         <input
                           type="text"
                           value={salesTargetInput}
-                          onChange={(e) => setSalesTargetInput(formatCurrencyBRL(e.target.value))}
+                          onChange={(e) => setSalesTargetInput(formatCurrencyInput(e.target.value))}
+                          onFocus={(e) => {
+                            if (!salesTargetInput || salesTargetInput === "R$ 0,00") {
+                              setSalesTargetInput("");
+                            } else {
+                              e.target.select();
+                            }
+                          }}
                           placeholder="R$ 1.000.000,00"
                           className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl font-bold text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                         />
@@ -322,7 +329,14 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                         <input
                           type="text"
                           value={commissionTargetInput}
-                          onChange={(e) => setCommissionTargetInput(formatCurrencyBRL(e.target.value))}
+                          onChange={(e) => setCommissionTargetInput(formatCurrencyInput(e.target.value))}
+                          onFocus={(e) => {
+                            if (!commissionTargetInput || commissionTargetInput === "R$ 0,00") {
+                              setCommissionTargetInput("");
+                            } else {
+                              e.target.select();
+                            }
+                          }}
                           placeholder="R$ 30.000,00"
                           className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl font-bold text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                         />
@@ -354,7 +368,14 @@ export const GoalSimulatorModal = memo(function GoalSimulatorModal({
                     <input
                       type="text"
                       value={avgTicketInput}
-                      onChange={(e) => setAvgTicketInput(formatCurrencyBRL(e.target.value))}
+                      onChange={(e) => setAvgTicketInput(formatCurrencyInput(e.target.value))}
+                      onFocus={(e) => {
+                        if (!avgTicketInput || avgTicketInput === "R$ 0,00") {
+                          setAvgTicketInput("");
+                        } else {
+                          e.target.select();
+                        }
+                      }}
                       placeholder="R$ 500.000,00"
                       className="w-full px-3 py-2 bg-card border border-border rounded-xl font-bold text-xs sm:text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                     />
