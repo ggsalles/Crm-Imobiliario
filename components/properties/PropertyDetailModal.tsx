@@ -73,6 +73,11 @@ export function PropertyDetailModal({
     setImgError(false);
   }, [activeProperty?.id, isOpen]);
 
+  // Reseta erro ao alternar fotos
+  useEffect(() => {
+    setImgError(false);
+  }, [activeImageIndex]);
+
   // Safely extract and normalize images array from any input format
   const images = useMemo(() => {
     if (!activeProperty) return [FALLBACK_IMAGE];

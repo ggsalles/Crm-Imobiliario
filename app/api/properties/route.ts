@@ -153,17 +153,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Fetch images for this property
-      const { data: images, error: imagesError } = await supabase
-        .from('property_images')
-        .select('url')
-        .eq('property_id', id);
-
-      if (imagesError) {
-        console.warn("[API/Properties] Erro ao carregar fotos da tabela property_images:", imagesError);
-      }
-
-      let dbUrls: string[] = (images || []).map((img: any) => String(img.url));
+      // Prioridade máxima para property.image_url (lista oficial de fotos sincronizadas e renovadas)
       let propUrls: string[] = [];
       if (property.image_url) {
         try {
@@ -173,7 +163,23 @@ export async function GET(req: NextRequest) {
           propUrls = [String(property.image_url)];
         }
       }
-      const urls: string[] = Array.from(new Set([...dbUrls, ...propUrls].filter((u: string) => typeof u === 'string' && u.trim().length > 0)));
+
+      propUrls = propUrls.filter((u: string) => typeof u === 'string' && u.trim().length > 0 && u.startsWith('http'));
+
+      let finalUrls: string[] = propUrls;
+
+      // Fallback: se por algum motivo property.image_url estiver vazio, busca em property_images
+      if (finalUrls.length === 0) {
+        const { data: images } = await supabase
+          .from('property_images')
+          .select('url')
+          .eq('property_id', id);
+        finalUrls = (images || [])
+          .map((img: any) => String(img.url))
+          .filter((u: string) => typeof u === 'string' && u.trim().length > 0 && u.startsWith('http'));
+      }
+
+      const urls: string[] = Array.from(new Set(finalUrls));
 
       return NextResponse.json(formatPropertyDbRow(property, urls, isPublic), { headers: NO_CACHE_HEADERS });
     }
