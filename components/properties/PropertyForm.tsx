@@ -927,6 +927,15 @@ export function PropertyForm({
                   onRemoveImage={(idx) =>
                     setImageUrls((prev) => prev.filter((_, i) => i !== idx))
                   }
+                  onBatchRemoveImages={(indices) => {
+                    const indexSet = new Set(indices);
+                    setImageUrls((prev) => prev.filter((_, i) => !indexSet.has(i)));
+                    toast.success(
+                      indices.length === 1 
+                        ? "Foto removida com sucesso!" 
+                        : `${indices.length} fotos removidas com sucesso!`
+                    );
+                  }}
                   onSetCoverImage={(idx) => {
                     setImageUrls((prev) => {
                       const newArr = [...prev];
