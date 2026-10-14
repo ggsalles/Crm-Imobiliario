@@ -33,3 +33,9 @@ Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
+
+# Backups and large files (keep Vercel functions storage minimal)
+/backups/
+*.bak
+*.xml
+*.json.bak

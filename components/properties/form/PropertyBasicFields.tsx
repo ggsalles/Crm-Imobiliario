@@ -1,8 +1,9 @@
 "use client";
 
-import { Building2, Hash, RefreshCw } from "lucide-react";
+import { Building2, Hash, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { Property, Company } from "@/lib/db";
 import { PROPERTY_TYPES_LIST } from "@/lib/property-types";
+import { OFFICIAL_PREFIX_MAP } from "@/lib/reference-codes";
 import { cn } from "@/lib/utils";
 
 export interface PropertyBasicFieldsProps {
@@ -20,6 +21,12 @@ export interface PropertyBasicFieldsProps {
   onTypeChange?: (value: string) => void;
   isGeneratingRef?: boolean;
   onAutoGenerateRef?: () => void;
+  refConflict?: { id: string; title: string; referenceCode: string } | null;
+  refError?: string | null;
+  refWarning?: string | null;
+  refSuggestion?: string | null;
+  isCheckingRef?: boolean;
+  onApplySuggestion?: (sug: string) => void;
 }
 
 export function PropertyBasicFields({
@@ -37,6 +44,12 @@ export function PropertyBasicFields({
   onTypeChange,
   isGeneratingRef = false,
   onAutoGenerateRef,
+  refConflict = null,
+  refError = null,
+  refWarning = null,
+  refSuggestion = null,
+  isCheckingRef = false,
+  onApplySuggestion,
 }: PropertyBasicFieldsProps) {
   return (
     <>
@@ -118,22 +131,60 @@ export function PropertyBasicFields({
         </div>
 
         {/* Código de Referência Sequencial */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1 h-5 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Hash className="w-3 h-3 text-amber-500" />
+              <Hash className={cn(
+                "w-3 h-3",
+                (refError || refConflict) ? "text-rose-500" : (refWarning ? "text-amber-500" : "text-amber-500")
+              )} />
               Código de Referência
             </span>
-            <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">auto-gerado</span>
+            <div className="flex items-center gap-2">
+              {isCheckingRef && (
+                <span className="text-[9px] font-semibold text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" /> verificando...
+                </span>
+              )}
+              {refError ? (
+                <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> formato inválido
+                </span>
+              ) : refConflict ? (
+                <span className="text-[9px] font-bold text-rose-500 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> duplicado
+                </span>
+              ) : refWarning ? (
+                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> atenção à sigla
+                </span>
+              ) : referenceCode && !isCheckingRef ? (
+                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> sigla e formato válidos
+                </span>
+              ) : (
+                <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400">auto-gerado</span>
+              )}
+            </div>
           </label>
           <div className="relative flex items-center">
             <input
               name="referenceCode"
               value={referenceCode}
-              onChange={(e) => onReferenceCodeChange?.(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\s+/g, '').replace(/-/g, '').toUpperCase();
+                onReferenceCodeChange?.(val);
+              }}
               placeholder={isGeneratingRef ? "Calculando..." : "Ex: AP0001"}
               maxLength={20}
-              className="w-full pl-6 pr-12 py-4 bg-amber-500/5 border-2 border-amber-400/40 rounded-2xl text-sm font-black tracking-wider uppercase focus:ring-2 focus:ring-amber-500/30 transition-all outline-none text-amber-700 dark:text-amber-300 placeholder:text-muted-foreground font-mono"
+              className={cn(
+                "w-full pl-6 pr-12 py-4 border-2 rounded-2xl text-sm font-black tracking-wider uppercase transition-all outline-none font-mono",
+                (refError || refConflict)
+                  ? "bg-rose-500/10 border-rose-500 text-rose-700 dark:text-rose-300 focus:ring-2 focus:ring-rose-500/30"
+                  : (refWarning
+                      ? "bg-amber-500/10 border-amber-500 text-amber-800 dark:text-amber-200 focus:ring-2 focus:ring-amber-500/30"
+                      : "bg-amber-500/5 border-amber-400/40 text-amber-700 dark:text-amber-300 focus:ring-2 focus:ring-amber-500/30 placeholder:text-muted-foreground")
+              )}
             />
             {onAutoGenerateRef && !editingProperty && (
               <button
@@ -147,6 +198,50 @@ export function PropertyBasicFields({
               </button>
             )}
           </div>
+
+          {/* Erro de Formato ou Sigla Desconhecida */}
+          {refError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl space-y-2 text-[11px] font-semibold text-rose-600 dark:text-rose-400 animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-500" />
+                <div className="flex-1 leading-relaxed">
+                  {refError}
+                </div>
+              </div>
+              {refSuggestion && onApplySuggestion && (
+                <div className="pt-1 pl-6">
+                  <button
+                    type="button"
+                    onClick={() => onApplySuggestion(refSuggestion)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold shadow-sm transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Corrigir automaticamente para: <span className="font-mono">{refSuggestion}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Erro de Código Duplicado */}
+          {!refError && refConflict && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/25 rounded-xl flex items-start gap-2 text-[11px] font-semibold text-rose-600 dark:text-rose-400 animate-in fade-in slide-in-from-top-1">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-rose-500" />
+              <div className="leading-relaxed">
+                O código <strong>{referenceCode}</strong> já pertence ao imóvel: <span className="underline italic">&quot;{refConflict.title}&quot;</span>. Digite outro número ou clique no ícone para gerar automaticamente.
+              </div>
+            </div>
+          )}
+
+          {/* Alerta de Divergência Sigla x Tipo Selecionado */}
+          {!refError && !refConflict && refWarning && (
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl flex items-start gap-2 text-[11px] font-medium text-amber-700 dark:text-amber-300 animate-in fade-in slide-in-from-top-1">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />
+              <div className="leading-relaxed">
+                {refWarning}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

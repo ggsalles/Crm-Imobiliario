@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase, getAuthenticatedUser, getActiveTenantId } from '@/lib/server-auth';
 import { DEFAULT_TENANT_ID, isPlatformAdmin } from '@/lib/constants';
 import { calculateNextReferenceCode } from '@/app/api/properties/next-reference/route';
+import { validateReferenceCodeStructure, normalizeReferenceCode } from '@/lib/reference-codes';
 
 export const dynamic = 'force-dynamic';
 
@@ -442,15 +443,25 @@ export async function POST(req: NextRequest) {
       delete sanitized.ownerId;
     }
 
-    // Validação e auto-resolução de colisão do Código de Referência (garante unicidade absoluta)
-    let finalRefCode = (sanitized.reference_code ? String(sanitized.reference_code).trim().toUpperCase() : '');
+    // Validação estrita de Sigla Oficial, Formato e Unicidade do Código de Referência
+    let finalRefCode = normalizeReferenceCode(sanitized.reference_code);
     if (!finalRefCode) {
       finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);
     } else {
-      // Verifica se o código informado já existe neste tenant usando .limit(1)
+      // 1. Validação de formato e sigla existente no catálogo
+      const structValidation = validateReferenceCodeStructure(finalRefCode, sanitized.type);
+      if (!structValidation.isValid) {
+        return NextResponse.json({
+          error: structValidation.error,
+          code: 'INVALID_REFERENCE_CODE',
+          suggestion: structValidation.suggestion
+        }, { status: 400 });
+      }
+
+      // 2. Verifica se o código informado já existe neste tenant
       let checkExisting = supabase
         .from('properties')
-        .select('id')
+        .select('id, title, reference_code')
         .eq('reference_code', finalRefCode)
         .limit(1);
 
@@ -461,9 +472,17 @@ export async function POST(req: NextRequest) {
       const { data: existingRows } = await checkExisting;
 
       if (existingRows && existingRows.length > 0) {
-        // Se já existe e colide, calcula o próximo disponível com incremento correto
-        console.warn(`[API/Properties] POST: Código ${finalRefCode} já existente no tenant ${resolvedTenantId}. Gerando próximo sequencial único.`);
-        finalRefCode = await calculateNextReferenceCode(supabase, sanitized.type || 'apartamento', resolvedTenantId);
+        const existingProp = existingRows[0];
+        console.warn(`[API/Properties] POST: Código ${finalRefCode} já em uso no tenant ${resolvedTenantId}. Bloqueando cadastro.`);
+        return NextResponse.json({
+          error: `O código de referência "${finalRefCode}" já está em uso pelo imóvel "${existingProp.title || 'Sem título'}". Por favor, informe outro código de referência ou deixe em branco para gerar o próximo automaticamente.`,
+          code: 'DUPLICATE_REFERENCE_CODE',
+          conflictingProperty: {
+            id: existingProp.id,
+            title: existingProp.title,
+            referenceCode: existingProp.reference_code
+          }
+        }, { status: 409 });
       }
     }
     sanitized.reference_code = finalRefCode;
@@ -670,8 +689,49 @@ export async function PATCH(req: NextRequest) {
       sanitized.company_id = sanitized.companyId || null;
       delete sanitized.companyId;
     }
-    if ('referenceCode' in sanitized) {
-      sanitized.reference_code = sanitized.referenceCode;
+    if ('referenceCode' in sanitized || 'reference_code' in sanitized) {
+      const rawRef = sanitized.referenceCode || sanitized.reference_code;
+      if (rawRef && String(rawRef).trim()) {
+        const cleanRef = normalizeReferenceCode(rawRef);
+
+        // 1. Validação estrita de formato e sigla oficial
+        const structValidation = validateReferenceCodeStructure(cleanRef, sanitized.type);
+        if (!structValidation.isValid) {
+          return NextResponse.json({
+            error: structValidation.error,
+            code: 'INVALID_REFERENCE_CODE',
+            suggestion: structValidation.suggestion
+          }, { status: 400 });
+        }
+
+        sanitized.reference_code = cleanRef;
+
+        // 2. Validação de unicidade (garante que outro imóvel não esteja usando esse código)
+        let checkPatch = supabase
+          .from('properties')
+          .select('id, title, reference_code')
+          .eq('reference_code', cleanRef)
+          .neq('id', id)
+          .limit(1);
+
+        if (resolvedTenantId) {
+          checkPatch = checkPatch.eq('tenant_id', resolvedTenantId);
+        }
+
+        const { data: collisionRows } = await checkPatch;
+        if (collisionRows && collisionRows.length > 0) {
+          const conflict = collisionRows[0];
+          return NextResponse.json({
+            error: `O código de referência "${cleanRef}" já está em uso pelo imóvel "${conflict.title || 'Sem título'}". Por favor, informe um código diferente.`,
+            code: 'DUPLICATE_REFERENCE_CODE',
+            conflictingProperty: {
+              id: conflict.id,
+              title: conflict.title,
+              referenceCode: conflict.reference_code
+            }
+          }, { status: 409 });
+        }
+      }
       delete sanitized.referenceCode;
     }
     if ('ownerId' in sanitized) {

@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { applyWatermarkToImage } from "@/lib/watermark";
 
 import { PropertyBasicFields } from "./form/PropertyBasicFields";
+import { validateReferenceCodeStructure, normalizeReferenceCode } from "@/lib/reference-codes";
 import { PropertyLocationFields, AddressData } from "./form/PropertyLocationFields";
 import { PropertyFinancialFields } from "./form/PropertyFinancialFields";
 import { PropertyMediaUploader } from "./form/PropertyMediaUploader";
@@ -87,10 +88,86 @@ export function PropertyForm({
   const [referenceCode, setReferenceCode] = useState("");
   const [selectedType, setSelectedType] = useState("apartamento");
   const [isGeneratingRef, setIsGeneratingRef] = useState(false);
+  const [refConflict, setRefConflict] = useState<{ id: string; title: string; referenceCode: string } | null>(null);
+  const [refError, setRefError] = useState<string | null>(null);
+  const [refWarning, setRefWarning] = useState<string | null>(null);
+  const [refSuggestion, setRefSuggestion] = useState<string | null>(null);
+  const [isCheckingRef, setIsCheckingRef] = useState(false);
+
+  // Validação em tempo real (formato, sigla oficial e duplicidade)
+  useEffect(() => {
+    const cleanCode = normalizeReferenceCode(referenceCode);
+    if (!cleanCode) {
+      setRefConflict(null);
+      setRefError(null);
+      setRefWarning(null);
+      setRefSuggestion(null);
+      setIsCheckingRef(false);
+      return;
+    }
+
+    // 1. Validação local imediata de formato e sigla (0ms de latência)
+    const structCheck = validateReferenceCodeStructure(cleanCode, selectedType);
+    if (!structCheck.isValid) {
+      setRefError(structCheck.error || 'Formato ou sigla inválida.');
+      setRefSuggestion(structCheck.suggestion || null);
+      setRefConflict(null);
+      setRefWarning(null);
+      setIsCheckingRef(false);
+      return;
+    }
+
+    setRefError(null);
+    setRefSuggestion(null);
+    setRefWarning(structCheck.warning || null);
+
+    // Se estiver editando e for a mesma referência do imóvel, não verifica duplicidade
+    if (editingProperty) {
+      const origRef = normalizeReferenceCode(editingProperty.referenceCode || (editingProperty as any).reference_code);
+      if (origRef === cleanCode) {
+        setRefConflict(null);
+        setIsCheckingRef(false);
+        return;
+      }
+    }
+
+    // 2. Consulta debounced de duplicidade no servidor
+    setIsCheckingRef(true);
+    const timer = setTimeout(async () => {
+      try {
+        const excludeParam = editingProperty?.id ? `&excludeId=${editingProperty.id}` : '';
+        const typeParam = selectedType ? `&type=${encodeURIComponent(selectedType)}` : '';
+        const res = await apiFetch(`/api/properties/check-reference?code=${encodeURIComponent(cleanCode)}${excludeParam}${typeParam}&t=${Date.now()}`, {
+          bypassCache: true
+        });
+        if (res && res.available === false) {
+          if (res.conflict) {
+            setRefConflict(res.conflict);
+          } else if (res.error) {
+            setRefError(res.error);
+            setRefSuggestion(res.suggestion || null);
+          }
+        } else {
+          setRefConflict(null);
+          if (res?.warning) setRefWarning(res.warning);
+        }
+      } catch (e) {
+        console.warn("Erro ao checar código de referência:", e);
+      } finally {
+        setIsCheckingRef(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [referenceCode, selectedType, editingProperty]);
 
   // Busca automática do próximo código sequencial para o tipo selecionado
   const fetchNextRef = useCallback(async (typeToUse: string) => {
     setIsGeneratingRef(true);
+    setRefConflict(null);
+    setRefError(null);
+    setRefWarning(null);
+    setRefSuggestion(null);
     try {
       const data = await apiFetch(`/api/properties/next-reference?type=${encodeURIComponent(typeToUse)}&t=${Date.now()}`, {
         bypassCache: true
@@ -527,11 +604,51 @@ export function PropertyForm({
         )
         .map((u) => String(u).trim());
 
+      const cleanRefCode = normalizeReferenceCode(formData.get("referenceCode") || referenceCode);
+
+      if (cleanRefCode) {
+        // Validação estrita de formato e sigla oficial antes de enviar
+        const structCheck = validateReferenceCodeStructure(cleanRefCode, selectedType);
+        if (!structCheck.isValid) {
+          clearTimeout(uiTimeoutId);
+          setIsSaving(false);
+          toast.error(structCheck.error || 'Código de referência inválido.');
+          return;
+        }
+
+        if (refConflict) {
+          clearTimeout(uiTimeoutId);
+          setIsSaving(false);
+          toast.error(`O código de referência "${cleanRefCode}" já está em uso pelo imóvel "${refConflict.title}". Escolha outro código ou gere automaticamente.`);
+          return;
+        }
+
+        try {
+          const excludeParam = isEditing && currentPropertyId ? `&excludeId=${currentPropertyId}` : '';
+          const typeParam = selectedType ? `&type=${encodeURIComponent(selectedType)}` : '';
+          const checkRes = await apiFetch(`/api/properties/check-reference?code=${encodeURIComponent(cleanRefCode)}${excludeParam}${typeParam}&t=${Date.now()}`, { bypassCache: true });
+          if (checkRes && checkRes.available === false) {
+            clearTimeout(uiTimeoutId);
+            setIsSaving(false);
+            if (checkRes.conflict) {
+              setRefConflict(checkRes.conflict);
+              toast.error(`O código de referência "${cleanRefCode}" já está em uso pelo imóvel "${checkRes.conflict.title}".`);
+            } else {
+              setRefError(checkRes.error);
+              toast.error(checkRes.error || 'Código de referência ou sigla inválida.');
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn("Erro no check de referência pré-submit:", e);
+        }
+      }
+
       const data: Partial<Property> = {
         title: titleVal.substring(0, 200),
         buildingName: String(formData.get("buildingName") || buildingName || "").trim().substring(0, 200),
         companyId: companyId || String(formData.get("companyId") || "") || undefined,
-        referenceCode: (String(formData.get("referenceCode") || referenceCode || "")).trim().toUpperCase() || undefined,
+        referenceCode: cleanRefCode || undefined,
         type: (selectedType || formData.get("type") || "apartamento") as any,
         status: (formData.get("status") as any) || "disponível",
         price: priceVal,
@@ -719,6 +836,12 @@ export function PropertyForm({
                   onTypeChange={handleTypeChange}
                   isGeneratingRef={isGeneratingRef}
                   onAutoGenerateRef={() => fetchNextRef(selectedType)}
+                  refConflict={refConflict}
+                  refError={refError}
+                  refWarning={refWarning}
+                  refSuggestion={refSuggestion}
+                  isCheckingRef={isCheckingRef}
+                  onApplySuggestion={(sug) => setReferenceCode(sug)}
                 />
 
                 {/* 2. Endereço e Localização */}

@@ -378,7 +378,9 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export const PUT = PATCH;
+export async function PUT(req: NextRequest) {
+  return PATCH(req);
+}
 
 export async function DELETE(req: NextRequest) {
   try {
