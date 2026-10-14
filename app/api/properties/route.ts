@@ -613,7 +613,7 @@ export async function PATCH(req: NextRequest) {
     // 1. Fetch existing property to verify existence and preserve tenant
     const { data: existingProp, error: findError } = await supabase
       .from('properties')
-      .select('id, tenant_id, owner_id')
+      .select('id, tenant_id, owner_id, type, title, reference_code')
       .eq('id', id)
       .maybeSingle();
 
@@ -626,6 +626,8 @@ export async function PATCH(req: NextRequest) {
       console.warn(`[API/Properties] PATCH ID ${id}: Imóvel não encontrado no banco.`);
       return NextResponse.json({ error: "Imóvel não encontrado." }, { status: 404 });
     }
+
+    const resolvedTenantId = existingProp.tenant_id || activeTenantId || DEFAULT_TENANT_ID;
 
     // 2. Permission check:
     if (!isMaster && user?.id) {
@@ -695,7 +697,8 @@ export async function PATCH(req: NextRequest) {
         const cleanRef = normalizeReferenceCode(rawRef);
 
         // 1. Validação estrita de formato e sigla oficial
-        const structValidation = validateReferenceCodeStructure(cleanRef, sanitized.type);
+        const propType = sanitized.type || existingProp.type || 'apartamento';
+        const structValidation = validateReferenceCodeStructure(cleanRef, propType);
         if (!structValidation.isValid) {
           return NextResponse.json({
             error: structValidation.error,
