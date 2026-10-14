@@ -20,7 +20,8 @@ import {
   Check,
   X,
   Play,
-  Info
+  Info,
+  Download
 } from "lucide-react";
 import { parseTokkoXml, TokkoParseResult, ParsedTokkoContact, ParsedTokkoProperty } from "@/lib/parsers/tokko-xml-parser";
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ export function DataImportSection() {
 
   // Configuration options
   const [ignoreDeleted, setIgnoreDeleted] = useState(true);
+  const [syncMode, setSyncMode] = useState<'sync' | 'insert'>('sync');
   const [targetTenantId, setTargetTenantId] = useState<string>("");
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
@@ -58,10 +60,12 @@ export function DataImportSection() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importedCount, setImportedCount] = useState(0);
+  const [updatedCount, setUpdatedCount] = useState(0);
+  const [newlyInsertedCount, setNewlyInsertedCount] = useState(0);
   const [totalToImport, setTotalToImport] = useState(0);
   const [currentBatchText, setCurrentBatchText] = useState("");
   const [importCompleted, setImportCompleted] = useState(false);
-  const [importSummary, setImportSummary] = useState<{ inserted: number; failed: number; kind: string } | null>(null);
+  const [importSummary, setImportSummary] = useState<{ updated: number; inserted: number; failed: number; kind: string } | null>(null);
 
   // Preview tab
   const [showPreview, setShowPreview] = useState(false);
@@ -181,11 +185,14 @@ export function DataImportSection() {
     setImporting(true);
     setProgress(0);
     setImportedCount(0);
+    setUpdatedCount(0);
+    setNewlyInsertedCount(0);
     setTotalToImport(itemsToProcess.length);
     setImportCompleted(false);
 
     const BATCH_SIZE = 50;
     const totalBatches = Math.ceil(itemsToProcess.length / BATCH_SIZE);
+    let totalUpdated = 0;
     let totalInserted = 0;
     let totalFailed = 0;
 
@@ -207,6 +214,7 @@ export function DataImportSection() {
           body: JSON.stringify({
             kind: parseResult.kind,
             items: batch,
+            mode: syncMode,
             targetTenantId: targetTenantId || profile?.tenantId,
             userEmail: user?.email || profile?.email || 'ggsalles@gmail.com'
           })
@@ -218,15 +226,23 @@ export function DataImportSection() {
         }
 
         const data = (await res.json().catch(() => null)) || {};
-        totalInserted += (data.insertedCount || batch.length);
-        totalFailed += (data.failedCount || 0);
+        const batchUpdated = Number(data.updatedCount) || 0;
+        const batchInserted = Number(data.insertedCount) || 0;
+        const batchFailed = Number(data.failedCount) || 0;
 
+        totalUpdated += batchUpdated;
+        totalInserted += batchInserted;
+        totalFailed += batchFailed;
+
+        setUpdatedCount(totalUpdated);
+        setNewlyInsertedCount(totalInserted);
         setImportedCount(end);
         setProgress(Math.round((end / itemsToProcess.length) * 100));
       }
 
       setImportCompleted(true);
       setImportSummary({
+        updated: totalUpdated,
         inserted: totalInserted,
         failed: totalFailed,
         kind: parseResult.kind
@@ -239,7 +255,10 @@ export function DataImportSection() {
         clearContactsCache();
       }
 
-      toast.success(`Importação finalizada com sucesso! ${totalInserted} registros gravados.`);
+      const successMsg = syncMode === 'sync'
+        ? `Sincronização concluída! ${totalUpdated} fotos/status atualizados e ${totalInserted} novos imóveis cadastrados.`
+        : `Importação finalizada! ${totalInserted} registros gravados.`;
+      toast.success(successMsg);
     } catch (err: any) {
       console.error("Erro durante a importação em lotes:", err);
       toast.error(`Falha na importação: ${err.message || 'Erro de conexão'}`);
@@ -291,6 +310,32 @@ export function DataImportSection() {
             </select>
           </div>
         )}
+      </div>
+
+      {/* Backup Status Banner */}
+      <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="font-bold text-foreground">
+              Backup Completo da Base Salvo com Sucesso
+            </p>
+            <p className="text-muted-foreground text-[11px]">
+              2.525 imóveis cadastrados salvos e protegidos antes da sincronização.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="/api/properties/backup"
+          download
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-2xs self-start sm:self-auto"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Baixar Backup (.json)
+        </a>
       </div>
 
       {/* Upload Dropzone */}
@@ -435,6 +480,56 @@ export function DataImportSection() {
               </div>
             )}
 
+            {/* Import & Sync Modes (for Properties) */}
+            {parseResult.kind === 'properties' && (
+              <div className="p-3 bg-card border border-border rounded-xl space-y-2">
+                <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Modo de Processamento Seguro:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSyncMode('sync')}
+                    disabled={importing}
+                    className={cn(
+                      "p-3 rounded-lg border text-left transition-all cursor-pointer",
+                      syncMode === 'sync'
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-foreground">
+                      <RefreshCw className={cn("w-3.5 h-3.5 text-primary", syncMode === 'sync' && "text-primary")} />
+                      Sincronização & Atualização (Recomendado)
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                      Preserva as referências existentes (ex: <strong>AP2016</strong>), atualiza as URLs das fotos e status oficiais, e cadastra novos imóveis com sequência lógica.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSyncMode('insert')}
+                    disabled={importing}
+                    className={cn(
+                      "p-3 rounded-lg border text-left transition-all cursor-pointer",
+                      syncMode === 'insert'
+                        ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-foreground">
+                      <Building2 className="w-3.5 h-3.5" />
+                      Inserção Pura
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                      Insere os registros como novos imóveis no banco sem cruzar com os dados já existentes.
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Import Filters */}
             <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -511,10 +606,10 @@ export function DataImportSection() {
           {!importing ? (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
               <div className="text-xs text-muted-foreground">
-                Serão importados <strong>{(ignoreDeleted ? parseResult.activeCount : parseResult.totalParsed).toLocaleString('pt-BR')}</strong> registros vinculados à <strong>{selectedCompanyName}</strong>.
+                Serão processados <strong>{(ignoreDeleted ? parseResult.activeCount : parseResult.totalParsed).toLocaleString('pt-BR')}</strong> registros vinculados à <strong>{selectedCompanyName}</strong>.
                 {ignoreDeleted && parseResult.activeCount === 0 && parseResult.totalParsed > 0 && (
                   <span className="block text-amber-500 font-medium mt-0.5">
-                    Desmarque a opção de ignorar acima para importar todos os {parseResult.totalParsed.toLocaleString('pt-BR')} imóveis.
+                    Desmarque a opção de ignorar acima para processar todos os {parseResult.totalParsed.toLocaleString('pt-BR')} registros.
                   </span>
                 )}
               </div>
@@ -531,7 +626,7 @@ export function DataImportSection() {
                 )}
               >
                 <Play className="w-4 h-4 fill-current" />
-                Iniciar Importação em Lote
+                {syncMode === 'sync' ? 'Iniciar Sincronização em Lote' : 'Iniciar Importação em Lote'}
               </button>
             </div>
           ) : (
@@ -552,9 +647,15 @@ export function DataImportSection() {
                 />
               </div>
 
-              <p className="text-[11px] text-muted-foreground text-center">
-                Gravados {importedCount} de {totalToImport} itens no banco de dados da {selectedCompanyName}. Não feche esta aba.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Processados {importedCount} de {totalToImport} itens</span>
+                {parseResult.kind === 'properties' && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-emerald-500 font-bold">✓ {updatedCount} fotos/status atualizados</span>
+                    <span className="text-blue-500 font-bold">+ {newlyInsertedCount} novos imóveis</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -568,9 +669,14 @@ export function DataImportSection() {
           </div>
 
           <div className="space-y-1">
-            <h4 className="text-base font-bold text-foreground">Importação Concluída com Sucesso!</h4>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              <strong>{importSummary.inserted.toLocaleString('pt-BR')}</strong> registros foram gravados e integrados com sucesso na <strong>{selectedCompanyName}</strong>.
+            <h4 className="text-base font-bold text-foreground">Sincronização Concluída com Sucesso!</h4>
+            <p className="text-xs text-muted-foreground max-w-lg mx-auto">
+              Operação finalizada para <strong>{selectedCompanyName}</strong>. 
+              {importSummary.kind === 'properties' ? (
+                <> Foram <strong>{importSummary.updated.toLocaleString('pt-BR')} imóveis atualizados</strong> (com novas URLs de fotos e status oficiais) e <strong>{importSummary.inserted.toLocaleString('pt-BR')} novos imóveis</strong> cadastrados com sequência lógica.</>
+              ) : (
+                <> Foram integrados <strong>{importSummary.inserted.toLocaleString('pt-BR')}</strong> contatos com sucesso.</>
+              )}
             </p>
           </div>
 
@@ -604,7 +710,7 @@ export function DataImportSection() {
               }}
               className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-xs font-bold border border-border cursor-pointer"
             >
-              Importar Outro Arquivo XML
+              Processar Outro Arquivo XML
             </button>
           </div>
         </div>

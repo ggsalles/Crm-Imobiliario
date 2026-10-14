@@ -347,29 +347,66 @@ export function parseTokkoXml(xmlContent: string): TokkoParseResult {
       ).toLowerCase();
 
       let normalizedStatus: ParsedTokkoProperty['status'] = 'disponível';
-      const isSold = getDirectChildText(node, 'is_sold') === 'true' || getDirectChildText(node, 'is_sold') === '1' || rawStatus === 'vendido' || rawStatus === 'vendida' || rawStatus === 'sold';
-      const isReserved = getDirectChildText(node, 'is_reserved') === 'true' || getDirectChildText(node, 'is_reserved') === '1' || rawStatus === 'reservado' || rawStatus === 'reservada' || rawStatus === 'reserved';
-      const isRented = getDirectChildText(node, 'is_rented') === 'true' || getDirectChildText(node, 'is_rented') === '1' || rawStatus === 'alugado' || rawStatus === 'alugada' || rawStatus === 'alquilado' || rawStatus === 'alquilada' || rawStatus === 'rented' || rawStatus === 'locado';
+      
+      // Tokko Broker códigos de status oficiais (<status_summary>):
+      // 1 = Cotization (Cotação / Em avaliação)
+      // 2 = Available (Disponível)
+      // 3 = Reserved (Reservado)
+      // 4 = Not available (Indisponível / Vendido / Arquivado)
+      const isExplicitlySold = getDirectChildText(node, 'is_sold') === 'true' || 
+                              getDirectChildText(node, 'is_sold') === '1' || 
+                              rawStatus === 'vendido' || 
+                              rawStatus === 'vendida' || 
+                              rawStatus === 'sold' ||
+                              rawStatus === '4';
+                      
+      const isReserved = getDirectChildText(node, 'is_reserved') === 'true' || 
+                          getDirectChildText(node, 'is_reserved') === '1' || 
+                          rawStatus === 'reservado' || 
+                          rawStatus === 'reservada' || 
+                          rawStatus === 'reserved' ||
+                          rawStatus === '3';
+                          
+      const isRented = getDirectChildText(node, 'is_rented') === 'true' || 
+                        getDirectChildText(node, 'is_rented') === '1' || 
+                        rawStatus === 'alugado' || 
+                        rawStatus === 'alugada' || 
+                        rawStatus === 'alquilado' || 
+                        rawStatus === 'alquilada' || 
+                        rawStatus === 'rented' || 
+                        rawStatus === 'locado';
 
-      if (isSold) {
-        normalizedStatus = 'vendido';
-      } else if (isReserved) {
+      // PRECEDÊNCIA CORRETA:
+      // Se o imóvel possui código 2 (Available) ou 1 (Cotization) no Tokko, ele é DISPONÍVEL,
+      // mesmo que o arquivo XML geral traga o carimbo deleted_at devido ao encerramento da conta.
+      if (rawStatus === '2' || rawStatus === '1') {
+        normalizedStatus = 'disponível';
+      } else if (rawStatus === '3' || isReserved) {
         normalizedStatus = 'reservado';
       } else if (isRented) {
         normalizedStatus = 'alugado';
+      } else if (isExplicitlySold || rawStatus === '4') {
+        normalizedStatus = 'vendido';
       } else {
+        let tagFound = false;
         for (const tag of tags) {
           const lowerTag = tag.toLowerCase();
           if (lowerTag === 'reservado' || lowerTag === 'reservada') {
             normalizedStatus = 'reservado';
+            tagFound = true;
             break;
           } else if (lowerTag === 'vendido' || lowerTag === 'vendida' || lowerTag === 'escriturado') {
             normalizedStatus = 'vendido';
+            tagFound = true;
             break;
           } else if (lowerTag === 'alugado' || lowerTag === 'alugada' || lowerTag === 'locado') {
             normalizedStatus = 'alugado';
+            tagFound = true;
             break;
           }
+        }
+        if (!tagFound && isDeleted) {
+          normalizedStatus = 'vendido';
         }
       }
 
