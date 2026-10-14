@@ -8,13 +8,17 @@ import {
   Check, 
   Home, 
   User, 
+  UserPlus,
+  Phone,
+  Mail,
+  Tag,
   Coins, 
   Layers, 
   ArrowRight, 
   Loader2,
   AlertCircle
 } from "lucide-react";
-import { Property, Contact, createDeal } from "@/lib/db";
+import { Property, Contact, createDeal, createContact } from "@/lib/db";
 import { STAGES } from "@/lib/constants";
 import { formatCurrencyBRL, parseCurrencyBRLToNumber, formatCurrencyInput } from "@/lib/utils";
 import { recordAuditEvent } from "@/lib/audit";
@@ -38,7 +42,13 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
 }: CreateDealFromPropertyModalProps) {
   const router = useRouter();
 
+  const [contactMode, setContactMode] = useState<'select' | 'new'>('select');
   const [selectedContactId, setSelectedContactId] = useState("");
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactSource, setNewContactSource] = useState("Instagram");
+
   const [dealTitle, setDealTitle] = useState("");
   const [dealValueDisplay, setDealValueDisplay] = useState("");
   const [selectedStage, setSelectedStage] = useState("lead");
@@ -56,6 +66,11 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
       setDealValueDisplay(formattedPrice);
       setSelectedStage("lead");
       setSelectedContactId("");
+      setContactMode("select");
+      setNewContactName("");
+      setNewContactPhone("");
+      setNewContactEmail("");
+      setNewContactSource("Instagram");
       setDealTitle(`Interesse: ${property.title}`);
     }
   }, [property]);
@@ -72,6 +87,29 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
     } else {
       setDealTitle(`Interesse: ${property.title}`);
     }
+  };
+
+  const handleNewNameChange = (nameVal: string) => {
+    setNewContactName(nameVal);
+    if (!property) return;
+    if (nameVal.trim()) {
+      setDealTitle(`Negociação - ${property.title} - ${nameVal.trim()}`);
+    } else {
+      setDealTitle(`Interesse: ${property.title}`);
+    }
+  };
+
+  const handlePhoneInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, "");
+    if (val.length > 11) val = val.slice(0, 11);
+    if (val.length > 6) {
+      val = `(${val.slice(0, 2)}) ${val.slice(2, 7)}-${val.slice(7)}`;
+    } else if (val.length > 2) {
+      val = `(${val.slice(0, 2)}) ${val.slice(2)}`;
+    } else if (val.length > 0) {
+      val = `(${val}`;
+    }
+    setNewContactPhone(val);
   };
 
   if (!isOpen || !property) return null;
@@ -92,15 +130,63 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
     }
 
     setIsSubmitting(true);
-    const toastId = toast.loading("Criando negociação no funil...");
+    const toastId = toast.loading("Processando cadastro e oportunidade...");
 
     try {
+      let finalContactId: string | null = selectedContactId || null;
+
+      // Se o usuário optou por criar um novo cliente
+      if (contactMode === 'new') {
+        if (!newContactName.trim()) {
+          toast.error("Por favor, informe o nome do cliente.", { id: toastId });
+          setIsSubmitting(false);
+          return;
+        }
+        if (!newContactPhone.trim()) {
+          toast.error("Por favor, informe o WhatsApp ou telefone do cliente.", { id: toastId });
+          setIsSubmitting(false);
+          return;
+        }
+
+        const cleanEmail = newContactEmail.trim().toLowerCase();
+        const cleanDigits = newContactPhone.replace(/\D/g, "");
+
+        // Verifica se cliente já existe por e-mail ou telefone para reaproveitar
+        const existing = clientContacts.find(c => {
+          if (cleanEmail && c.email && c.email.trim().toLowerCase() === cleanEmail) return true;
+          if (cleanDigits && c.phone && c.phone.replace(/\D/g, "") === cleanDigits) return true;
+          return false;
+        });
+
+        if (existing) {
+          finalContactId = existing.id;
+          toast.info(`Cliente "${existing.name}" já constava no cadastro e foi vinculado automaticamente.`, { id: toastId });
+        } else {
+          // Cria o novo cliente no banco
+          try {
+            const created = await createContact({
+              name: newContactName.trim(),
+              phone: newContactPhone.trim(),
+              email: newContactEmail.trim(),
+              source: newContactSource || 'Instagram',
+              type: 'cliente'
+            });
+            finalContactId = created?.id || (created as any)?.contact?.id || null;
+          } catch (contactErr: any) {
+            console.error("Erro ao cadastrar contato:", contactErr);
+            toast.error(contactErr?.message || "Erro ao salvar contato.", { id: toastId });
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+
       const res = await createDeal({
         title: dealTitle.trim(),
         value: numericValue,
         stage: selectedStage,
         propertyId: property.id,
-        contactId: selectedContactId || null,
+        contactId: finalContactId,
       });
       const newDealId = typeof res === "string" ? res : (res?.id || property.id);
 
@@ -117,11 +203,11 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
           propertyTitle: property.title,
           value: numericValue,
           stage: selectedStage,
-          contactId: selectedContactId || null
+          contactId: finalContactId
         }
       });
 
-      toast.success("Negociação criada com sucesso no funil!", {
+      toast.success("Cliente e negociação sincronizados no funil com sucesso!", {
         id: toastId,
         action: {
           label: "Ver Funil",
@@ -218,31 +304,151 @@ export const CreateDealFromPropertyModal = memo(function CreateDealFromPropertyM
               />
             </div>
 
-            {/* Client selection */}
-            <div className="space-y-1.5">
+            {/* Client selection / Quick Create */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-0.5">
-                  Cliente Comprador (Opcional)
+                  Cliente Comprador / Lead
                 </label>
-                <span className="text-[10px] text-muted-foreground font-medium">
-                  {clientContacts.length} clientes na carteira
-                </span>
+                <div className="flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setContactMode('select')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      contactMode === 'select'
+                        ? 'bg-background text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <User className="w-3 h-3" />
+                    <span>Selecionar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContactMode('new');
+                      setSelectedContactId('');
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      contactMode === 'new'
+                        ? 'bg-primary text-white shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    <span>+ Novo Cliente</span>
+                  </button>
+                </div>
               </div>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <select
-                  value={selectedContactId}
-                  onChange={(e) => handleContactChange(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="">Selecione um cliente ou deixe em aberto...</option>
-                  {clientContacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {contact.name} {contact.phone ? `(${contact.phone})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
+              {contactMode === 'select' ? (
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <select
+                    value={selectedContactId}
+                    onChange={(e) => handleContactChange(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 bg-muted/30 rounded-xl text-xs md:text-sm border border-border text-foreground focus:border-primary focus:outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">Selecione um cliente ou deixe em aberto...</option>
+                    {clientContacts.map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name} {contact.phone ? `(${contact.phone})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-3 bg-primary/5 rounded-2xl border border-primary/20 space-y-2.5 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-primary">
+                    <span className="flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Cadastrar Cliente e Vincular à Negociação
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      Salva no CRM automaticamente
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Nome */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
+                        Nome Completo *
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          required={contactMode === 'new'}
+                          value={newContactName}
+                          onChange={(e) => handleNewNameChange(e.target.value)}
+                          placeholder="Ex: Tamiris Vasconcellos"
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-background text-foreground text-xs rounded-lg border border-border focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Telefone / WhatsApp */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
+                        WhatsApp / Telefone *
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          required={contactMode === 'new'}
+                          value={newContactPhone}
+                          onChange={handlePhoneInputChange}
+                          placeholder="(21) 99999-9999"
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-background text-foreground text-xs rounded-lg border border-border focus:border-primary focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Email */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
+                        E-mail (Opcional)
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <input
+                          type="email"
+                          value={newContactEmail}
+                          onChange={(e) => setNewContactEmail(e.target.value)}
+                          placeholder="cliente@email.com"
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-background text-foreground text-xs rounded-lg border border-border focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Origem */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
+                        Origem do Lead
+                      </label>
+                      <div className="relative">
+                        <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <select
+                          value={newContactSource}
+                          onChange={(e) => setNewContactSource(e.target.value)}
+                          className="w-full pl-8 pr-2.5 py-1.5 bg-background text-foreground text-xs rounded-lg border border-border focus:border-primary focus:outline-none cursor-pointer"
+                        >
+                          <option value="Instagram">Instagram</option>
+                          <option value="WhatsApp">WhatsApp</option>
+                          <option value="Indicação">Indicação</option>
+                          <option value="Portal Imobiliário">Portal Imobiliário</option>
+                          <option value="Site">Site</option>
+                          <option value="Outro">Outro</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Deal Value */}

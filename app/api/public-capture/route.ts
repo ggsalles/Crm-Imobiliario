@@ -50,25 +50,39 @@ export async function POST(req: NextRequest) {
     const tenantId = property.tenant_id;
     const ownerId = property.owner_id;
 
-    // 2. Check if contact exists by email in this tenant
+    // 2. Check if contact exists by email (case-insensitive) or phone in this tenant
     let contactId = null;
     let existingContact = null;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanDigits = phone.replace(/\D/g, "");
+
+    let emailQuery = supabase
+      .from('contacts')
+      .select('id, name, email, phone, tenant_id')
+      .ilike('email', cleanEmail);
 
     if (tenantId) {
-      const { data } = await supabase
+      emailQuery = emailQuery.eq('tenant_id', tenantId);
+    }
+
+    const { data: contactByEmail } = await emailQuery.maybeSingle();
+    existingContact = contactByEmail;
+
+    // Se não encontrou por e-mail, tenta verificar por telefone se tiver no mínimo 8 dígitos
+    if (!existingContact && cleanDigits.length >= 8) {
+      let phoneQuery = supabase
         .from('contacts')
-        .select('*')
-        .eq('email', email)
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
-      existingContact = data;
-    } else {
-      const { data } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('email', email)
-        .maybeSingle();
-      existingContact = data;
+        .select('id, name, email, phone, tenant_id')
+        .or(`phone.ilike.%${cleanDigits}%,phone.eq.${phone.trim()}`);
+
+      if (tenantId) {
+        phoneQuery = phoneQuery.eq('tenant_id', tenantId);
+      }
+
+      const { data: contactByPhone } = await phoneQuery.limit(1);
+      if (contactByPhone && contactByPhone.length > 0) {
+        existingContact = contactByPhone[0];
+      }
     }
 
     if (existingContact) {
