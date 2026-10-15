@@ -47,6 +47,8 @@ export const publicLeadCaptureSchema = z.object({
     .trim()
     .max(1000, 'Mensagem não pode exceder 1000 caracteres')
     .optional(),
+  brokerId: z.string().optional(),
+  ownerId: z.string().optional(),
 });
 
 /**

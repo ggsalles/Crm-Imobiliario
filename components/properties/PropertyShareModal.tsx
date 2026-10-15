@@ -14,26 +14,36 @@ import {
 import { Property } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
 import { toast } from "sonner";
+import { useAuth } from "@/providers/auth-provider";
 
 interface PropertyShareModalProps {
   property: Property | null;
   sharingText: string;
   setSharingText: (val: string) => void;
   onClose: () => void;
+  profile?: any;
 }
 
 export function PropertyShareModal({
   property,
   sharingText,
   setSharingText,
-  onClose
+  onClose,
+  profile: propProfile
 }: PropertyShareModalProps) {
+  const { profile: authProfile } = useAuth();
+  const profile = propProfile || authProfile;
   const [recipientPhone, setRecipientPhone] = useState("");
 
   if (!property) return null;
 
+  const brokerIdentifier = profile?.id || profile?.email || "";
+  const brokerParam = brokerIdentifier ? `?broker=${encodeURIComponent(brokerIdentifier)}` : "";
+  const publicUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/p/${property.id}${brokerParam}`
+    : `https://sales-score-crm.com/p/${property.id}${brokerParam}`;
+
   const handleCopyLink = () => {
-    const publicUrl = `${window.location.origin}/p/${property.id}`;
     navigator.clipboard.writeText(publicUrl);
     toast.success("Link público de captura copiado!");
     recordAuditEvent({
@@ -111,7 +121,6 @@ export function PropertyShareModal({
       maximumFractionDigits: 0 
     }).format(property.price);
 
-    const publicUrl = `${window.location.origin}/p/${property.id}`;
     const coverPhoto = property.imageUrls && property.imageUrls[0] 
       ? property.imageUrls[0] 
       : 'https://picsum.photos/seed/realestate/800/600';

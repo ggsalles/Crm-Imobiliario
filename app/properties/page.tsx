@@ -136,11 +136,17 @@ export default function PropertiesPage() {
       photosText = "\n📸 *Fotos do Imóvel:*\n" + property.imageUrls.map((url, i) => `Imagem ${i+1}: ${url}`).join("\n");
     }
 
+    const brokerIdentifier = profile?.id || profile?.email || '';
+    const brokerParam = brokerIdentifier ? `?broker=${encodeURIComponent(brokerIdentifier)}` : '';
     const publicUrl = typeof window !== 'undefined' 
-      ? `${window.location.origin}/p/${property.id}`
-      : `https://sales-score-crm.com/p/${property.id}`;
+      ? `${window.location.origin}/p/${property.id}${brokerParam}`
+      : `https://sales-score-crm.com/p/${property.id}${brokerParam}`;
 
     const refCode = property.referenceCode || (property as any).reference_code;
+
+    const brokerSignature = profile?.displayName || profile?.email
+      ? `\n👤 *Consultor(a) Responsável:* ${profile.displayName || 'Corretor'}\n${profile.email ? `✉️ *E-mail:* ${profile.email}\n` : ''}`
+      : '';
 
     return `✨ *OPORTUNIDADE IMOBILIÁRIA* ✨
 ${refCode ? `🏷️ *Código de Referência:* #${refCode}\n` : ''}🏡 *${property.title}*
@@ -163,8 +169,8 @@ ${photosText}
 ${publicUrl}
 
 ---
-Estou à disposição para agendarmos uma visita e simularmos as melhores condições! 🚀`;
-  }, []);
+${brokerSignature}Estou à disposição para agendarmos uma visita e simularmos as melhores condições! 🚀`;
+  }, [profile]);
 
   useEffect(() => {
     if (sharingProperty) {
@@ -840,6 +846,7 @@ Estou à disposição para agendarmos uma visita e simularmos as melhores condi�
         property={sharingProperty}
         sharingText={sharingText}
         setSharingText={setSharingText}
+        profile={profile}
         onClose={() => setSharingProperty(null)}
       />
 

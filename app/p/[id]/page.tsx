@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -69,6 +69,7 @@ interface Broker {
   displayName: string;
   email: string;
   photoUrl?: string;
+  phone?: string;
 }
 
 const FALLBACK_IMAGES = [
@@ -79,8 +80,23 @@ const FALLBACK_IMAGES = [
 
 export default function PublicPropertyCapturePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
   const router = useRouter();
+
+  const getBrokerParam = (): string | null => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const b = sp.get('broker') || sp.get('brokerId') || sp.get('ownerId') || sp.get('responsavel') || sp.get('ref') || sp.get('corretor');
+        if (b && b.trim()) return b.trim();
+      } catch {}
+    }
+    const fromParams = searchParams?.get('broker') || searchParams?.get('brokerId') || searchParams?.get('ownerId') || searchParams?.get('responsavel') || searchParams?.get('ref') || searchParams?.get('corretor');
+    return fromParams ? fromParams.trim() : null;
+  };
+
+  const brokerQueryParam = getBrokerParam();
 
   const [property, setProperty] = useState<Property | null>(null);
   const [broker, setBroker] = useState<Broker | null>(null);
@@ -132,20 +148,50 @@ export default function PublicPropertyCapturePage() {
 
         setProperty(propData);
 
-        // 2. Fetch broker profile
-        if (propData.ownerId) {
+        // 2. Fetch broker profile (prefer broker query param from generated link if available)
+        const currentParam = getBrokerParam() || brokerQueryParam;
+        const targetBroker = currentParam || propData.ownerId;
+        
+        if (targetBroker) {
           try {
-            const brokerData = await apiClient.get<any>(`/api/profiles?id=${propData.ownerId}`, { skipAuth: true });
+            const isEmail = targetBroker.includes('@');
+            let brokerData: any = null;
+
+            if (isEmail) {
+              brokerData = await apiClient.get<any>(`/api/profiles?email=${encodeURIComponent(targetBroker.toLowerCase())}`, { skipAuth: true }).catch(() => null);
+            } else {
+              brokerData = await apiClient.get<any>(`/api/profiles?id=${encodeURIComponent(targetBroker)}`, { skipAuth: true }).catch(() => null);
+              if (!brokerData && targetBroker.length > 2) {
+                brokerData = await apiClient.get<any>(`/api/profiles?email=${encodeURIComponent(targetBroker)}`, { skipAuth: true }).catch(() => null);
+              }
+            }
+
             if (brokerData) {
               setBroker({
                 id: brokerData.id,
-                displayName: brokerData.displayName || brokerData.display_name || "Consultor de Vendas",
-                email: brokerData.email || "",
-                photoUrl: brokerData.photoUrl || brokerData.photo_url || undefined
+                displayName: brokerData.displayName || brokerData.display_name || (isEmail ? targetBroker.split("@")[0] : "Consultor Imobiliário"),
+                email: brokerData.email || (isEmail ? targetBroker : ""),
+                photoUrl: brokerData.photoURL || brokerData.photoUrl || brokerData.photo_url || undefined,
+                phone: brokerData.phone || brokerData.phone_number || undefined
+              });
+            } else if (isEmail) {
+              setBroker({
+                id: targetBroker,
+                displayName: targetBroker.split("@")[0],
+                email: targetBroker,
+                phone: undefined
               });
             }
           } catch (brokerErr) {
             console.warn("Erro ao buscar dados do corretor:", brokerErr);
+            if (targetBroker && targetBroker.includes("@")) {
+              setBroker({
+                id: targetBroker,
+                displayName: targetBroker.split("@")[0],
+                email: targetBroker,
+                phone: undefined
+              });
+            }
           }
         }
       } catch (err) {
@@ -157,7 +203,7 @@ export default function PublicPropertyCapturePage() {
     }
 
     loadData();
-  }, [id]);
+  }, [id, brokerQueryParam]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "");
@@ -189,7 +235,8 @@ export default function PublicPropertyCapturePage() {
         name,
         email,
         phone: phone.replace(/\D/g, ""), // clean non-digits for database
-        message: message.trim() || undefined
+        message: message.trim() || undefined,
+        brokerId: broker?.id || broker?.email || getBrokerParam() || brokerQueryParam || property.ownerId
       };
 
       await apiClient.post('/api/public-capture', payload, { skipAuth: true });
@@ -206,10 +253,14 @@ export default function PublicPropertyCapturePage() {
 
   const handleWhatsAppRedirect = () => {
     if (!property) return;
-    const cleanPhone = phone.replace(/\D/g, "");
+    const rawTargetPhone = broker?.phone || "";
+    const cleanTargetPhone = rawTargetPhone.replace(/\D/g, "");
+    
     // Use an elegant text to message the agent/broker or start contact
     const textMessage = `Olá! Me chamo ${encodeURIComponent(name)} e acabei de acessar o imóvel "${encodeURIComponent(property.title)}" (Valor: R$ ${encodeURIComponent(property.price.toLocaleString('pt-BR'))}) através do Instagram. Tenho interesse em receber mais detalhes!`;
-    const waUrl = `https://api.whatsapp.com/send?text=${textMessage}`;
+    const waUrl = cleanTargetPhone 
+      ? `https://api.whatsapp.com/send?phone=${cleanTargetPhone}&text=${textMessage}`
+      : `https://api.whatsapp.com/send?text=${textMessage}`;
     window.open(waUrl, '_blank');
   };
 
@@ -764,10 +815,65 @@ export default function PublicPropertyCapturePage() {
               </motion.div>
             )}
           </AnimatePresence>
-
         </section>
 
       </main>
+
+      {/* Rodapé da Página com os dados do Corretor Responsável */}
+      <footer className="w-full border-t border-slate-800 bg-slate-950/95 backdrop-blur-md py-8 px-4 mt-16 text-slate-400">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 text-left">
+            <div className="relative w-12 h-12 rounded-full bg-slate-800 border-2 border-blue-500/40 overflow-hidden flex-shrink-0 shadow-md">
+              {broker?.photoUrl ? (
+                <Image 
+                  src={broker.photoUrl} 
+                  alt={broker.displayName} 
+                  fill 
+                  className="object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center font-bold text-blue-400 bg-blue-500/10 text-base">
+                  {broker?.displayName ? broker.displayName[0].toUpperCase() : "C"}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-blue-400 leading-none mb-1">
+                Corretor(a) Responsável
+              </p>
+              <h4 className="text-white font-bold text-sm leading-tight">
+                {broker?.displayName || "Consultor Imobiliário"}
+              </h4>
+              <p className="text-slate-300 text-xs flex items-center gap-1.5 mt-1">
+                <Mail className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                <span>{broker?.email || "contato@imoveis.com"}</span>
+              </p>
+              {broker?.phone && (
+                <p className="text-slate-300 text-xs flex items-center gap-1.5 mt-0.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  <span>{broker.phone}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-right">
+            {broker?.phone && (
+              <button
+                onClick={handleWhatsAppRedirect}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold transition duration-200 shadow-md shadow-[#25D366]/20 cursor-pointer"
+              >
+                <Phone className="w-3.5 h-3.5 fill-white" /> Falar com o Corretor
+              </button>
+            )}
+            <div className="text-[11px] text-slate-500">
+              <p className="font-semibold text-slate-400">Atendimento Exclusivo e Direto</p>
+              <p>© {new Date().getFullYear()} SalesScore CRM • Todos os direitos reservados</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

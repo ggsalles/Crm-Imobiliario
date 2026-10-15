@@ -408,6 +408,8 @@ export async function GET(req: NextRequest) {
         tenantIds: emailTenantIds,
         displayName: data.display_name,
         email: data.email,
+        photoURL: data.photo_url || null,
+        phone: data.phone || data.phone_number || null,
         role: data.role,
         isActive,
         inactiveReason,

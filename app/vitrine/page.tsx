@@ -440,7 +440,9 @@ function VitrineContent() {
 
   // Open property details
   const handleOpenProperty = (propertyId: string) => {
-    router.push(`/p/${propertyId}`);
+    const effectiveBroker = brokerParam || profile?.id || '';
+    const query = effectiveBroker ? `?broker=${encodeURIComponent(effectiveBroker)}` : '';
+    router.push(`/p/${propertyId}${query}`);
   };
 
   // Send WhatsApp inquiry for a specific property
@@ -520,7 +522,8 @@ function VitrineContent() {
               onClick={() => {
                 const origin = typeof window !== 'undefined' ? window.location.origin : '';
                 const targetTenant = tenantParam || profile?.tenantId || '';
-                const url = targetTenant ? `${origin}/vitrine?tenant=${targetTenant}&mode=client` : `${origin}/vitrine?mode=client`;
+                const brokerParamStr = profile?.id ? `&broker=${profile.id}` : '';
+                const url = targetTenant ? `${origin}/vitrine?tenant=${targetTenant}&mode=client${brokerParamStr}` : `${origin}/vitrine?mode=client${brokerParamStr}`;
                 window.open(url, '_blank');
               }}
               className="hidden sm:flex px-3 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold items-center gap-1.5 transition-all shadow-sm cursor-pointer"

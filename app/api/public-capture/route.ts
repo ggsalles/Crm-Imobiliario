@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const { propertyId, name, email, phone, message } = validation.data;
+    const { propertyId, name, email, phone, message, brokerId, ownerId: requestedOwnerId } = validation.data;
     const supabase = getSupabase();
 
     // 1. Fetch property details to grab the owner and tenant
@@ -48,7 +48,18 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = property.tenant_id;
-    const ownerId = property.owner_id;
+    let ownerId = brokerId || requestedOwnerId || property.owner_id;
+
+    if (ownerId && typeof ownerId === 'string' && ownerId.includes('@')) {
+      const { data: profByEmail } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', ownerId.trim().toLowerCase())
+        .maybeSingle();
+      if (profByEmail?.id) {
+        ownerId = profByEmail.id;
+      }
+    }
 
     // 2. Check if contact exists by email (case-insensitive) or phone in this tenant
     let contactId = null;
