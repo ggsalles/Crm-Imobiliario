@@ -171,20 +171,6 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
     setNavigatingTo(null);
   }, [pathname, currentTab]);
 
-  // Background warm-up of key routes for instantaneous transitions
-  useEffect(() => {
-    const keyRoutes = ['/pipeline', '/properties', '/contacts', '/activities', '/calendar'];
-    const timer = setTimeout(() => {
-      keyRoutes.forEach((route, i) => {
-        setTimeout(() => {
-          try {
-            router.prefetch(route);
-          } catch {}
-        }, i * 250);
-      });
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [router]);
 
   // Restore the scroll position of the sidebar when navigating
   useEffect(() => {
@@ -466,13 +452,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
             <Link
               key={item.href}
               href={targetHref}
-              prefetch={true}
-              onMouseEnter={() => {
-                try { router.prefetch(targetHref); } catch {}
-              }}
-              onPointerDown={() => {
-                try { router.prefetch(targetHref); } catch {}
-              }}
+              prefetch={false}
               onClick={() => {
                 if (!isActive) setNavigatingTo(targetHref);
                 if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
@@ -510,10 +490,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         
         <Link
           href="/settings"
-          prefetch={true}
-          onMouseEnter={() => {
-            try { router.prefetch("/settings"); } catch {}
-          }}
+          prefetch={false}
           onClick={() => {
             if (pathname !== "/settings") setNavigatingTo("/settings");
             if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
@@ -536,10 +513,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         {(profile?.role === 'Admin' || profile?.isAdmin || isPlatformAdmin(profile?.email)) && (
           <Link
             href="/audit"
-            prefetch={true}
-            onMouseEnter={() => {
-              try { router.prefetch("/audit"); } catch {}
-            }}
+            prefetch={false}
             onClick={() => {
               if (pathname !== "/audit") setNavigatingTo("/audit");
               if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
@@ -563,10 +537,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         {isPlatformAdmin(profile?.email) && (
           <Link
             href="/admin/billing"
-            prefetch={true}
-            onMouseEnter={() => {
-              try { router.prefetch("/admin/billing"); } catch {}
-            }}
+            prefetch={false}
             onClick={() => {
               if (pathname !== "/admin/billing") setNavigatingTo("/admin/billing");
               if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);
@@ -590,10 +561,7 @@ function SidebarContent({ pathname, setIsMobileMenuOpen, logout, profile, change
         {profile?.email?.toLowerCase().trim() === 'ggsalles@gmail.com' && (
           <Link
             href="/admin/reset"
-            prefetch={true}
-            onMouseEnter={() => {
-              try { router.prefetch("/admin/reset"); } catch {}
-            }}
+            prefetch={false}
             onClick={() => {
               if (pathname !== "/admin/reset") setNavigatingTo("/admin/reset");
               if (setIsMobileMenuOpen) setIsMobileMenuOpen(false);

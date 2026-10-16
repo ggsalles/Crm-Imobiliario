@@ -340,7 +340,12 @@ export async function GET(req: NextRequest) {
         isActive,
         inactiveReason,
         securityKeyword
-      }, { headers: NO_CACHE_HEADERS });
+      }, { 
+        headers: !req.headers.get('Authorization') ? {
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=300',
+        } : NO_CACHE_HEADERS 
+      });
     }
 
     if (email) {
@@ -414,7 +419,12 @@ export async function GET(req: NextRequest) {
         isActive,
         inactiveReason,
         securityKeyword
-      }, { headers: NO_CACHE_HEADERS });
+      }, { 
+        headers: !req.headers.get('Authorization') ? {
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=300',
+        } : NO_CACHE_HEADERS 
+      });
     }
 
     const callerUser = getAuthenticatedUser(req);

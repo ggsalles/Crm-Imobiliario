@@ -92,8 +92,25 @@ async function getAuthToken(): Promise<{ token: string | null; tenantId: string 
   }
 }
 
+// In-memory cache e deduplicação de requisições GET para eliminar carga e custos no Vercel
+const getClientCache = new Map<string, { data: any; expiry: number }>();
+const inFlightRequests = new Map<string, Promise<any>>();
+const CLIENT_CACHE_TTL = 15000; // 15s de cache em memória no browser para requisições GET
+
+export function invalidateApiClientCache(pattern?: string) {
+  if (!pattern) {
+    getClientCache.clear();
+    return;
+  }
+  for (const key of getClientCache.keys()) {
+    if (key.includes(pattern)) {
+      getClientCache.delete(key);
+    }
+  }
+}
+
 /**
- * Função base de requisição com tratamento completo de resiliência
+ * Função base de requisição com tratamento completo de resiliência e cache inteligente
  */
 export async function apiRequest<T = any>(
   url: string,
@@ -101,45 +118,68 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const isServer = typeof window === "undefined";
   const { timeout = 12000, skipAuth = false, headers: customHeaders, ...fetchOptions } = options;
+  const method = (fetchOptions.method || "GET").toUpperCase();
 
-  const reqHeaders: Record<string, string> = {
-    Accept: "application/json",
-    ...((customHeaders as Record<string, string>) || {}),
-  };
-
-  // Se body existir e não for FormData e não tiver Content-Type, define como JSON
-  if (fetchOptions.body && !(fetchOptions.body instanceof FormData) && !reqHeaders["Content-Type"]) {
-    reqHeaders["Content-Type"] = "application/json";
+  // Se for mutação (POST, PUT, PATCH, DELETE), invalida o cache de leitura
+  if (method !== "GET") {
+    invalidateApiClientCache();
   }
 
-  // Injeção de autenticação e tenant
-  if (!skipAuth && !isServer) {
-    const { token, tenantId, userId, email } = await getAuthToken();
-    if (token && !reqHeaders["Authorization"]) {
-      reqHeaders["Authorization"] = `Bearer ${token}`;
+  // Verifica cache em memória para requisições GET no cliente
+  const isNoStore = fetchOptions.cache === "no-store" || (customHeaders && (customHeaders as any)["Cache-Control"]?.includes("no-store"));
+  const cacheKey = `${method}:${url}:${skipAuth}`;
+
+  if (!isServer && method === "GET" && !isNoStore) {
+    const cached = getClientCache.get(cacheKey);
+    if (cached && cached.expiry > Date.now()) {
+      return cached.data as T;
     }
-    if (tenantId && tenantId !== "undefined" && tenantId !== "null" && !reqHeaders["x-tenant-id"]) {
-      reqHeaders["x-tenant-id"] = tenantId;
-    }
-    if (userId && !reqHeaders["x-user-id"]) {
-      reqHeaders["x-user-id"] = userId;
-    }
-    if (email && !reqHeaders["x-user-email"]) {
-      reqHeaders["x-user-email"] = email;
+
+    // Deduplicação de requisições em voo concorrentes para a mesma rota
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey) as Promise<T>;
     }
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const executeRequest = async (): Promise<T> => {
+    const reqHeaders: Record<string, string> = {
+      Accept: "application/json",
+      ...((customHeaders as Record<string, string>) || {}),
+    };
 
-  try {
-    const response = await fetch(url, {
-      ...fetchOptions,
-      headers: reqHeaders,
-      signal: controller.signal,
-    });
+    // Se body existir e não for FormData e não tiver Content-Type, define como JSON
+    if (fetchOptions.body && !(fetchOptions.body instanceof FormData) && !reqHeaders["Content-Type"]) {
+      reqHeaders["Content-Type"] = "application/json";
+    }
 
-    clearTimeout(timeoutId);
+    // Injeção de autenticação e tenant
+    if (!skipAuth && !isServer) {
+      const { token, tenantId, userId, email } = await getAuthToken();
+      if (token && !reqHeaders["Authorization"]) {
+        reqHeaders["Authorization"] = `Bearer ${token}`;
+      }
+      if (tenantId && tenantId !== "undefined" && tenantId !== "null" && !reqHeaders["x-tenant-id"]) {
+        reqHeaders["x-tenant-id"] = tenantId;
+      }
+      if (userId && !reqHeaders["x-user-id"]) {
+        reqHeaders["x-user-id"] = userId;
+      }
+      if (email && !reqHeaders["x-user-email"]) {
+        reqHeaders["x-user-email"] = email;
+      }
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOptions,
+        headers: reqHeaders,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
 
     // Tratamento de expiração de sessão
     if ((response.status === 401 || response.status === 403) && !isServer && !skipAuth) {
@@ -179,19 +219,36 @@ export async function apiRequest<T = any>(
     }
 
     return rawText as unknown as T;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
 
-    if (error?.name === "AbortError") {
-      throw new ApiClientError(`A requisição excedeu o tempo limite de ${Math.round(timeout / 1000)}s.`, 408);
+      if (error?.name === "AbortError") {
+        throw new ApiClientError(`A requisição excedeu o tempo limite de ${Math.round(timeout / 1000)}s.`, 408);
+      }
+
+      if (error instanceof ApiClientError) {
+        throw error;
+      }
+
+      throw new ApiClientError(error?.message || "Falha de conexão com o servidor.", 0);
     }
+  };
 
-    if (error instanceof ApiClientError) {
-      throw error;
-    }
+  if (!isServer && method === "GET" && !isNoStore) {
+    const requestPromise = executeRequest()
+      .then((data) => {
+        getClientCache.set(cacheKey, { data, expiry: Date.now() + CLIENT_CACHE_TTL });
+        return data;
+      })
+      .finally(() => {
+        inFlightRequests.delete(cacheKey);
+      });
 
-    throw new ApiClientError(error?.message || "Falha de conexão com o servidor.", 0);
+    inFlightRequests.set(cacheKey, requestPromise);
+    return requestPromise;
   }
+
+  return executeRequest();
 }
 
 /**

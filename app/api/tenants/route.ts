@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id') || searchParams.get('slug');
-    const hasCacheBuster = searchParams.has('t') || !!id;
+    const hasCacheBuster = searchParams.has('t') && searchParams.get('t') !== '0';
     const config = await getSaaSConfig(hasCacheBuster);
     const blockedIds = config.blockedTenantIds || [];
 
@@ -101,10 +101,13 @@ export async function GET(req: NextRequest) {
         extraAdminPrice: data.extra_admin_price !== undefined && data.extra_admin_price !== null ? Number(data.extra_admin_price) : 49.90,
         plan: data.plan || 'ativo'
       }, {
-        headers: {
+        headers: hasCacheBuster ? {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
+        } : {
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=300',
         }
       });
     }

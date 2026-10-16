@@ -156,12 +156,12 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
 
     setIsLoggingIn(true);
     setLoginStepMessage("Aguarde, autenticando...");
     try {
-      router.prefetch("/");
-      await login(cleanEmail, password);
+      await login(cleanEmail, cleanPassword);
       setLoginStepMessage("Aguarde, acessando seu painel...");
       // Fallback de segurança: caso o redirecionamento demore anormalmente, destrava o botão em 10s
       setTimeout(() => {

@@ -182,7 +182,12 @@ export async function GET(req: NextRequest) {
 
       const urls: string[] = Array.from(new Set(finalUrls));
 
-      return NextResponse.json(formatPropertyDbRow(property, urls, isPublic), { headers: NO_CACHE_HEADERS });
+      const responseHeaders = isPublic ? {
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+        'Vercel-CDN-Cache-Control': 'public, s-maxage=300',
+      } : NO_CACHE_HEADERS;
+
+      return NextResponse.json(formatPropertyDbRow(property, urls, isPublic), { headers: responseHeaders });
     }
 
     // Fetch active tenant from profile as a software isolation safeguard (zero HTTP auth roundtrip)

@@ -731,34 +731,6 @@ export default function PublicPropertyCapturePage() {
                     )}
                   </button>
                 </form>
-
-                {/* Broker profile integration if present */}
-                {broker && (
-                  <div className="border-t border-slate-800 pt-4 flex items-center gap-3.5 text-left relative z-10">
-                    <div className="relative w-11 h-11 rounded-full bg-slate-800 overflow-hidden flex-shrink-0 border border-slate-700">
-                      {broker.photoUrl ? (
-                        <Image 
-                          src={broker.photoUrl} 
-                          alt={broker.displayName} 
-                          fill 
-                          className="object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-blue-400 bg-blue-500/10">
-                          {broker.displayName[0]}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[8px] text-slate-400 uppercase tracking-widest font-black leading-none mb-0.5">Corretor Responsável</p>
-                      <p className="font-bold text-white text-xs leading-tight mb-0.5">{broker.displayName}</p>
-                      <p className="text-slate-400 text-[10px] leading-none flex items-center gap-1">
-                        <Mail className="w-2.5 h-2.5 text-slate-500" /> {broker.email}
-                      </p>
-                    </div>
-                  </div>
-                )}
               </motion.div>
             ) : (
               <motion.div 

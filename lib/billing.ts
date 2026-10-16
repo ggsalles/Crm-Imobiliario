@@ -92,7 +92,7 @@ let lastCacheTime = 0;
 
 export async function getSaaSConfig(bypassCache = false): Promise<SaaSAdminConfig> {
   const now = Date.now();
-  if (!bypassCache && cachedAdminConfig !== null && now - lastCacheTime < 1000) {
+  if (!bypassCache && cachedAdminConfig !== null && now - lastCacheTime < 60000) {
     return cachedAdminConfig;
   }
 

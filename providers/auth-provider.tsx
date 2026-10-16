@@ -201,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const lastActivityTimeRef = useRef<number>(Date.now());
+  const lastTenantCheckRef = useRef<number>(0);
 
   useEffect(() => {
     // Online/Offline status handling
@@ -369,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const checkTenantBlock = useCallback(async () => {
+  const checkTenantBlock = useCallback(async (force = false) => {
     if (
       !profile || 
       !profile.tenantId || 
@@ -382,6 +383,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setDiffDays(0);
       return;
     }
+
+    // Economia de Vercel Compute / Serverless Invocations:
+    // Evita requisições repetitivas a cada troca de rota/clique se verificado nos últimos 5 minutos
+    const now = Date.now();
+    if (!force && now - lastTenantCheckRef.current < 300000) {
+      return;
+    }
+    lastTenantCheckRef.current = now;
     
     try {
       const res = await fetch(`/api/tenants?id=${profile.tenantId}&t=${Date.now()}`, { 
@@ -459,25 +468,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [profile]);
 
   useEffect(() => {
-    // Check immediately on profile change or navigation
+    // Verificação inicial suave ao carregar perfil
     checkTenantBlock();
 
-    // Check periodically every 30 seconds for robust background sync
+    // Verificação em background a cada 10 minutos (em vez de 30s) para não esgotar cotas de Serverless do Vercel
     const intervalKey = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         return;
       }
       checkTenantBlock();
-    }, 30000);
+    }, 600000);
 
-    // Event listeners for instant billing synchronization
+    // Event listeners para sincronização instantânea em caso de eventos reais de pagamento/faturamento
     const handleCustomBillingEvent = () => {
-      checkTenantBlock();
+      checkTenantBlock(true);
     };
 
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'saas-billing-timestamp') {
-        checkTenantBlock();
+        checkTenantBlock(true);
       }
     };
 
@@ -491,20 +500,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       bc = new BroadcastChannel('saas_billing_channel');
       bc.onmessage = () => {
-        checkTenantBlock();
+        checkTenantBlock(true);
       };
     } catch {}
 
     window.addEventListener('saas-billing-updated', handleCustomBillingEvent);
     window.addEventListener('storage', handleStorage);
-    window.addEventListener('focus', checkTenantBlock);
+    window.addEventListener('focus', () => checkTenantBlock());
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(intervalKey);
       window.removeEventListener('saas-billing-updated', handleCustomBillingEvent);
       window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('focus', checkTenantBlock);
+      window.removeEventListener('focus', () => checkTenantBlock());
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (bc) {
         try {
@@ -512,7 +521,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
     };
-  }, [checkTenantBlock, pathname]);
+  }, [checkTenantBlock]);
 
   useEffect(() => {
     if (!user) {
@@ -888,11 +897,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password ? password.trim() : '';
 
     // Parallelize Supabase signIn and Pre-registration check to cut login latency in half
     const authPromise = supabase.auth.signInWithPassword({
       email: cleanEmail,
-      password,
+      password: cleanPassword || password,
     });
 
     const preRegPromise = isPlatformAdmin(cleanEmail)
