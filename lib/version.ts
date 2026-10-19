@@ -15,12 +15,36 @@ export interface VersionRelease {
   improvements?: string[];
 }
 
-export const APP_VERSION = "v2.58";
-export const APP_VERSION_CODE = 258;
-export const APP_VERSION_DATE = "13/10/2026";
-export const APP_VERSION_TITLE = "Correção da Máscara e Digitação de Valores Monetários nos Modais e Filtros";
+export const APP_VERSION = "v2.59";
+export const APP_VERSION_CODE = 259;
+export const APP_VERSION_DATE = "19/10/2026";
+export const APP_VERSION_TITLE = "Migração de Infraestrutura Vercel e Otimização de Cotas (Nova URL: crm-imobiliario-imob.vercel.app)";
 
 export const VERSION_HISTORY: VersionRelease[] = [
+  {
+    version: "v2.59",
+    releaseDate: "19/10/2026",
+    title: "Migração de Infraestrutura Vercel, Nova URL Oficial e Otimização de Cotas",
+    type: "minor",
+    highlights: [
+      "Migração bem-sucedida de infraestrutura na Vercel para conta exclusiva e nova URL de produção: crm-imobiliario-imob.vercel.app",
+      "Otimização drástica de Serverless Function Invocations e Fast Origin Transfer na Vercel",
+      "Novo sistema de cache de borda (CDN Edge Cache) em rotas públicas (/api/properties, /api/profiles e /api/tenants)",
+      "Espaçamento e throttle inteligente no checkTenantBlock (de 30s para 10min) eliminando mais de 95% do tráfego fantasma",
+      "Desativação de pré-carregamento agressivo de rotas na sidebar e sanitização de credenciais de login com .trim()",
+      "Correção definitiva da duplicação visual do corretor na página pública do imóvel (/p/[id])"
+    ],
+    improvements: [
+      "Ambiente de produção operando na nova URL oficial: crm-imobiliario-imob.vercel.app",
+      "Contadores de cota da Vercel 100% zerados na nova conta dedicada da imobiliária",
+      "Entrega ultra-rápida de fichas de imóveis e vitrines na CDN global sem consumo de computação serverless",
+      "Deduplicação de requisições GET em memória no navegador através de novo cache no apiClient"
+    ],
+    fixes: [
+      "Eliminação do card duplicado de corretor dentro do formulário de proposta na ficha do imóvel (/p/[id])",
+      "Tratamento automático de espaços acidentais em senhas copiadas no login (evitando falsos erros de credenciais)"
+    ]
+  },
   {
     version: "v2.58",
     releaseDate: "13/10/2026",
